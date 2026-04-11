@@ -45,6 +45,24 @@ describe("dialog terminal state", () => {
     ]);
   });
 
+  it("switches codex and claude commands into agent workflow presentation", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const codex = submitDialogCommand(state, "codex", () => "cmd:codex");
+    const claude = submitDialogCommand(state, "claude", () => "cmd:claude");
+
+    expect(codex).toMatchObject({
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "agent-workflow",
+    });
+
+    expect(claude).toMatchObject({
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "agent-workflow",
+    });
+  });
+
   it("routes plain output into the active command block and finalizes it on command end", () => {
     const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "ls", () => "cmd:1");
     const withOutput = appendDialogOutput(state, "file-a\nfile-b\n");
@@ -73,6 +91,18 @@ describe("dialog terminal state", () => {
 
     expect(finished.mode).toBe("dialog");
     expect(finished.modeSource).toBe("default");
+  });
+
+  it("restores the default presentation after an agent workflow command exits", () => {
+    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "codex", () => "cmd:1");
+    const finished = applyShellLifecycleEvent(state, {
+      type: "command-end",
+      exitCode: 0,
+    });
+
+    expect(finished.mode).toBe("dialog");
+    expect(finished.modeSource).toBe("default");
+    expect(finished.presentation).toBe("default");
   });
 
   it("captures non-command output in a session output block", () => {

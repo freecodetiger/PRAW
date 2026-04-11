@@ -123,6 +123,31 @@ export function SettingsPanel() {
                 />
               </label>
             </div>
+
+            <div className="settings-section__title">
+              <strong>AI Appearance</strong>
+              <p>These colors only affect AI workflow panes.</p>
+            </div>
+
+            <div className="settings-grid">
+              <label className="settings-field">
+                <span>Theme color</span>
+                <input
+                  type="color"
+                  value={config.ai.themeColor}
+                  onChange={(event) => patchAiConfig({ themeColor: event.target.value })}
+                />
+              </label>
+
+              <label className="settings-field">
+                <span>Background color</span>
+                <input
+                  type="color"
+                  value={config.ai.backgroundColor}
+                  onChange={(event) => patchAiConfig({ backgroundColor: event.target.value })}
+                />
+              </label>
+            </div>
           </section>
         </div>
       </aside>

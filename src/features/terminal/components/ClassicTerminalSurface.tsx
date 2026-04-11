@@ -16,6 +16,7 @@ interface ClassicTerminalSurfaceProps {
   bufferedOutput: TerminalBufferSnapshot;
   fontFamily: string;
   fontSize: number;
+  backgroundColor: string;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
 }
@@ -25,6 +26,7 @@ export function ClassicTerminalSurface({
   bufferedOutput,
   fontFamily,
   fontSize,
+  backgroundColor,
   write,
   resize,
 }: ClassicTerminalSurfaceProps) {
@@ -52,7 +54,7 @@ export function ClassicTerminalSurface({
       fontSize,
       lineHeight: 1.3,
       theme: {
-        background: "#ffffff",
+        background: backgroundColor,
         foreground: "#000000",
         cursor: "#000000",
         black: "#000000",
@@ -119,7 +121,7 @@ export function ClassicTerminalSurface({
       fitAddonRef.current = null;
       renderedContentRef.current = "";
     };
-  }, [fontFamily, fontSize, handleShortcutKeyDown, resize, write]);
+  }, [backgroundColor, fontFamily, fontSize, handleShortcutKeyDown, resize, write]);
 
   useEffect(() => {
     if (!xtermRef.current) {
@@ -129,6 +131,7 @@ export function ClassicTerminalSurface({
     applyTerminalAppearance(xtermRef.current, {
       fontFamily,
       fontSize,
+      backgroundColor,
     });
 
     queueMicrotask(() => {
@@ -137,7 +140,7 @@ export function ClassicTerminalSurface({
         void resize(xtermRef.current.cols, xtermRef.current.rows);
       }
     });
-  }, [fontFamily, fontSize, resize]);
+  }, [backgroundColor, fontFamily, fontSize, resize]);
 
   useEffect(() => {
     if (!sessionId || !xtermRef.current || !fitAddonRef.current) {

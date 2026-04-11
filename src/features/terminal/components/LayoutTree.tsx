@@ -2,25 +2,28 @@ import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointer
 
 import { getNodeLeafId } from "../../../domain/layout/tree";
 import type { LayoutNode, SplitNode } from "../../../domain/layout/types";
+import { getDividerOverlapStyle, splitPaneBorderMask, type PaneBorderMask } from "../lib/layout-presentation";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { TerminalPane } from "./TerminalPane";
 
 interface LayoutTreeProps {
   node: LayoutNode;
+  borderMask?: PaneBorderMask;
 }
 
-export function LayoutTree({ node }: LayoutTreeProps) {
+export function LayoutTree({ node, borderMask = {} }: LayoutTreeProps) {
   if (node.kind === "leaf") {
-    return <TerminalPane tabId={getNodeLeafId(node)} />;
+    return <TerminalPane tabId={getNodeLeafId(node)} borderMask={borderMask} />;
   }
 
-  return <SplitLayoutTree node={node} />;
+  return <SplitLayoutTree node={node} borderMask={borderMask} />;
 }
 
-function SplitLayoutTree({ node }: { node: SplitNode }) {
+function SplitLayoutTree({ node, borderMask }: { node: SplitNode; borderMask: PaneBorderMask }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const resizeSplit = useWorkspaceStore((state) => state.resizeSplit);
   const [isResizing, setIsResizing] = useState(false);
+  const childMasks = splitPaneBorderMask(borderMask, node.axis);
 
   const style = {
     "--split-ratio": String(node.ratio),
@@ -73,16 +76,17 @@ function SplitLayoutTree({ node }: { node: SplitNode }) {
       data-layout-node-id={node.id}
     >
       <div className="layout-tree__branch">
-        <LayoutTree node={node.first} />
+        <LayoutTree node={node.first} borderMask={childMasks.first} />
       </div>
       <button
         className={`layout-tree__divider layout-tree__divider--${node.axis}`}
         type="button"
         aria-label={`Resize ${node.axis} split`}
+        style={getDividerOverlapStyle(node.axis)}
         onPointerDown={handlePointerDown}
       />
       <div className="layout-tree__branch">
-        <LayoutTree node={node.second} />
+        <LayoutTree node={node.second} borderMask={childMasks.second} />
       </div>
     </div>
   );

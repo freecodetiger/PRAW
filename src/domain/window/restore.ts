@@ -137,6 +137,7 @@ function normalizeTabSnapshot(tab: unknown): WindowSnapshot["tabs"][number] | nu
   return {
     tabId: tab.tabId,
     title: isNonEmptyString(tab.title) ? tab.title : tab.tabId,
+    note: isNonEmptyString(tab.note) ? tab.note.trim() : undefined,
     shell: isNonEmptyString(tab.shell) ? tab.shell : "/bin/bash",
     cwd: isNonEmptyString(tab.cwd) ? tab.cwd : "~",
   };

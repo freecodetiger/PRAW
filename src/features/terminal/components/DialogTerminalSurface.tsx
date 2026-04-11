@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CommandBlock } from "../../../domain/terminal/dialog";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
+import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 
 interface DialogTerminalSurfaceProps {
@@ -23,6 +24,7 @@ export function DialogTerminalSurface({
   const [isPinnedBottom, setIsPinnedBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const manualJumpPendingRef = useRef(false);
 
   useEffect(() => {
     if (isActive) {
@@ -62,7 +64,9 @@ export function DialogTerminalSurface({
         onScroll={(event) => {
           const node = event.currentTarget;
           const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-          setIsPinnedBottom(distanceFromBottom < 24);
+          const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
+          manualJumpPendingRef.current = false;
+          setIsPinnedBottom(nextPinned);
         }}
       >
         {paneState.blocks.map((block: CommandBlock, index: number) => (
@@ -92,6 +96,7 @@ export function DialogTerminalSurface({
                 return;
               }
 
+              manualJumpPendingRef.current = true;
               node.scrollTop = node.scrollHeight;
               setIsPinnedBottom(true);
             }}

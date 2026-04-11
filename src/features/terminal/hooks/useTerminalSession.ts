@@ -32,6 +32,15 @@ export function useTerminalSession(tabId: string) {
         await resizeTerminalSession(sessionId, cols, rows);
       },
 
+      async terminate() {
+        const sessionId = activeSessionIdRef.current;
+        if (!sessionId) {
+          return;
+        }
+
+        await closeTerminalSession(sessionId).catch(() => undefined);
+      },
+
       async restart() {
         const sessionId = activeSessionIdRef.current;
         if (sessionId) {

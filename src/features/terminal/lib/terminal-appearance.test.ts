@@ -17,6 +17,7 @@ describe("terminal appearance", () => {
     applyTerminalAppearance(terminal, {
       fontFamily: "JetBrains Mono",
       fontSize: 14,
+      backgroundColor: "#eef4ff",
     });
 
     expect(terminal.options).toBe(options);
@@ -25,6 +26,9 @@ describe("terminal appearance", () => {
       rows: 30,
       fontFamily: "JetBrains Mono",
       fontSize: 14,
+      theme: {
+        background: "#eef4ff",
+      },
     });
   });
 });

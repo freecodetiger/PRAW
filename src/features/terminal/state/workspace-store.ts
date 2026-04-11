@@ -27,6 +27,7 @@ interface WorkspaceStore {
   bootstrapWindow: (options: BootstrapWindowOptions) => void;
   hydrateWindow: (snapshot: WindowSnapshot) => void;
   setActiveTab: (tabId: string) => void;
+  setTabNote: (tabId: string, note: string) => void;
   splitTab: (tabId: string, axis: SplitAxis) => void;
   resizeSplit: (splitId: string, ratio: number) => void;
   focusAdjacentTab: (direction: FocusDirection) => void;
@@ -77,6 +78,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
           activeTabId: tabId,
         },
       };
+    }),
+
+  setTabNote: (tabId, note) =>
+    set((state) => {
+      return updateTabState(state, tabId, (tab) => {
+        const normalizedNote = note.trim();
+        const nextNote = normalizedNote.length > 0 ? normalizedNote : undefined;
+
+        if (tab.note === nextNote) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          note: nextNote,
+        };
+      });
     }),
 
   splitTab: (tabId, axis) =>

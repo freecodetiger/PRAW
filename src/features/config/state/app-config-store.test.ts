@@ -33,12 +33,16 @@ describe("app-config-store", () => {
       enabled: true,
       provider: "glm",
       model: "glm-4.5",
+      themeColor: "#2b6fff",
+      backgroundColor: "#eef4ff",
     });
 
     expect(useAppConfigStore.getState().config.ai).toEqual({
       enabled: true,
       provider: "glm",
       model: "glm-4.5",
+      themeColor: "#2b6fff",
+      backgroundColor: "#eef4ff",
     });
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
   });

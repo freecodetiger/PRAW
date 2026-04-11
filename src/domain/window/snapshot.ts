@@ -5,6 +5,7 @@ import type { WindowModel } from "./types";
 export interface TabSnapshot {
   tabId: string;
   title: string;
+  note?: string;
   shell: string;
   cwd: string;
 }
@@ -25,6 +26,7 @@ export function toWindowSnapshot(window: WindowModel): WindowSnapshot {
       .map((tab) => ({
         tabId: tab.tabId,
         title: tab.title,
+        note: tab.note,
         shell: tab.shell,
         cwd: tab.cwd,
       })),

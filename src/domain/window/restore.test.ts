@@ -25,13 +25,14 @@ describe("normalizeWindowSnapshot", () => {
         tabs: [
           {
             tabId: "tab:1",
-            title: "Main",
+            title: "Tab 1",
+            note: "Build",
             shell: "/bin/bash",
             cwd: "~",
           },
           {
             tabId: "tab:2",
-            title: "Build",
+            title: "Tab 2",
             shell: "/usr/bin/zsh",
             cwd: "/tmp",
           },
@@ -65,13 +66,14 @@ describe("normalizeWindowSnapshot", () => {
       tabs: [
         {
           tabId: "tab:1",
-          title: "Main",
+          title: "Tab 1",
+          note: "Build",
           shell: "/bin/bash",
           cwd: "~",
         },
         {
           tabId: "tab:2",
-          title: "Build",
+          title: "Tab 2",
           shell: "/usr/bin/zsh",
           cwd: "/tmp",
         },
@@ -110,13 +112,13 @@ describe("normalizeWindowSnapshot", () => {
               panes: [
                 {
                   paneId: "pane:main",
-                  title: "Main",
+                  title: "Tab 1",
                   shell: "/bin/bash",
                   cwd: "/home/zpc",
                 },
                 {
                   paneId: "pane:2",
-                  title: "Build",
+                  title: "Tab 2",
                   shell: "/usr/bin/zsh",
                   cwd: "/tmp/build",
                 },
@@ -169,19 +171,58 @@ describe("normalizeWindowSnapshot", () => {
       tabs: [
         {
           tabId: "tab:1",
-          title: "Main",
+          title: "Tab 1",
           shell: "/bin/bash",
           cwd: "/home/zpc",
         },
         {
           tabId: "tab:2",
-          title: "Build",
+          title: "Tab 2",
           shell: "/usr/bin/zsh",
           cwd: "/tmp/build",
         },
       ],
       activeTabId: "tab:2",
       nextTabNumber: 4,
+    });
+  });
+
+  it("defaults a missing note to undefined when normalizing snapshots", () => {
+    expect(
+      normalizeWindowSnapshot({
+        layout: {
+          kind: "leaf",
+          id: "leaf:tab:1",
+          leafId: "tab:1",
+        },
+        tabs: [
+          {
+            tabId: "tab:1",
+            title: "Tab 1",
+            shell: "/bin/bash",
+            cwd: "~",
+          },
+        ],
+        activeTabId: "tab:1",
+        nextTabNumber: 2,
+      }),
+    ).toEqual({
+      layout: {
+        kind: "leaf",
+        id: "leaf:tab:1",
+        leafId: "tab:1",
+      },
+      tabs: [
+        {
+          tabId: "tab:1",
+          title: "Tab 1",
+          note: undefined,
+          shell: "/bin/bash",
+          cwd: "~",
+        },
+      ],
+      activeTabId: "tab:1",
+      nextTabNumber: 2,
     });
   });
 

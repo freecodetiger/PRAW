@@ -12,6 +12,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     provider: "glm",
     model: "glm-5-flash",
     enabled: false,
+    themeColor: "#1f5eff",
+    backgroundColor: "#eef4ff",
   },
 };
 
@@ -38,6 +40,8 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       provider: normalizeString(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
       model: normalizeString(ai?.model, DEFAULT_APP_CONFIG.ai.model),
       enabled: typeof ai?.enabled === "boolean" ? ai.enabled : DEFAULT_APP_CONFIG.ai.enabled,
+      themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
+      backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
     },
   };
 }
@@ -57,4 +61,13 @@ function normalizeFontSize(value: number | undefined): number {
   }
 
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));
+}
+
+function normalizeHexColor(value: string | undefined, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim();
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized) ? normalized : fallback;
 }

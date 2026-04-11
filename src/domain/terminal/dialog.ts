@@ -4,6 +4,8 @@ export type PaneRenderModeSource = "default" | "manual" | "auto-interactive" | "
 
 export type ShellIntegrationStatus = "supported" | "unsupported";
 
+export type TerminalPresentation = "default" | "agent-workflow";
+
 export type CommandBlockKind = "command" | "session";
 
 export type CommandBlockStatus = "running" | "completed";
@@ -22,6 +24,7 @@ export interface CommandBlock {
 export interface DialogState {
   mode: PaneRenderMode;
   modeSource: PaneRenderModeSource;
+  presentation: TerminalPresentation;
   shellIntegration: ShellIntegrationStatus;
   cwd: string;
   blocks: CommandBlock[];
@@ -55,7 +58,9 @@ const AUTO_INTERACTIVE_COMMANDS = new Set([
   "lazygit",
 ]);
 
-const COMMAND_PREFIXES_TO_SKIP = new Set(["sudo", "env", "command"]);
+const AGENT_WORKFLOW_COMMANDS = new Set(["codex", "claude"]);
+
+const COMMAND_PREFIXES_TO_SKIP = new Set(["sudo", "env", "command", "npx", "pnpm", "bunx", "uvx"]);
 
 let nextSessionBlockId = 1;
 
@@ -65,6 +70,7 @@ export function createDialogState(shell: string, cwd: string): DialogState {
   return {
     mode: supported ? "dialog" : "classic",
     modeSource: supported ? "default" : "shell-unsupported",
+    presentation: "default",
     shellIntegration: supported ? "supported" : "unsupported",
     cwd,
     blocks: [],
@@ -83,15 +89,19 @@ export function submitDialogCommand(
     return state;
   }
 
-  const interactive = isAutoInteractiveCommand(normalizedCommand);
+  const commandKind = classifyCommand(normalizedCommand);
+  const interactive = commandKind !== "default";
   const mode = interactive ? "classic" : state.mode;
   const modeSource: PaneRenderModeSource = interactive ? "auto-interactive" : state.modeSource;
+  const presentation: TerminalPresentation =
+    commandKind === "agent-workflow" ? "agent-workflow" : state.presentation;
   const id = createId();
 
   return {
     ...state,
     mode,
     modeSource,
+    presentation,
     activeCommandBlockId: id,
     composerHistory: [...state.composerHistory, normalizedCommand],
     blocks: [
@@ -188,6 +198,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           ...nextState,
           mode: "dialog",
           modeSource: "default",
+          presentation: "default",
         };
       }
 
@@ -201,9 +212,17 @@ export function isDialogShellSupported(shell: string): boolean {
 }
 
 export function isAutoInteractiveCommand(command: string): boolean {
+  return classifyCommand(command) !== "default";
+}
+
+export function isAgentWorkflowCommand(command: string): boolean {
+  return classifyCommand(command) === "agent-workflow";
+}
+
+function classifyCommand(command: string): "default" | "interactive" | "agent-workflow" {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) {
-    return false;
+    return "default";
   }
 
   let index = 0;
@@ -212,8 +231,17 @@ export function isAutoInteractiveCommand(command: string): boolean {
   }
 
   if (index >= tokens.length) {
-    return false;
+    return "default";
   }
 
-  return AUTO_INTERACTIVE_COMMANDS.has(tokens[index]);
+  const entry = tokens[index];
+  if (AGENT_WORKFLOW_COMMANDS.has(entry)) {
+    return "agent-workflow";
+  }
+
+  if (AUTO_INTERACTIVE_COMMANDS.has(entry)) {
+    return "interactive";
+  }
+
+  return "default";
 }

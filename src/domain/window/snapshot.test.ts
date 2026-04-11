@@ -23,7 +23,8 @@ const windowModel: WindowModel = {
   tabs: {
     "tab:1": {
       tabId: "tab:1",
-      title: "Main",
+      title: "Tab 1",
+      note: "Build",
       shell: "/bin/bash",
       cwd: "~",
       status: "starting",
@@ -32,7 +33,7 @@ const windowModel: WindowModel = {
     },
     "tab:2": {
       tabId: "tab:2",
-      title: "Build",
+      title: "Tab 2",
       shell: "/usr/bin/zsh",
       cwd: "/tmp",
       status: "running",
@@ -67,13 +68,14 @@ describe("window snapshot", () => {
       tabs: [
         {
           tabId: "tab:1",
-          title: "Main",
+          title: "Tab 1",
+          note: "Build",
           shell: "/bin/bash",
           cwd: "~",
         },
         {
           tabId: "tab:2",
-          title: "Build",
+          title: "Tab 2",
           shell: "/usr/bin/zsh",
           cwd: "/tmp",
         },
@@ -93,7 +95,8 @@ describe("window snapshot", () => {
       tabs: [
         {
           tabId: "tab:1",
-          title: "Main",
+          title: "Tab 1",
+          note: "Build",
           shell: "/bin/bash",
           cwd: "~",
         },
@@ -111,7 +114,8 @@ describe("window snapshot", () => {
       tabs: {
         "tab:1": {
           tabId: "tab:1",
-          title: "Main",
+          title: "Tab 1",
+          note: "Build",
           shell: "/bin/bash",
           cwd: "~",
           status: "starting",

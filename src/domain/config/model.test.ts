@@ -48,4 +48,22 @@ describe("resolveAppConfig", () => {
       },
     });
   });
+
+  it("normalizes ai appearance colors", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          themeColor: "#2b6fff",
+          backgroundColor: "invalid",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        themeColor: "#2b6fff",
+        backgroundColor: DEFAULT_APP_CONFIG.ai.backgroundColor,
+      },
+    });
+  });
 });

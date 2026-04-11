@@ -83,4 +83,31 @@ describe("terminal-view-store", () => {
     expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")].blocks).toHaveLength(1);
     expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:2")].blocks).toEqual([]);
   });
+
+  it("suppresses transcript streaming while an agent workflow command owns the tab", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().submitCommand("tab:1", "codex");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "thinking...\n");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.presentation).toBe("agent-workflow");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "codex",
+        output: "",
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("returns to dialog presentation after an agent workflow command exits", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().submitCommand("tab:1", "claude");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.mode).toBe("dialog");
+    expect(tabState.modeSource).toBe("default");
+    expect(tabState.presentation).toBe("default");
+  });
 });

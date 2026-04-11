@@ -69,6 +69,42 @@ describe("workspace-store", () => {
     expect(useWorkspaceStore.getState().dragPreview).toBeNull();
   });
 
+  it("stores a trimmed tab note without changing the stable title", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().setTabNote("tab:1", "  Dev Server  ");
+
+    expect(selectActiveTab(useWorkspaceStore.getState())).toMatchObject({
+      title: "Tab 1",
+      note: "Dev Server",
+    });
+
+    useWorkspaceStore.getState().setTabNote("tab:1", "   ");
+    expect(selectActiveTab(useWorkspaceStore.getState())).toMatchObject({
+      title: "Tab 1",
+      note: undefined,
+    });
+  });
+
+  it("allows split-created tabs to keep stable titles while notes change independently", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    useWorkspaceStore.getState().setTabNote("tab:2", "Build Logs");
+
+    expect(useWorkspaceStore.getState().window?.tabs["tab:1"]?.title).toBe("Tab 1");
+    expect(useWorkspaceStore.getState().window?.tabs["tab:2"]).toMatchObject({
+      title: "Tab 2",
+      note: "Build Logs",
+    });
+  });
+
   it("applies the drag preview by reordering the window layout", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",

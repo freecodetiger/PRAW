@@ -113,6 +113,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
 
       const normalizedOutput = stripAnsiForDialog(parsed.visibleOutput);
       const shouldCaptureVisibleOutput =
+        tabState.presentation !== "agent-workflow" &&
         !(tabState.mode === "classic" && tabState.modeSource === "manual" && tabState.activeCommandBlockId === null);
 
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
