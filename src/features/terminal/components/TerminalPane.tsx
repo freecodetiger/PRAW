@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { countLeaves } from "../../../domain/layout/tree";
 import type { PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalSession } from "../hooks/useTerminalSession";
+import { shouldCloseContextMenu } from "../lib/context-menu";
 import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
@@ -37,6 +38,7 @@ export function TerminalPane({ tabId }: TerminalPaneProps) {
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
   const { tab, currentStreamSessionId, write, resize, restart } = useTerminalSession(tabId);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isDragSource = dragState?.sourceTabId === tabId;
   const previewEdge =
@@ -48,16 +50,23 @@ export function TerminalPane({ tabId }: TerminalPaneProps) {
       return;
     }
 
-    const close = () => {
+    const close = (event: PointerEvent) => {
+      if (!shouldCloseContextMenu(contextMenuRef.current, event.target)) {
+        return;
+      }
+
+      setContextMenu(null);
+    };
+    const closeOnBlur = () => {
       setContextMenu(null);
     };
 
     window.addEventListener("pointerdown", close, true);
-    window.addEventListener("blur", close);
+    window.addEventListener("blur", closeOnBlur);
 
     return () => {
       window.removeEventListener("pointerdown", close, true);
-      window.removeEventListener("blur", close);
+      window.removeEventListener("blur", closeOnBlur);
     };
   }, [contextMenu]);
 
@@ -161,6 +170,7 @@ export function TerminalPane({ tabId }: TerminalPaneProps) {
 
       {contextMenu ? (
         <div
+          ref={contextMenuRef}
           className="pane-context-menu"
           style={{
             left: contextMenu.x,
