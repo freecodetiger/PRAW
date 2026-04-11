@@ -1,7 +1,115 @@
-# Tauri + React + Typescript
+# PRAW
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+PRAW 是一款面向未来工作流的智能终端项目。它希望把传统终端的可靠性、现代工作区的组织能力，以及 AI 辅助的自然交互方式放进同一个桌面应用中。
 
-## Recommended IDE Setup
+当前它还不是完成品，而是一个正在持续迭代中的半成品项目。很多核心能力已经成形，但整体体验、兼容性和 AI 能力仍在持续打磨中。
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## 这个项目想解决什么问题
+传统终端很强，但在多任务、多分屏、上下文切换、工作区组织和 AI 协作这几个方向上，用户体验往往并不理想。PRAW 的目标不是替代 shell，而是在不牺牲终端本质的前提下，给终端一个更适合现代开发者的桌面外壳。
+
+从用户视角看，它希望做到：
+
+- 像工作区一样管理多个终端任务，而不是把所有内容堆在一个窗口里
+- 支持灵活分屏、拖拽调整和 pane 重组
+- 在对话式输入和传统终端输入之间自然切换
+- 为 AI 工作模式提供更明确的界面反馈，而不是把 AI 功能粗暴塞进终端里
+- 逐步加入更自然的补全、上下文感知和智能辅助能力
+
+## 当前亮点
+从用户视角，这个项目目前最值得关注的地方有：
+
+- 支持一个窗口内的多 pane 分屏工作区，不同 pane 可以继续拆分、调整大小和重排
+- 终端支持对话式输入体验，历史记录紧贴输入区呈现，更适合连续执行命令和回看结果
+- 保留 classic 模式，兼容更传统的终端工作方式
+- 针对 AI agent 工作流引入独立的 AI mode 呈现，让用户清楚知道自己当前进入了哪种工作语境
+- 历史输出正在逐步具备更直观的高亮表达，包括命令结果、路径、状态词和 ANSI 颜色保留
+- 支持 tab 备注，有助于在复杂分屏场景下区分每个 pane 的用途
+- 设置层已经开始接管主题和 AI 能力的关键参数，后续可继续扩展成更完整的个性化系统
+
+## 为什么这个项目对开发者有意义
+从开发者视角，这个项目的意义不只是“又一个终端”，而是一次关于桌面终端架构的系统性探索。
+
+它在尝试回答几个很现实的问题：
+
+- 现代智能终端的 UI 和系统能力应该如何解耦
+- 复杂分屏工作区应该如何建模，才能长期维护而不失控
+- AI 功能应该如何作为增强层接入，而不是破坏终端原有的操作模型
+- 如何在桌面端同时兼顾交互效率、系统稳定性和资源占用
+
+目前项目已经形成了一些明确的技术方向：
+
+- 前端使用 React 负责高频交互、模式切换、布局呈现和设置界面
+- 后端使用 Rust 负责终端会话、系统资源、持久化和能力桥接
+- 桌面壳采用 Tauri，在保持桌面能力的同时避免过重的运行时负担
+- 布局系统从严格二叉分割演进为多叉容器树，以更稳定地支持复杂分屏、边界约束和拖拽重排
+
+如果你关心桌面开发、终端产品、工作区建模、Tauri 应用架构，或者想观察一个“终端 + AI + 工作区”方向的工程实践，这个项目是一个值得跟踪的样本。
+
+## 当前状态
+请把这个项目视为一个半成品。
+
+这意味着：
+
+- 已经有可运行的主线能力
+- 已经有比较清晰的架构方向
+- 但仍然存在大量待完善细节
+- 产品体验还没有收敛到最终形态
+- 一些交互、兼容性和 AI 相关能力仍在快速演进中
+
+如果你现在就体验它，应该把它看成一个“积极成长中的实验型产品”，而不是已经完全稳定的成熟终端。
+
+## 计划支持的平台
+当前开发环境主要围绕 Ubuntu 展开，但项目目标不是只停留在 Linux。
+
+预计将逐步支持主流三大桌面操作系统：
+
+- Linux
+- macOS
+- Windows
+
+具体支持节奏会取决于：
+
+- Tauri 桌面封装表现
+- 终端会话层在不同平台上的适配成本
+- 输入法、字体、快捷键、窗口行为等细节兼容性
+- 打包、签名和分发链路的成熟度
+
+## 技术文档
+如果你更关心项目的架构思路，可以继续看根目录下的技术说明：
+
+- [为什么从二叉树改成多叉容器树](./project-insights/why-multi-container-tree.md)
+- [为什么项目前后端选择 Tauri + React + Rust](./project-insights/why-tauri-react-rust.md)
+
+## 开发与运行
+当前项目基于 `Tauri + React + TypeScript + Rust`。
+
+本地开发前建议至少准备：
+
+- Node.js
+- npm
+- Rust / Cargo
+- Tauri 所需系统依赖
+
+启动开发环境：
+
+```bash
+npm install
+npm run tauri dev
+```
+
+如果你只想跑前端调试界面，也可以使用：
+
+```bash
+npm run dev
+```
+
+## 推荐开发环境
+
+- [VS Code](https://code.visualstudio.com/)
+- [Tauri VS Code Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
+- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## 最后
+PRAW 还在路上。
+
+它现在最有价值的，不是“已经完美”，而是它已经开始形成一套比较清楚的产品方向和技术结构。后续会继续围绕终端体验、工作区组织、AI 补全与协作、跨平台能力和分发质量持续迭代。
