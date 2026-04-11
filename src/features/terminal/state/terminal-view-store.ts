@@ -11,6 +11,7 @@ import {
   applyShellLifecycleEvent,
   createDialogState,
   isDialogShellSupported,
+  isAgentWorkflowCommand,
   submitDialogCommand,
   type DialogState,
   type PaneRenderMode,
@@ -86,14 +87,23 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         return state;
       }
 
+      const nextTabState = {
+        ...tabState,
+        ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
+      };
+      const nextBuffers = isAgentWorkflowCommand(command)
+        ? {
+            ...state.buffers,
+            [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
+          }
+        : state.buffers;
+
       return {
         tabStates: {
           ...state.tabStates,
-          [key]: {
-            ...tabState,
-            ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
-          },
+          [key]: nextTabState,
         },
+        buffers: nextBuffers,
       };
     }),
 

@@ -10,13 +10,14 @@ describe("output replay", () => {
     });
   });
 
-  it("does not replay appended output that should arrive via live stream", () => {
+  it("appends only the buffered delta when output grows", () => {
     expect(getTerminalReplayPlan("prompt$ ", "prompt$ ls")).toEqual({
-      type: "noop",
+      type: "append",
+      content: "ls",
     });
   });
 
-  it("rehydrates when buffered output diverges from rendered content", () => {
+  it("rehydrates when buffered output diverges from the previously applied buffer", () => {
     expect(getTerminalReplayPlan("prompt$ stale", "prompt$ fresh")).toEqual({
       type: "hydrate",
       content: "prompt$ fresh",

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { canSplitPaneAtSize } from "../../../domain/layout/constraints";
 import { countLeaves } from "../../../domain/layout/tree";
 import type { PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { formatTabLabel } from "../../../domain/window/label";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalSession } from "../hooks/useTerminalSession";
-import { shouldCloseContextMenu } from "../lib/context-menu";
+import { calculateContextMenuPosition, shouldCloseContextMenu } from "../lib/context-menu";
 import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
 import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
@@ -19,8 +20,10 @@ interface TerminalPaneProps {
 }
 
 interface ContextMenuState {
-  x: number;
-  y: number;
+  clickX: number;
+  clickY: number;
+  left: number;
+  top: number;
 }
 
 export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
@@ -49,6 +52,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
+  const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
+  const paneRef = useRef<HTMLElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -57,6 +62,32 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
   const renderMode = tabState?.mode ?? "classic";
   const isAgentWorkflow = tabState?.presentation === "agent-workflow";
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) {
+      return;
+    }
+
+    const menu = contextMenuRef.current;
+    const nextPosition = calculateContextMenuPosition({
+      clickX: contextMenu.clickX,
+      clickY: contextMenu.clickY,
+      menuWidth: menu.offsetWidth,
+      menuHeight: menu.offsetHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    });
+
+    if (nextPosition.left === contextMenu.left && nextPosition.top === contextMenu.top) {
+      return;
+    }
+
+    setContextMenu((current) =>
+      current && current.clickX === contextMenu.clickX && current.clickY === contextMenu.clickY
+        ? { ...current, ...nextPosition }
+        : current,
+    );
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -82,6 +113,29 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
       window.removeEventListener("blur", closeOnBlur);
     };
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!paneRef.current) {
+      return;
+    }
+
+    const pane = paneRef.current;
+    const updatePaneSize = () => {
+      setPaneSize({
+        width: pane.clientWidth,
+        height: pane.clientHeight,
+      });
+    };
+
+    updatePaneSize();
+
+    const observer = new ResizeObserver(() => {
+      updatePaneSize();
+    });
+
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!tab || isEditingNote) {
@@ -111,6 +165,13 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     "--ai-background-color": aiBackgroundColor,
   } as CSSProperties;
 
+  const canSplitHorizontal = canSplitPaneAtSize("horizontal", paneSize.width, {
+    preserveTrailingBoundary: !(borderMask?.right ?? false),
+  });
+  const canSplitVertical = canSplitPaneAtSize("vertical", paneSize.height, {
+    preserveTrailingBoundary: !(borderMask?.bottom ?? false),
+  });
+
   const startEditingNote = () => {
     setContextMenu(null);
     setNoteDraft(tab.note ?? "");
@@ -130,6 +191,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   };
 
   const runSplitAction = (axis: SplitAxis) => {
+    const allowed = axis === "horizontal" ? canSplitHorizontal : canSplitVertical;
+    if (!allowed) {
+      setContextMenu(null);
+      return;
+    }
+
     setContextMenu(null);
     splitTab(tabId, axis);
   };
@@ -140,7 +207,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     }
 
     setContextMenu(null);
-    if (shouldConfirmBeforeClosingTab(tab)) {
+    if (shouldConfirmBeforeClosingTab(tab, tabState)) {
       setIsCloseConfirmOpen(true);
       return;
     }
@@ -166,6 +233,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
   return (
     <section
+      ref={paneRef}
       className={`terminal-pane${isActive ? " terminal-pane--active" : ""}${isDragSource ? " terminal-pane--drag-source" : ""}${isAgentWorkflow ? " terminal-pane--agent-workflow" : ""}${borderMask?.top ? " terminal-pane--flush-top" : ""}${borderMask?.right ? " terminal-pane--flush-right" : ""}${borderMask?.bottom ? " terminal-pane--flush-bottom" : ""}${borderMask?.left ? " terminal-pane--flush-left" : ""}`}
       style={paneStyle}
       onMouseDown={() => {
@@ -175,8 +243,10 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         event.preventDefault();
         setActiveTab(tabId);
         setContextMenu({
-          x: event.clientX,
-          y: event.clientY,
+          clickX: event.clientX,
+          clickY: event.clientY,
+          left: event.clientX,
+          top: event.clientY,
         });
       }}
     >
@@ -270,6 +340,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           fontFamily={fontFamily}
           fontSize={fontSize}
           backgroundColor={terminalBackgroundColor}
+          isActive={Boolean(isActive)}
           write={write}
           resize={resize}
         />
@@ -305,17 +376,17 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           ref={contextMenuRef}
           className="pane-context-menu"
           style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
+            left: contextMenu.left,
+            top: contextMenu.top,
           }}
           onPointerDown={(event) => {
             event.stopPropagation();
           }}
         >
-          <button className="pane-context-menu__item" type="button" onClick={() => runSplitAction("horizontal")}>
+          <button className="pane-context-menu__item" type="button" disabled={!canSplitHorizontal} onClick={() => runSplitAction("horizontal")}>
             Split Right
           </button>
-          <button className="pane-context-menu__item" type="button" onClick={() => runSplitAction("vertical")}>
+          <button className="pane-context-menu__item" type="button" disabled={!canSplitVertical} onClick={() => runSplitAction("vertical")}>
             Split Down
           </button>
           <button className="pane-context-menu__item" type="button" onClick={() => startEditingNote()}>

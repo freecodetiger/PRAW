@@ -12,6 +12,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     provider: "glm",
     model: "glm-5-flash",
     enabled: false,
+    apiKey: "",
     themeColor: "#1f5eff",
     backgroundColor: "#eef4ff",
   },
@@ -37,9 +38,10 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       fontSize: normalizeFontSize(terminal?.fontSize),
     },
     ai: {
-      provider: normalizeString(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
-      model: normalizeString(ai?.model, DEFAULT_APP_CONFIG.ai.model),
+      provider: normalizeAiIdentifier(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
+      model: normalizeAiIdentifier(ai?.model, DEFAULT_APP_CONFIG.ai.model),
       enabled: typeof ai?.enabled === "boolean" ? ai.enabled : DEFAULT_APP_CONFIG.ai.enabled,
+      apiKey: normalizeOptionalString(ai?.apiKey),
       themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
       backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
     },
@@ -53,6 +55,23 @@ function normalizeString(value: string | undefined, fallback: string): string {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : fallback;
+}
+
+function normalizeAiIdentifier(value: string | undefined, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : fallback;
+}
+
+function normalizeOptionalString(value: string | undefined): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
 }
 
 function normalizeFontSize(value: number | undefined): number {

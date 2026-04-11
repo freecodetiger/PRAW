@@ -33,6 +33,7 @@ describe("app-config-store", () => {
       enabled: true,
       provider: "glm",
       model: "glm-4.5",
+      apiKey: "secret-key",
       themeColor: "#2b6fff",
       backgroundColor: "#eef4ff",
     });
@@ -41,6 +42,7 @@ describe("app-config-store", () => {
       enabled: true,
       provider: "glm",
       model: "glm-4.5",
+      apiKey: "secret-key",
       themeColor: "#2b6fff",
       backgroundColor: "#eef4ff",
     });

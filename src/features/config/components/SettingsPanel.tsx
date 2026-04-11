@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react";
 
+import type { AiConnectionTestResult } from "../../../domain/ai/types";
+import type { AiConfig } from "../../../domain/config/types";
+import { testAiConnection } from "../../../lib/tauri/ai";
+import { describeAiConnectionResult } from "../lib/ai-connection";
 import { useAppConfigStore } from "../state/app-config-store";
 
 export function SettingsPanel() {
@@ -7,11 +11,34 @@ export function SettingsPanel() {
   const patchTerminalConfig = useAppConfigStore((state) => state.patchTerminalConfig);
   const patchAiConfig = useAppConfigStore((state) => state.patchAiConfig);
   const [isOpen, setIsOpen] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<AiConnectionTestResult | null>(null);
 
   const aiStatus = useMemo(
     () => (config.ai.enabled ? `${config.ai.provider} / ${config.ai.model}` : "disabled"),
     [config.ai.enabled, config.ai.model, config.ai.provider],
   );
+
+  const patchAi = (partial: Partial<AiConfig>) => {
+    patchAiConfig(partial);
+    setConnectionResult(null);
+  };
+
+  const runConnectionTest = async () => {
+    setIsTestingConnection(true);
+    setConnectionResult(null);
+
+    try {
+      const result = await testAiConnection({
+        provider: config.ai.provider as "glm",
+        model: config.ai.model,
+        apiKey: config.ai.apiKey,
+      });
+      setConnectionResult(result);
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
 
   return (
     <>
@@ -94,14 +121,14 @@ export function SettingsPanel() {
           <section className="settings-section">
             <div className="settings-section__title">
               <strong>AI</strong>
-              <p>Provider configuration stays isolated from terminal execution.</p>
+              <p>Ghost completion uses the current tab input, cwd, shell, and recent commands only.</p>
             </div>
 
             <label className="settings-toggle">
               <input
                 type="checkbox"
                 checked={config.ai.enabled}
-                onChange={(event) => patchAiConfig({ enabled: event.target.checked })}
+                onChange={(event) => patchAi({ enabled: event.target.checked })}
               />
               <span>Enable assistant provider</span>
             </label>
@@ -111,7 +138,7 @@ export function SettingsPanel() {
                 <span>Provider</span>
                 <input
                   value={config.ai.provider}
-                  onChange={(event) => patchAiConfig({ provider: event.target.value })}
+                  onChange={(event) => patchAi({ provider: event.target.value })}
                 />
               </label>
 
@@ -119,10 +146,40 @@ export function SettingsPanel() {
                 <span>Model</span>
                 <input
                   value={config.ai.model}
-                  onChange={(event) => patchAiConfig({ model: event.target.value })}
+                  onChange={(event) => patchAi({ model: event.target.value })}
                 />
               </label>
             </div>
+
+            <label className="settings-field">
+              <span>API key</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={config.ai.apiKey}
+                onChange={(event) => patchAi({ apiKey: event.target.value })}
+              />
+            </label>
+
+            <div className="settings-actions">
+              <button
+                className="button"
+                type="button"
+                disabled={isTestingConnection}
+                onClick={() => void runConnectionTest()}
+              >
+                {isTestingConnection ? "Testing..." : "Test AI Connection"}
+              </button>
+              {connectionResult ? (
+                <p
+                  className={`settings-status${connectionResult.status === "success" ? " settings-status--success" : " settings-status--error"}`}
+                >
+                  {describeAiConnectionResult(connectionResult)}
+                </p>
+              ) : null}
+            </div>
+
+            <p className="settings-panel__summary">This key is currently stored in the local app config file.</p>
 
             <div className="settings-section__title">
               <strong>AI Appearance</strong>
@@ -135,7 +192,7 @@ export function SettingsPanel() {
                 <input
                   type="color"
                   value={config.ai.themeColor}
-                  onChange={(event) => patchAiConfig({ themeColor: event.target.value })}
+                  onChange={(event) => patchAi({ themeColor: event.target.value })}
                 />
               </label>
 
@@ -144,7 +201,7 @@ export function SettingsPanel() {
                 <input
                   type="color"
                   value={config.ai.backgroundColor}
-                  onChange={(event) => patchAiConfig({ backgroundColor: event.target.value })}
+                  onChange={(event) => patchAi({ backgroundColor: event.target.value })}
                 />
               </label>
             </div>

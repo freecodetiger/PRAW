@@ -1,6 +1,7 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import { getNodeLeafId } from "../../../domain/layout/tree";
+import { constrainSplitRatio } from "../../../domain/layout/constraints";
 import type { LayoutNode, SplitNode } from "../../../domain/layout/types";
 import { getDividerOverlapStyle, splitPaneBorderMask, type PaneBorderMask } from "../lib/layout-presentation";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -41,12 +42,12 @@ function SplitLayoutTree({ node, borderMask }: { node: SplitNode; borderMask: Pa
     const updateRatio = (clientX: number, clientY: number) => {
       const rect = element.getBoundingClientRect();
       if (node.axis === "horizontal" && rect.width > 0) {
-        resizeSplit(node.id, (clientX - rect.left) / rect.width);
+        resizeSplit(node.id, constrainSplitRatio(node, rect.width, (clientX - rect.left) / rect.width, { preserveTrailingBoundary: !(borderMask.right ?? false) }));
         return;
       }
 
       if (node.axis === "vertical" && rect.height > 0) {
-        resizeSplit(node.id, (clientY - rect.top) / rect.height);
+        resizeSplit(node.id, constrainSplitRatio(node, rect.height, (clientY - rect.top) / rect.height, { preserveTrailingBoundary: !(borderMask.bottom ?? false) }));
       }
     };
 

@@ -17,6 +17,9 @@ pub struct AiConfig {
     pub provider: String,
     pub model: String,
     pub enabled: bool,
+    pub api_key: String,
+    pub theme_color: String,
+    pub background_color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +42,42 @@ impl Default for AppConfig {
                 provider: "glm".to_string(),
                 model: "glm-5-flash".to_string(),
                 enabled: false,
+                api_key: String::new(),
+                theme_color: "#1f5eff".to_string(),
+                background_color: "#eef4ff".to_string(),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppConfig;
+
+    #[test]
+    fn deserializes_full_ai_config_shape() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "fontFamily": "CaskaydiaCove Nerd Font",
+                    "fontSize": 14
+                },
+                "ai": {
+                    "provider": "glm",
+                    "model": "glm-5-flash",
+                    "enabled": true,
+                    "apiKey": "secret-key",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                }
+            }"##,
+        )
+        .expect("config should deserialize");
+
+        assert_eq!(config.ai.api_key, "secret-key");
+        assert_eq!(config.ai.theme_color, "#1f5eff");
+        assert_eq!(config.ai.background_color, "#eef4ff");
     }
 }

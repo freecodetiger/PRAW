@@ -9,6 +9,7 @@ export interface AiConfig {
   provider: string;
   model: string;
   enabled: boolean;
+  apiKey: string;
   themeColor: string;
   backgroundColor: string;
 }

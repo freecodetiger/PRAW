@@ -4,6 +4,10 @@ export type TerminalReplayPlan =
       content: string;
     }
   | {
+      type: "append";
+      content: string;
+    }
+  | {
       type: "noop";
     };
 
@@ -23,7 +27,8 @@ export function getTerminalReplayPlan(renderedContent: string, bufferedContent: 
 
   if (bufferedContent.startsWith(renderedContent)) {
     return {
-      type: "noop",
+      type: "append",
+      content: bufferedContent.slice(renderedContent.length),
     };
   }
 

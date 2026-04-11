@@ -5,7 +5,6 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
-import { onTerminalOutput } from "../../../lib/tauri/terminal";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
 import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
 import { getTerminalReplayPlan } from "../lib/output-replay";
@@ -17,6 +16,7 @@ interface ClassicTerminalSurfaceProps {
   fontFamily: string;
   fontSize: number;
   backgroundColor: string;
+  isActive: boolean;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
 }
@@ -27,19 +27,15 @@ export function ClassicTerminalSurface({
   fontFamily,
   fontSize,
   backgroundColor,
+  isActive,
   write,
   resize,
 }: ClassicTerminalSurfaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const renderedContentRef = useRef("");
-  const sessionIdRef = useRef<string | null>(sessionId);
+  const appliedBufferContentRef = useRef("");
   const { handleShortcutKeyDown } = useTerminalClipboard(xtermRef);
-
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -84,7 +80,7 @@ export function ClassicTerminalSurface({
 
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
-    renderedContentRef.current = "";
+    appliedBufferContentRef.current = "";
 
     const dataDisposable = terminal.onData((data) => {
       void write(data);
@@ -119,7 +115,7 @@ export function ClassicTerminalSurface({
       terminal.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
-      renderedContentRef.current = "";
+      appliedBufferContentRef.current = "";
     };
   }, [backgroundColor, fontFamily, fontSize, handleShortcutKeyDown, resize, write]);
 
@@ -143,6 +139,16 @@ export function ClassicTerminalSurface({
   }, [backgroundColor, fontFamily, fontSize, resize]);
 
   useEffect(() => {
+    if (!isActive || !xtermRef.current) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      xtermRef.current?.focus();
+    });
+  }, [isActive, sessionId]);
+
+  useEffect(() => {
     if (!sessionId || !xtermRef.current || !fitAddonRef.current) {
       return;
     }
@@ -158,60 +164,44 @@ export function ClassicTerminalSurface({
   }, [sessionId, resize]);
 
   useEffect(() => {
-    let disposed = false;
-    let unlistenOutput: (() => void) | undefined;
-
-    void onTerminalOutput((event) => {
-      if (event.sessionId !== sessionIdRef.current) {
-        return;
-      }
-
-      const terminal = xtermRef.current;
-      if (!terminal) {
-        return;
-      }
-
-      terminal.write(event.data);
-      renderedContentRef.current += event.data;
-    }).then((cleanup) => {
-      if (disposed) {
-        cleanup();
-        return;
-      }
-
-      unlistenOutput = cleanup;
-    });
-
-    return () => {
-      disposed = true;
-      unlistenOutput?.();
-    };
-  }, []);
-
-  useEffect(() => {
     const terminal = xtermRef.current;
     if (!terminal) {
       return;
     }
 
-    const replayPlan = getTerminalReplayPlan(renderedContentRef.current, bufferedOutput.content);
-    if (replayPlan.type !== "hydrate") {
+    const replayPlan = getTerminalReplayPlan(appliedBufferContentRef.current, bufferedOutput.content);
+    if (replayPlan.type === "noop") {
+      return;
+    }
+
+    if (replayPlan.type === "append") {
+      if (!replayPlan.content) {
+        return;
+      }
+
+      terminal.write(replayPlan.content);
+      appliedBufferContentRef.current = bufferedOutput.content;
       return;
     }
 
     terminal.reset();
-    renderedContentRef.current = "";
+    appliedBufferContentRef.current = "";
 
     if (!replayPlan.content) {
       return;
     }
 
     terminal.write(replayPlan.content);
-    renderedContentRef.current = replayPlan.content;
+    appliedBufferContentRef.current = replayPlan.content;
   }, [bufferedOutput]);
 
   return (
-    <div className="terminal-pane__body">
+    <div
+      className="terminal-pane__body"
+      onMouseDown={() => {
+        xtermRef.current?.focus();
+      }}
+    >
       <div className="terminal-pane__xterm" ref={containerRef} />
     </div>
   );

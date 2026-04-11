@@ -4,6 +4,7 @@ import type { CommandBlock } from "../../../domain/terminal/dialog";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
+import { useGhostCompletion } from "../hooks/useGhostCompletion";
 
 interface DialogTerminalSurfaceProps {
   paneState: TerminalTabViewState;
@@ -22,9 +23,21 @@ export function DialogTerminalSurface({
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [historyDraft, setHistoryDraft] = useState("");
   const [isPinnedBottom, setIsPinnedBottom] = useState(true);
+  const [isComposing, setIsComposing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [cursorAtEnd, setCursorAtEnd] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const manualJumpPendingRef = useRef(false);
+  const { suggestion, acceptSuggestion, clearSuggestion } = useGhostCompletion({
+    paneState,
+    status,
+    draft,
+    cursorAtEnd,
+    browsingHistory: historyIndex !== null,
+    isComposing,
+    isFocused,
+  });
 
   useEffect(() => {
     if (isActive) {
@@ -50,10 +63,17 @@ export function DialogTerminalSurface({
       return;
     }
 
+    clearSuggestion();
     onSubmitCommand(command);
     setDraft("");
     setHistoryIndex(null);
     setHistoryDraft("");
+    setCursorAtEnd(true);
+  };
+
+  const syncCursorState = (input: HTMLInputElement) => {
+    const end = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    setCursorAtEnd(end);
   };
 
   return (
@@ -108,58 +128,106 @@ export function DialogTerminalSurface({
 
       <div className="dialog-terminal__composer">
         <span className="dialog-terminal__prompt">{paneState.cwd} $</span>
-        <input
-          ref={inputRef}
-          className="dialog-terminal__input"
-          disabled={isDisabled}
-          placeholder={isDisabled ? "Session is not accepting input." : "Run a command"}
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            if (historyIndex !== null) {
-              setHistoryIndex(null);
-            }
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              submit();
-              return;
-            }
-
-            if (event.key === "ArrowUp") {
-              if (history.length === 0) {
-                return;
-              }
-
-              event.preventDefault();
-              if (historyIndex === null) {
-                setHistoryDraft(draft);
-                setHistoryIndex(history.length - 1);
-                setDraft(history[history.length - 1] ?? "");
-                return;
-              }
-
-              const nextIndex = Math.max(0, historyIndex - 1);
-              setHistoryIndex(nextIndex);
-              setDraft(history[nextIndex] ?? "");
-              return;
-            }
-
-            if (event.key === "ArrowDown" && historyIndex !== null) {
-              event.preventDefault();
-              if (historyIndex >= history.length - 1) {
+        <div className="dialog-terminal__input-shell">
+          {suggestion ? (
+            <div className="dialog-terminal__ghost" aria-hidden="true">
+              <span className="dialog-terminal__ghost-prefix">{draft}</span>
+              <span className="dialog-terminal__ghost-suffix">{suggestion}</span>
+            </div>
+          ) : null}
+          <input
+            ref={inputRef}
+            className="dialog-terminal__input"
+            disabled={isDisabled}
+            placeholder={isDisabled ? "Session is not accepting input." : "Run a command"}
+            spellCheck={false}
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              syncCursorState(event.target);
+              if (historyIndex !== null) {
                 setHistoryIndex(null);
-                setDraft(historyDraft);
+              }
+            }}
+            onFocus={(event) => {
+              setIsFocused(true);
+              syncCursorState(event.target);
+            }}
+            onBlur={() => {
+              setIsFocused(false);
+              clearSuggestion();
+            }}
+            onClick={(event) => syncCursorState(event.currentTarget)}
+            onKeyUp={(event) => syncCursorState(event.currentTarget)}
+            onSelect={(event) => syncCursorState(event.currentTarget)}
+            onCompositionStart={() => {
+              setIsComposing(true);
+              clearSuggestion();
+            }}
+            onCompositionEnd={(event) => {
+              setIsComposing(false);
+              syncCursorState(event.currentTarget);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Tab" && suggestion && !isComposing) {
+                event.preventDefault();
+                const nextDraft = acceptSuggestion();
+                if (nextDraft) {
+                  setDraft(nextDraft);
+                  setHistoryIndex(null);
+                  setCursorAtEnd(true);
+                }
                 return;
               }
 
-              const nextIndex = historyIndex + 1;
-              setHistoryIndex(nextIndex);
-              setDraft(history[nextIndex] ?? "");
-            }
-          }}
-        />
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+                return;
+              }
+
+              if (event.key === "ArrowUp") {
+                if (history.length === 0) {
+                  return;
+                }
+
+                event.preventDefault();
+                clearSuggestion();
+                if (historyIndex === null) {
+                  setHistoryDraft(draft);
+                  setHistoryIndex(history.length - 1);
+                  setDraft(history[history.length - 1] ?? "");
+                  setCursorAtEnd(true);
+                  return;
+                }
+
+                const nextIndex = Math.max(0, historyIndex - 1);
+                setHistoryIndex(nextIndex);
+                setDraft(history[nextIndex] ?? "");
+                setCursorAtEnd(true);
+                return;
+              }
+
+              if (event.key === "ArrowDown" && historyIndex !== null) {
+                event.preventDefault();
+                clearSuggestion();
+                if (historyIndex >= history.length - 1) {
+                  setHistoryIndex(null);
+                  setDraft(historyDraft);
+                  setCursorAtEnd(true);
+                  return;
+                }
+
+                const nextIndex = historyIndex + 1;
+                setHistoryIndex(nextIndex);
+                setDraft(history[nextIndex] ?? "");
+                setCursorAtEnd(true);
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   );

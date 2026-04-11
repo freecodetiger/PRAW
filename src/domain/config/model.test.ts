@@ -31,6 +31,58 @@ describe("resolveAppConfig", () => {
     });
   });
 
+  it("normalizes api keys without dropping them from ai config", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          apiKey: "  secret-key  ",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        apiKey: "secret-key",
+      },
+    });
+  });
+
+  it("normalizes ai provider and model identifiers to lowercase", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          provider: " GLM ",
+          model: " GLM-4.7-Flash ",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        provider: "glm",
+        model: "glm-4.7-flash",
+      },
+    });
+  });
+
+  it("normalizes ai provider and model identifiers to lowercase", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          provider: " GLM ",
+          model: " GLM-4.7-Flash ",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        provider: "glm",
+        model: "glm-4.7-flash",
+      },
+    });
+  });
+
   it("clamps invalid terminal presentation values", () => {
     expect(
       resolveAppConfig({

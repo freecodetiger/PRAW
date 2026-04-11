@@ -100,6 +100,18 @@ describe("terminal-view-store", () => {
     ]);
   });
 
+  it("clears the classic terminal buffer before entering agent workflow mode", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().appendOutput("tab:1", "previous output\n");
+
+    useTerminalViewStore.getState().submitCommand("tab:1", "codex");
+
+    expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
+      content: "",
+      revision: 2,
+    });
+  });
+
   it("returns to dialog presentation after an agent workflow command exits", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
     useTerminalViewStore.getState().submitCommand("tab:1", "claude");
