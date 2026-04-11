@@ -3,23 +3,27 @@ import { describe, expect, it } from "vitest";
 import type { WorkspaceSnapshot } from "./snapshot";
 import { normalizeWorkspaceSnapshot } from "./restore";
 
-const baseSnapshot: WorkspaceSnapshot = {
-  layout: {
-    kind: "split",
-    id: "split:root",
-    axis: "horizontal",
-    ratio: 0.5,
-    first: {
-      kind: "leaf",
-      id: "leaf:main",
+const baseLayout = {
+  kind: "container" as const,
+  id: "container:root",
+  axis: "horizontal" as const,
+  sizes: [1, 1],
+  children: [
+    {
+      kind: "pane" as const,
+      id: "pane:main",
       paneId: "pane:main",
     },
-    second: {
-      kind: "leaf",
-      id: "leaf:2",
+    {
+      kind: "pane" as const,
+      id: "pane:2",
       paneId: "pane:2",
     },
-  },
+  ],
+};
+
+const baseSnapshot: WorkspaceSnapshot = {
+  layout: baseLayout,
   activePaneId: "pane:2",
   nextPaneNumber: 3,
   panes: [
@@ -65,7 +69,7 @@ describe("normalizeWorkspaceSnapshot", () => {
     expect(
       normalizeWorkspaceSnapshot({
         ...baseSnapshot,
-        panes: baseSnapshot.panes.filter((pane) => pane.paneId !== "pane:2"),
+        panes: baseSnapshot.panes.filter((pane) => pane.paneId === "pane:main"),
       }),
     ).toBeNull();
   });
@@ -74,8 +78,8 @@ describe("normalizeWorkspaceSnapshot", () => {
     const malformedSnapshot = {
       ...baseSnapshot,
       layout: {
-        ...baseSnapshot.layout,
-        second: null,
+        ...baseLayout,
+        children: [baseLayout.children[0], null],
       },
       panes: [null],
     } as unknown as WorkspaceSnapshot;

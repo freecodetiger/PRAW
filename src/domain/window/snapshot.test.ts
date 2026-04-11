@@ -1,24 +1,26 @@
 import { describe, expect, it } from "vitest";
 
 import type { WindowModel } from "./types";
-import { fromWindowSnapshot, toWindowSnapshot, type WindowSnapshot } from "./snapshot";
+import { WINDOW_SNAPSHOT_VERSION, fromWindowSnapshot, toWindowSnapshot, type WindowSnapshot } from "./snapshot";
 
 const windowModel: WindowModel = {
   layout: {
-    kind: "split",
-    id: "split:root",
+    kind: "container",
+    id: "container:root",
     axis: "horizontal",
-    ratio: 0.5,
-    first: {
-      kind: "leaf",
-      id: "leaf:tab:1",
-      leafId: "tab:1",
-    },
-    second: {
-      kind: "leaf",
-      id: "leaf:tab:2",
-      leafId: "tab:2",
-    },
+    sizes: [1, 1],
+    children: [
+      {
+        kind: "pane",
+        id: "pane:tab:1",
+        paneId: "tab:1",
+      },
+      {
+        kind: "pane",
+        id: "pane:tab:2",
+        paneId: "tab:2",
+      },
+    ],
   },
   tabs: {
     "tab:1": {
@@ -47,23 +49,26 @@ const windowModel: WindowModel = {
 };
 
 describe("window snapshot", () => {
-  it("serializes a window model to a window snapshot", () => {
+  it("serializes a window model to a versioned window snapshot", () => {
     expect(toWindowSnapshot(windowModel)).toEqual({
+      version: WINDOW_SNAPSHOT_VERSION,
       layout: {
-        kind: "split",
-        id: "split:root",
+        kind: "container",
+        id: "container:root",
         axis: "horizontal",
-        ratio: 0.5,
-        first: {
-          kind: "leaf",
-          id: "leaf:tab:1",
-          leafId: "tab:1",
-        },
-        second: {
-          kind: "leaf",
-          id: "leaf:tab:2",
-          leafId: "tab:2",
-        },
+        sizes: [1, 1],
+        children: [
+          {
+            kind: "pane",
+            id: "pane:tab:1",
+            paneId: "tab:1",
+          },
+          {
+            kind: "pane",
+            id: "pane:tab:2",
+            paneId: "tab:2",
+          },
+        ],
       },
       tabs: [
         {
@@ -87,10 +92,11 @@ describe("window snapshot", () => {
 
   it("rehydrates snapshots into runtime models with tabs in starting state", () => {
     const snapshot: WindowSnapshot = {
+      version: WINDOW_SNAPSHOT_VERSION,
       layout: {
-        kind: "leaf",
-        id: "leaf:tab:1",
-        leafId: "tab:1",
+        kind: "pane",
+        id: "pane:tab:1",
+        paneId: "tab:1",
       },
       tabs: [
         {
@@ -107,9 +113,9 @@ describe("window snapshot", () => {
 
     expect(fromWindowSnapshot(snapshot)).toEqual({
       layout: {
-        kind: "leaf",
-        id: "leaf:tab:1",
-        leafId: "tab:1",
+        kind: "pane",
+        id: "pane:tab:1",
+        paneId: "tab:1",
       },
       tabs: {
         "tab:1": {

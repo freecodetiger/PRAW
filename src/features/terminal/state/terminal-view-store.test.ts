@@ -72,6 +72,22 @@ describe("terminal-view-store", () => {
     ]);
   });
 
+  it("preserves ANSI color sequences for dialog transcript rendering", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().submitCommand("tab:1", "ls --color=always");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "[01;34msrc[0m\n");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "]133;D;0");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "ls --color=always",
+        output: "[01;34msrc[0m\n",
+        status: "completed",
+      }),
+    ]);
+  });
+
   it("keeps transcript and shell state isolated per tab", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace/app");
     useTerminalViewStore.getState().syncTabState("tab:2", "/bin/bash", "/workspace/api");

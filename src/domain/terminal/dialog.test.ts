@@ -45,6 +45,48 @@ describe("dialog terminal state", () => {
     ]);
   });
 
+  it("treats sudo-prefixed commands as interactive and keeps them out of dialog mode", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const next = submitDialogCommand(state, "sudo du -sh /var/log", () => "cmd:sudo");
+
+    expect(next.mode).toBe("classic");
+    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:sudo",
+        command: "sudo du -sh /var/log",
+        interactive: true,
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("treats shell continuation commands like if as interactive to avoid dialog deadlocks", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const next = submitDialogCommand(state, "if", () => "cmd:if");
+
+    expect(next.mode).toBe("classic");
+    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:if",
+        command: "if",
+        interactive: true,
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("ignores a second dialog submission while a command block is still active", () => {
+    const running = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "ls", () => "cmd:1");
+    const next = submitDialogCommand(running, "pwd", () => "cmd:2");
+
+    expect(next).toBe(running);
+    expect(next.activeCommandBlockId).toBe("cmd:1");
+    expect(next.composerHistory).toEqual(["ls"]);
+    expect(next.blocks).toHaveLength(1);
+  });
+
   it("switches codex and claude commands into agent workflow presentation", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const codex = submitDialogCommand(state, "codex", () => "cmd:codex");

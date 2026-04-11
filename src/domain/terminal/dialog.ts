@@ -60,7 +60,19 @@ const AUTO_INTERACTIVE_COMMANDS = new Set([
 
 const AGENT_WORKFLOW_COMMANDS = new Set(["codex", "claude"]);
 
-const COMMAND_PREFIXES_TO_SKIP = new Set(["sudo", "env", "command", "npx", "pnpm", "bunx", "uvx"]);
+const SHELL_CONTINUATION_COMMANDS = new Set([
+  "if",
+  "for",
+  "while",
+  "until",
+  "case",
+  "select",
+  "function",
+  "{",
+  "(",
+]);
+
+const COMMAND_PREFIXES_TO_SKIP = new Set(["env", "command", "npx", "pnpm", "bunx", "uvx"]);
 
 let nextSessionBlockId = 1;
 
@@ -85,7 +97,7 @@ export function submitDialogCommand(
   createId: () => string,
 ): DialogState {
   const normalizedCommand = command.trim();
-  if (normalizedCommand.length === 0) {
+  if (normalizedCommand.length === 0 || state.activeCommandBlockId !== null) {
     return state;
   }
 
@@ -235,6 +247,9 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
   }
 
   const entry = tokens[index];
+  if (entry === "sudo" || SHELL_CONTINUATION_COMMANDS.has(entry)) {
+    return "interactive";
+  }
   if (AGENT_WORKFLOW_COMMANDS.has(entry)) {
     return "agent-workflow";
   }

@@ -1,4 +1,6 @@
+import { solveLayoutGeometry } from "./geometry";
 import type {
+  ContainerNode,
   FocusDirection,
   LayoutNode,
   LeafDragPreview,
@@ -6,28 +8,24 @@ import type {
   LeafNode,
   LeafRect,
   SplitAxis,
-  SplitNode,
 } from "./types";
 
 export type { FocusDirection } from "./types";
 
-const MIN_SPLIT_RATIO = 0.15;
-const MAX_SPLIT_RATIO = 0.85;
-
 export function createLeafLayout(leafId: string): LeafNode {
   return {
-    kind: "leaf",
-    id: `layout:${leafId}`,
-    leafId,
+    kind: "pane",
+    id: `pane:${leafId}`,
+    paneId: leafId,
   };
 }
 
 export function collectLeafIds(node: LayoutNode): string[] {
-  if (node.kind === "leaf") {
-    return [getNodeLeafId(node)];
+  if (node.kind === "pane") {
+    return [node.paneId];
   }
 
-  return [...collectLeafIds(node.first), ...collectLeafIds(node.second)];
+  return node.children.flatMap(collectLeafIds);
 }
 
 export function countLeaves(node: LayoutNode): number {
@@ -35,84 +33,32 @@ export function countLeaves(node: LayoutNode): number {
 }
 
 export function getFirstLeafId(node: LayoutNode): string {
-  if (node.kind === "leaf") {
-    return getNodeLeafId(node);
+  if (node.kind === "pane") {
+    return node.paneId;
   }
 
-  return getFirstLeafId(node.first);
+  return getFirstLeafId(node.children[0]);
 }
 
-export function splitLeaf(
-  node: LayoutNode,
-  targetLeafId: string,
-  newLeafId: string,
-  axis: SplitAxis,
-): LayoutNode {
-  if (node.kind === "leaf") {
-    if (getNodeLeafId(node) !== targetLeafId) {
-      return node;
-    }
-
-    return createSplitNode(axis, node, createLeafLayout(newLeafId));
-  }
-
-  return {
-    ...node,
-    first: splitLeaf(node.first, targetLeafId, newLeafId, axis),
-    second: splitLeaf(node.second, targetLeafId, newLeafId, axis),
-  };
+export function splitLeaf(node: LayoutNode, targetLeafId: string, newLeafId: string, axis: SplitAxis): LayoutNode {
+  const next = splitLeafInternal(node, targetLeafId, newLeafId, axis);
+  return normalizeNode(next) ?? node;
 }
 
 export function removeLeaf(node: LayoutNode, leafId: string): LayoutNode | null {
-  if (node.kind === "leaf") {
-    return getNodeLeafId(node) === leafId ? null : node;
-  }
-
-  const nextFirst = removeLeaf(node.first, leafId);
-  const nextSecond = removeLeaf(node.second, leafId);
-
-  if (!nextFirst && !nextSecond) {
-    return null;
-  }
-
-  if (!nextFirst) {
-    return nextSecond;
-  }
-
-  if (!nextSecond) {
-    return nextFirst;
-  }
-
-  return {
-    ...node,
-    first: nextFirst,
-    second: nextSecond,
-  };
-}
-
-export function setSplitRatio(node: LayoutNode, splitId: string, ratio: number): LayoutNode {
-  if (node.kind === "leaf") {
-    return node;
-  }
-
-  if (node.id === splitId) {
-    return {
-      ...node,
-      ratio: clampRatio(ratio),
-    };
-  }
-
-  return {
-    ...node,
-    first: setSplitRatio(node.first, splitId, ratio),
-    second: setSplitRatio(node.second, splitId, ratio),
-  };
+  const next = removeLeafInternal(node, leafId);
+  return normalizeNode(next);
 }
 
 export function toLeafRects(node: LayoutNode): Record<string, LeafRect> {
-  const rects: Record<string, LeafRect> = {};
-  collectRects(node, { x: 0, y: 0, width: 1, height: 1 }, rects);
-  return rects;
+  return solveLayoutGeometry(
+    node,
+    { widthPx: 1000, heightPx: 1000 },
+    () => ({
+      minWidthPx: 0,
+      minHeightPx: 0,
+    }),
+  ).paneRects;
 }
 
 export function findAdjacentLeafId(
@@ -185,15 +131,8 @@ export function applyLeafDragPreview(node: LayoutNode, preview: LeafDragPreview)
     return node;
   }
 
-  const inserted = insertRelativeToTarget(
-    detached.remaining,
-    preview.targetLeafId,
-    detached.removedLeaf,
-    preview.axis,
-    preview.order,
-  );
-
-  return inserted ?? node;
+  const inserted = insertRelativeToTarget(detached.remaining, preview.targetLeafId, detached.removedLeaf, preview.axis, preview.order);
+  return normalizeNode(inserted) ?? node;
 }
 
 export const collectLeafPaneIds = collectLeafIds;
@@ -205,14 +144,48 @@ export const findAdjacentPaneId = findAdjacentLeafId;
 export const createPaneDragPreview = createLeafDragPreview;
 export const applyPaneDragPreview = applyLeafDragPreview;
 
-function createSplitNode(axis: SplitAxis, first: LayoutNode, second: LayoutNode): SplitNode {
+function splitLeafInternal(node: LayoutNode, targetLeafId: string, newLeafId: string, axis: SplitAxis): LayoutNode {
+  if (node.kind === "pane") {
+    if (node.paneId !== targetLeafId) {
+      return node;
+    }
+
+    return createContainer(axis, [node, createLeafLayout(newLeafId)], [1, 1]);
+  }
+
+  const nextChildren = node.children.map((child) => splitLeafInternal(child, targetLeafId, newLeafId, axis));
   return {
-    kind: "split",
-    id: `split:${first.id}:${second.id}`,
-    axis,
-    ratio: 0.5,
-    first,
-    second,
+    ...node,
+    children: nextChildren,
+  };
+}
+
+function removeLeafInternal(node: LayoutNode, leafId: string): LayoutNode | null {
+  if (node.kind === "pane") {
+    return node.paneId === leafId ? null : node;
+  }
+
+  const nextChildren: LayoutNode[] = [];
+  const nextSizes: number[] = [];
+
+  node.children.forEach((child, index) => {
+    const nextChild = removeLeafInternal(child, leafId);
+    if (!nextChild) {
+      return;
+    }
+
+    nextChildren.push(nextChild);
+    nextSizes.push(node.sizes[index] ?? 1);
+  });
+
+  if (nextChildren.length === 0) {
+    return null;
+  }
+
+  return {
+    ...node,
+    children: nextChildren,
+    sizes: nextSizes,
   };
 }
 
@@ -220,8 +193,8 @@ function detachLeaf(
   node: LayoutNode,
   leafId: string,
 ): { remaining: LayoutNode | null; removedLeaf: LeafNode | null } {
-  if (node.kind === "leaf") {
-    if (getNodeLeafId(node) !== leafId) {
+  if (node.kind === "pane") {
+    if (node.paneId !== leafId) {
       return {
         remaining: node,
         removedLeaf: null,
@@ -234,29 +207,28 @@ function detachLeaf(
     };
   }
 
-  const left = detachLeaf(node.first, leafId);
-  if (left.removedLeaf) {
-    return {
-      remaining: left.remaining
-        ? {
-            ...node,
-            first: left.remaining,
-          }
-        : node.second,
-      removedLeaf: left.removedLeaf,
-    };
-  }
+  for (let index = 0; index < node.children.length; index += 1) {
+    const result = detachLeaf(node.children[index], leafId);
+    if (!result.removedLeaf) {
+      continue;
+    }
 
-  const right = detachLeaf(node.second, leafId);
-  if (right.removedLeaf) {
+    const nextChildren = [...node.children];
+    const nextSizes = [...node.sizes];
+    if (result.remaining) {
+      nextChildren[index] = result.remaining;
+    } else {
+      nextChildren.splice(index, 1);
+      nextSizes.splice(index, 1);
+    }
+
     return {
-      remaining: right.remaining
-        ? {
-            ...node,
-            second: right.remaining,
-          }
-        : node.first,
-      removedLeaf: right.removedLeaf,
+      remaining: normalizeNode({
+        ...node,
+        children: nextChildren,
+        sizes: nextSizes,
+      }),
+      removedLeaf: result.removedLeaf,
     };
   }
 
@@ -272,74 +244,95 @@ function insertRelativeToTarget(
   movedLeaf: LeafNode,
   axis: SplitAxis,
   order: "before" | "after",
-): LayoutNode | null {
-  if (node.kind === "leaf") {
-    if (getNodeLeafId(node) !== targetLeafId) {
-      return null;
+): LayoutNode {
+  if (node.kind === "pane") {
+    if (node.paneId !== targetLeafId) {
+      return node;
     }
 
-    return order === "before" ? createSplitNode(axis, movedLeaf, node) : createSplitNode(axis, node, movedLeaf);
+    return order === "before"
+      ? createContainer(axis, [movedLeaf, node], [1, 1])
+      : createContainer(axis, [node, movedLeaf], [1, 1]);
   }
 
-  const nextFirst = insertRelativeToTarget(node.first, targetLeafId, movedLeaf, axis, order);
-  if (nextFirst) {
+  const directTargetIndex = node.children.findIndex((child) => child.kind === "pane" && child.paneId === targetLeafId);
+  if (directTargetIndex >= 0 && node.axis === axis) {
+    const insertIndex = order === "before" ? directTargetIndex : directTargetIndex + 1;
+    const referenceSize = node.sizes[directTargetIndex] ?? 1;
+    const nextChildren = [...node.children];
+    const nextSizes = [...node.sizes];
+    nextChildren.splice(insertIndex, 0, movedLeaf);
+    nextSizes.splice(insertIndex, 0, referenceSize);
     return {
       ...node,
-      first: nextFirst,
+      children: nextChildren,
+      sizes: nextSizes,
     };
   }
 
-  const nextSecond = insertRelativeToTarget(node.second, targetLeafId, movedLeaf, axis, order);
-  if (nextSecond) {
-    return {
-      ...node,
-      second: nextSecond,
-    };
-  }
-
-  return null;
+  return {
+    ...node,
+    children: node.children.map((child) => insertRelativeToTarget(child, targetLeafId, movedLeaf, axis, order)),
+  };
 }
 
-function clampRatio(ratio: number): number {
-  if (!Number.isFinite(ratio)) {
-    return 0.5;
+function normalizeNode(node: LayoutNode | null): LayoutNode | null {
+  if (!node) {
+    return null;
   }
 
-  return Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, ratio));
+  if (node.kind === "pane") {
+    return node;
+  }
+
+  const collectedChildren: LayoutNode[] = [];
+  const collectedSizes: number[] = [];
+
+  node.children.forEach((child, index) => {
+    const normalizedChild = normalizeNode(child);
+    if (!normalizedChild) {
+      return;
+    }
+
+    const slotSize = sanitizeSize(node.sizes[index]);
+    if (normalizedChild.kind === "container" && normalizedChild.axis === node.axis) {
+      const childTotal = normalizedChild.sizes.reduce((sum, size) => sum + sanitizeSize(size), 0) || normalizedChild.children.length;
+      normalizedChild.children.forEach((grandchild, grandchildIndex) => {
+        collectedChildren.push(grandchild);
+        collectedSizes.push((slotSize * sanitizeSize(normalizedChild.sizes[grandchildIndex])) / childTotal);
+      });
+      return;
+    }
+
+    collectedChildren.push(normalizedChild);
+    collectedSizes.push(slotSize);
+  });
+
+  if (collectedChildren.length === 0) {
+    return null;
+  }
+
+  if (collectedChildren.length === 1) {
+    return collectedChildren[0];
+  }
+
+  return {
+    kind: "container",
+    id: node.id,
+    axis: node.axis,
+    children: collectedChildren,
+    sizes: collectedSizes,
+  };
 }
 
-function collectRects(node: LayoutNode, rect: LeafRect, rects: Record<string, LeafRect>): void {
-  if (node.kind === "leaf") {
-    rects[getNodeLeafId(node)] = rect;
-    return;
-  }
-
-  if (node.axis === "horizontal") {
-    collectRects(node.first, { ...rect, width: rect.width * node.ratio }, rects);
-    collectRects(
-      node.second,
-      {
-        x: rect.x + rect.width * node.ratio,
-        y: rect.y,
-        width: rect.width * (1 - node.ratio),
-        height: rect.height,
-      },
-      rects,
-    );
-    return;
-  }
-
-  collectRects(node.first, { ...rect, height: rect.height * node.ratio }, rects);
-  collectRects(
-    node.second,
-    {
-      x: rect.x,
-      y: rect.y + rect.height * node.ratio,
-      width: rect.width,
-      height: rect.height * (1 - node.ratio),
-    },
-    rects,
-  );
+function createContainer(axis: SplitAxis, children: LayoutNode[], sizes: number[]): ContainerNode {
+  return {
+    kind: "container",
+    id: `container:${axis}:${children.map((child) => child.id).join(":")}`,
+    axis,
+    children,
+    sizes,
+  };
 }
 
 function getDirectionalMetrics(
@@ -399,6 +392,10 @@ function verticalDistanceBetween(a: LeafRect, b: LeafRect): number {
   return Math.abs(aCenter - bCenter);
 }
 
+function sanitizeSize(size: number | undefined): number {
+  return Number.isFinite(size) && (size ?? 0) > 0 ? (size as number) : 1;
+}
+
 export function getNodeLeafId(node: LeafNode): string {
-  return "leafId" in node ? node.leafId : node.paneId;
+  return node.paneId;
 }

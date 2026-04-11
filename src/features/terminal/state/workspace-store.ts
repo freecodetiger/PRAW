@@ -1,6 +1,14 @@
 import { create } from "zustand";
 
 import {
+  MIN_BOUNDARY_PANE_HEIGHT_PX,
+  MIN_INTERIOR_PANE_HEIGHT_PX,
+  MIN_PANE_WIDTH_PX,
+  resizeContainerDivider,
+  type LayoutFrame,
+  type PaneMinimumResolver,
+} from "../../../domain/layout/geometry";
+import {
   applyLeafDragPreview,
   collectLeafIds,
   countLeaves,
@@ -8,12 +16,12 @@ import {
   createLeafLayout,
   findAdjacentLeafId,
   removeLeaf,
-  setSplitRatio,
   splitLeaf,
 } from "../../../domain/layout/tree";
 import type { FocusDirection, PaneDragPreview, PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { fromWindowSnapshot, type WindowSnapshot } from "../../../domain/window/snapshot";
 import type { TabModel, WindowModel } from "../../../domain/window/types";
+import { selectTerminalTabState, useTerminalViewStore } from "./terminal-view-store";
 
 interface BootstrapWindowOptions {
   shell: string;
@@ -29,7 +37,7 @@ interface WorkspaceStore {
   setActiveTab: (tabId: string) => void;
   setTabNote: (tabId: string, note: string) => void;
   splitTab: (tabId: string, axis: SplitAxis) => void;
-  resizeSplit: (splitId: string, ratio: number) => void;
+  resizeSplit: (containerId: string, dividerIndex: number, deltaPx: number, frame: LayoutFrame) => void;
   focusAdjacentTab: (direction: FocusDirection) => void;
   closeTab: (tabId: string) => void;
   beginTabDrag: (tabId: string) => void;
@@ -123,16 +131,25 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       };
     }),
 
-  resizeSplit: (splitId, ratio) =>
+  resizeSplit: (containerId, dividerIndex, deltaPx, frame) =>
     set((state) => {
-      if (!state.window) {
+      if (!state.window || frame.widthPx <= 0 || frame.heightPx <= 0 || deltaPx === 0) {
         return state;
       }
 
       return {
         window: {
           ...state.window,
-          layout: setSplitRatio(state.window.layout, splitId, ratio),
+          layout: resizeContainerDivider(
+            state.window.layout,
+            frame,
+            {
+              containerId,
+              dividerIndex,
+              deltaPx,
+            },
+            createPaneMinimumResolver(),
+          ),
         },
       };
     }),
@@ -325,17 +342,13 @@ function updateTabState(
   tabId: string,
   updater: (tab: TabModel) => TabModel,
 ): Partial<WorkspaceStore> | WorkspaceStore {
-  if (!state.window) {
+  if (!state.window?.tabs[tabId]) {
     return state;
   }
 
-  const tab = state.window.tabs[tabId];
-  if (!tab) {
-    return state;
-  }
-
-  const nextTab = updater(tab);
-  if (nextTab === tab) {
+  const currentTab = state.window.tabs[tabId];
+  const nextTab = updater(currentTab);
+  if (nextTab === currentTab) {
     return state;
   }
 
@@ -347,5 +360,20 @@ function updateTabState(
         [tabId]: nextTab,
       },
     },
+  };
+}
+
+function createPaneMinimumResolver(): PaneMinimumResolver {
+  return (paneId, placement) => {
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, paneId);
+    const minimumHeight =
+      tabState?.mode === "dialog" && placement.touchesWindowBottom
+        ? MIN_BOUNDARY_PANE_HEIGHT_PX
+        : MIN_INTERIOR_PANE_HEIGHT_PX;
+
+    return {
+      minWidthPx: MIN_PANE_WIDTH_PX,
+      minHeightPx: minimumHeight,
+    };
   };
 }

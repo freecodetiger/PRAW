@@ -2,6 +2,8 @@ import { collectLeafIds } from "../layout/tree";
 import type { LayoutNode } from "../layout/types";
 import type { WindowModel } from "./types";
 
+export const WINDOW_SNAPSHOT_VERSION = 2;
+
 export interface TabSnapshot {
   tabId: string;
   title: string;
@@ -11,6 +13,7 @@ export interface TabSnapshot {
 }
 
 export interface WindowSnapshot {
+  version: typeof WINDOW_SNAPSHOT_VERSION;
   layout: LayoutNode;
   tabs: TabSnapshot[];
   activeTabId: string;
@@ -19,10 +22,11 @@ export interface WindowSnapshot {
 
 export function toWindowSnapshot(window: WindowModel): WindowSnapshot {
   return {
+    version: WINDOW_SNAPSHOT_VERSION,
     layout: window.layout,
     tabs: collectLeafIds(window.layout)
       .map((tabId) => window.tabs[tabId])
-      .filter((tab): tab is NonNullable<typeof tab> => tab !== undefined)
+      .filter((tab): tab is NonNullable<typeof tab> => tab !== null && typeof tab === "object")
       .map((tab) => ({
         tabId: tab.tabId,
         title: tab.title,

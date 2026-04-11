@@ -1,20 +1,14 @@
 import { collectLeafIds } from "../layout/tree";
 import type { LayoutNode, SplitAxis } from "../layout/types";
-import { normalizeWorkspaceSnapshot } from "../workspace/restore";
-import type { WorkspaceSnapshot } from "../workspace/snapshot";
-import type { WindowSnapshot } from "./snapshot";
+import { WINDOW_SNAPSHOT_VERSION, type WindowSnapshot } from "./snapshot";
 
 export function normalizeWindowSnapshot(snapshot: unknown): WindowSnapshot | null {
-  return normalizeModernWindowSnapshot(snapshot) ?? normalizeLegacyWindowSnapshot(snapshot);
-}
-
-function normalizeModernWindowSnapshot(snapshot: unknown): WindowSnapshot | null {
-  if (!isRecord(snapshot) || !("layout" in snapshot) || !Array.isArray(snapshot.tabs)) {
+  if (!isRecord(snapshot) || snapshot.version !== WINDOW_SNAPSHOT_VERSION || Array.isArray(snapshot.tabs) === false) {
     return null;
   }
 
   const layout = normalizeLayoutNode(snapshot.layout);
-  if (!layout) {
+  if (layout === null) {
     return null;
   }
 
@@ -26,7 +20,7 @@ function normalizeModernWindowSnapshot(snapshot: unknown): WindowSnapshot | null
   const tabMap = new Map<string, WindowSnapshot["tabs"][number]>();
   for (const rawTab of snapshot.tabs) {
     const tab = normalizeTabSnapshot(rawTab);
-    if (!tab) {
+    if (tab === null) {
       continue;
     }
 
@@ -37,95 +31,21 @@ function normalizeModernWindowSnapshot(snapshot: unknown): WindowSnapshot | null
     tabMap.set(tab.tabId, tab);
   }
 
-  const tabs = leafIds.map((leafId) => tabMap.get(leafId)).filter((tab): tab is NonNullable<typeof tab> => tab !== undefined);
+  const tabs = leafIds.map((leafId) => tabMap.get(leafId)).filter((tab): tab is NonNullable<typeof tab> => tab !== null && typeof tab === "object");
   if (tabs.length !== leafIds.length) {
     return null;
   }
 
-  const activeTabId =
-    typeof snapshot.activeTabId === "string" && leafIds.includes(snapshot.activeTabId) ? snapshot.activeTabId : leafIds[0];
+  const activeTabId = typeof snapshot.activeTabId === "string" && leafIds.includes(snapshot.activeTabId)
+    ? snapshot.activeTabId
+    : leafIds[0];
 
   return {
+    version: WINDOW_SNAPSHOT_VERSION,
     layout,
     tabs,
     activeTabId,
     nextTabNumber: inferNextTabNumber(snapshot.nextTabNumber, leafIds),
-  };
-}
-
-function normalizeLegacyWindowSnapshot(snapshot: unknown): WindowSnapshot | null {
-  if (!isRecord(snapshot) || !Array.isArray(snapshot.tabs) || snapshot.tabs.length === 0) {
-    return null;
-  }
-
-  const tabOrder = Array.isArray(snapshot.tabOrder)
-    ? snapshot.tabOrder.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    : [];
-  if (tabOrder.length === 0) {
-    return null;
-  }
-
-  const workspaceMap = new Map<string, WorkspaceSnapshot>();
-  for (const rawTab of snapshot.tabs) {
-    if (!isRecord(rawTab) || !isNonEmptyString(rawTab.tabId)) {
-      continue;
-    }
-
-    const workspace = normalizeWorkspaceSnapshot(rawTab.workspace as WorkspaceSnapshot | null | undefined);
-    if (!workspace) {
-      continue;
-    }
-
-    workspaceMap.set(rawTab.tabId, workspace);
-  }
-
-  const activeLegacyTabId =
-    isNonEmptyString(snapshot.activeTabId) && workspaceMap.has(snapshot.activeTabId)
-      ? snapshot.activeTabId
-      : tabOrder.find((tabId) => workspaceMap.has(tabId));
-  if (!activeLegacyTabId) {
-    return null;
-  }
-
-  const workspace = workspaceMap.get(activeLegacyTabId);
-  if (!workspace) {
-    return null;
-  }
-
-  const paneIds = collectLeafIds(workspace.layout);
-  const paneMap = new Map(workspace.panes.map((pane) => [pane.paneId, pane]));
-  const tabs = paneIds.map((paneId, index) => {
-    const pane = paneMap.get(paneId);
-    if (!pane) {
-      return null;
-    }
-
-    return {
-      tabId: `tab:${index + 1}`,
-      title: pane.title,
-      shell: pane.shell,
-      cwd: pane.cwd,
-    };
-  });
-
-  if (tabs.some((tab) => tab === null)) {
-    return null;
-  }
-
-  const tabIdByPaneId = new Map<string, string>();
-  for (const [index, paneId] of paneIds.entries()) {
-    tabIdByPaneId.set(paneId, `tab:${index + 1}`);
-  }
-
-  const layout = remapLegacyLayout(workspace.layout, tabIdByPaneId);
-  const activeTabId = tabIdByPaneId.get(workspace.activePaneId) ?? "tab:1";
-  const nextTabNumber = inferNextTabNumber(snapshot.nextTabNumber, Array.from(tabIdByPaneId.values()));
-
-  return {
-    layout,
-    tabs: tabs.filter((tab): tab is NonNullable<typeof tab> => tab !== null),
-    activeTabId,
-    nextTabNumber,
   };
 }
 
@@ -148,68 +68,56 @@ function normalizeLayoutNode(node: unknown): LayoutNode | null {
     return null;
   }
 
-  if (node.kind === "leaf") {
-    const leafId = isNonEmptyString(node.leafId) ? node.leafId : isNonEmptyString(node.paneId) ? node.paneId : null;
-    if (!leafId) {
+  if (node.kind === "pane") {
+    if (!isNonEmptyString(node.paneId)) {
       return null;
     }
 
     return {
-      kind: "leaf",
+      kind: "pane",
       id: node.id,
-      leafId,
+      paneId: node.paneId,
     };
+  }
+
+  if (node.kind !== "container") {
+    return null;
   }
 
   const axis = normalizeAxis(node.axis);
-  if (!axis) {
+  if (axis === null || Array.isArray(node.children) === false || node.children.length < 1) {
     return null;
   }
 
-  const first = normalizeLayoutNode(node.first);
-  const second = normalizeLayoutNode(node.second);
-  if (!first || !second) {
+  const children = node.children
+    .map(normalizeLayoutNode)
+    .filter((child): child is LayoutNode => child !== null && typeof child === "object");
+  if (children.length !== node.children.length) {
     return null;
   }
 
+  const sizes = normalizeSizes(node.sizes, children.length);
   return {
-    kind: "split",
+    kind: "container",
     id: node.id,
     axis,
-    ratio: normalizeRatio(node.ratio),
-    first,
-    second,
-  };
-}
-
-function remapLegacyLayout(node: LayoutNode, tabIdByPaneId: Map<string, string>): LayoutNode {
-  if (node.kind === "leaf") {
-    const paneId = "leafId" in node ? node.leafId : node.paneId;
-    return {
-      kind: "leaf",
-      id: node.id,
-      leafId: tabIdByPaneId.get(paneId) ?? paneId,
-    };
-  }
-
-  return {
-    ...node,
-    first: remapLegacyLayout(node.first, tabIdByPaneId),
-    second: remapLegacyLayout(node.second, tabIdByPaneId),
+    children,
+    sizes,
   };
 }
 
 function inferNextTabNumber(nextTabNumber: unknown, tabIds: string[]): number {
   const inferred = tabIds.reduce((maxValue, tabId) => {
-    const match = /^tab:(\d+)$/.exec(tabId);
-    if (!match) {
+    const parts = tabId.split(":");
+    if (parts.length !== 2 || parts[0] !== "tab") {
       return maxValue;
     }
 
-    return Math.max(maxValue, Number(match[1]) + 1);
+    const numericPart = Number(parts[1]);
+    return Number.isFinite(numericPart) ? Math.max(maxValue, numericPart + 1) : maxValue;
   }, 2);
 
-  if (typeof nextTabNumber !== "number" || !Number.isFinite(nextTabNumber)) {
+  if (typeof nextTabNumber !== "number" || Number.isFinite(nextTabNumber) === false) {
     return inferred;
   }
 
@@ -220,12 +128,15 @@ function normalizeAxis(axis: unknown): SplitAxis | null {
   return axis === "horizontal" || axis === "vertical" ? axis : null;
 }
 
-function normalizeRatio(ratio: unknown): number {
-  if (typeof ratio !== "number" || !Number.isFinite(ratio)) {
-    return 0.5;
+function normalizeSizes(value: unknown, count: number): number[] {
+  const raw = Array.isArray(value) ? value : [];
+  const sizes = raw
+    .slice(0, count)
+    .map((item) => (typeof item === "number" && Number.isFinite(item) && item > 0 ? item : 1));
+  while (sizes.length < count) {
+    sizes.push(1);
   }
-
-  return Math.min(0.85, Math.max(0.15, ratio));
+  return sizes;
 }
 
 function isNonEmptyString(value: unknown): value is string {

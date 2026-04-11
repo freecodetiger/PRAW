@@ -2,19 +2,19 @@ import { collectLeafPaneIds } from "../layout/tree";
 import type { LayoutNode, SplitAxis } from "../layout/types";
 import type { PaneSnapshot, WorkspaceSnapshot } from "./snapshot";
 
-const DEFAULT_SPLIT_RATIO = 0.5;
-const MIN_SPLIT_RATIO = 0.15;
-const MAX_SPLIT_RATIO = 0.85;
-
 export function normalizeWorkspaceSnapshot(
   snapshot: WorkspaceSnapshot | null | undefined,
 ): WorkspaceSnapshot | null {
-  if (!snapshot?.layout || !Array.isArray(snapshot.panes) || snapshot.panes.length === 0) {
+  if (snapshot === null || snapshot === undefined || snapshot.layout === undefined || snapshot.layout === null) {
+    return null;
+  }
+
+  if (Array.isArray(snapshot.panes) === false || snapshot.panes.length === 0) {
     return null;
   }
 
   const layout = normalizeLayoutNode(snapshot.layout);
-  if (!layout) {
+  if (layout === null) {
     return null;
   }
 
@@ -26,7 +26,7 @@ export function normalizeWorkspaceSnapshot(
   const paneMap = new Map<string, PaneSnapshot>();
   for (const pane of snapshot.panes) {
     const normalizedPane = normalizePaneSnapshot(pane);
-    if (!normalizedPane) {
+    if (normalizedPane === null) {
       continue;
     }
 
@@ -39,7 +39,7 @@ export function normalizeWorkspaceSnapshot(
 
   const panes = leafPaneIds
     .map((paneId) => paneMap.get(paneId))
-    .filter((pane): pane is PaneSnapshot => pane !== undefined);
+    .filter((pane): pane is PaneSnapshot => pane !== null && typeof pane === "object");
 
   if (panes.length !== leafPaneIds.length) {
     return null;
@@ -58,36 +58,42 @@ function normalizeLayoutNode(node: unknown): LayoutNode | null {
     return null;
   }
 
-  if (node.kind === "leaf") {
+  if (node.kind === "pane") {
     if (!isNonEmptyString(node.paneId)) {
       return null;
     }
 
     return {
-      kind: "leaf",
+      kind: "pane",
       id: node.id,
       paneId: node.paneId,
     };
   }
 
+  if (node.kind !== "container") {
+    return null;
+  }
+
   const axis = normalizeAxis(node.axis);
-  if (!axis) {
+  if (axis === null || Array.isArray(node.children) === false || node.children.length < 1) {
     return null;
   }
 
-  const first = normalizeLayoutNode(node.first);
-  const second = normalizeLayoutNode(node.second);
-  if (!first || !second) {
+  const children = node.children
+    .map(normalizeLayoutNode)
+    .filter((child): child is LayoutNode => child !== null && typeof child === "object");
+
+  if (children.length !== node.children.length) {
     return null;
   }
 
+  const sizes = normalizeSizes(node.sizes, children.length);
   return {
-    kind: "split",
+    kind: "container",
     id: node.id,
     axis,
-    ratio: normalizeRatio(node.ratio),
-    first,
-    second,
+    children,
+    sizes,
   };
 }
 
@@ -108,25 +114,31 @@ function normalizeAxis(axis: unknown): SplitAxis | null {
   return axis === "horizontal" || axis === "vertical" ? axis : null;
 }
 
-function normalizeRatio(ratio: unknown): number {
-  if (typeof ratio !== "number" || !Number.isFinite(ratio)) {
-    return DEFAULT_SPLIT_RATIO;
+function normalizeSizes(value: unknown, count: number): number[] {
+  const raw = Array.isArray(value) ? value : [];
+  const sizes = raw
+    .slice(0, count)
+    .map((item) => (typeof item === "number" && Number.isFinite(item) && item > 0 ? item : 1));
+
+  while (sizes.length < count) {
+    sizes.push(1);
   }
 
-  return Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, ratio));
+  return sizes;
 }
 
 function inferNextPaneNumber(nextPaneNumber: number, paneIds: string[]): number {
   const inferred = paneIds.reduce((maxValue, paneId) => {
-    const match = /^pane:(\d+)$/.exec(paneId);
-    if (!match) {
+    const parts = paneId.split(":");
+    if (parts.length !== 2 || parts[0] !== "pane") {
       return maxValue;
     }
 
-    return Math.max(maxValue, Number(match[1]) + 1);
+    const numericPart = Number(parts[1]);
+    return Number.isFinite(numericPart) ? Math.max(maxValue, numericPart + 1) : maxValue;
   }, 2);
 
-  if (typeof nextPaneNumber !== "number" || !Number.isFinite(nextPaneNumber)) {
+  if (typeof nextPaneNumber !== "number" || Number.isFinite(nextPaneNumber) === false) {
     return inferred;
   }
 
@@ -137,6 +149,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null;
 }

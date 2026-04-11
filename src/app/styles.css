@@ -577,6 +577,60 @@ button {
   line-height: 1.45;
 }
 
+.history-token--plain {
+  color: inherit;
+}
+
+.history-token--command,
+.history-token--subcommand {
+  color: #111111;
+  font-weight: 600;
+}
+
+.history-token--option,
+.history-token--operator {
+  color: #4d4d4d;
+}
+
+.history-token--env {
+  color: #0d5c63;
+}
+
+.history-token--string {
+  color: #6a4a12;
+}
+
+.history-token--path {
+  color: #1f4f7a;
+}
+
+.history-token--url {
+  color: #1b5e8a;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.history-token--error {
+  color: #a12626;
+  font-weight: 600;
+}
+
+.history-token--warning {
+  color: #8a5a00;
+  font-weight: 500;
+}
+
+.history-token--success {
+  color: #1f6b2f;
+  font-weight: 500;
+}
+
+.history-token--number,
+.history-token--time {
+  color: #5b4a8a;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
@@ -611,6 +665,21 @@ button {
   flex: var(--split-ratio, 0.5) 1 0;
   min-width: 0;
   min-height: 0;
+}
+
+.layout-tree__leaf-frame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.layout-tree__leaf-resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
 }
 
 .layout-tree__branch:last-child {
@@ -781,4 +850,60 @@ button {
     grid-template-columns: 1fr;
     gap: 6px;
   }
+}
+
+.terminal-pane__resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.terminal-pane__resize-handle::before,
+.terminal-pane__resize-handle::after {
+  content: "";
+  position: absolute;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+
+.terminal-pane__resize-handle::before {
+  inset: 0;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.terminal-pane__resize-handle::after {
+  background: #000000;
+}
+
+.terminal-pane__resize-handle:hover::before,
+.terminal-pane__resize-handle:hover::after,
+.terminal-pane__resize-handle--active::before,
+.terminal-pane__resize-handle--active::after {
+  opacity: 1;
+}
+
+.terminal-pane__resize-handle--left,
+.terminal-pane__resize-handle--right {
+  cursor: col-resize;
+}
+
+.terminal-pane__resize-handle--left::after,
+.terminal-pane__resize-handle--right::after {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  left: calc(50% - 0.5px);
+}
+
+.terminal-pane__resize-handle--top,
+.terminal-pane__resize-handle--bottom {
+  cursor: row-resize;
+}
+
+.terminal-pane__resize-handle--top::after,
+.terminal-pane__resize-handle--bottom::after {
+  left: 0;
+  right: 0;
+  height: 1px;
+  top: calc(50% - 0.5px);
 }

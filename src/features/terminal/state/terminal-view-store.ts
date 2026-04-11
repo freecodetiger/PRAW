@@ -17,6 +17,7 @@ import {
   type PaneRenderMode,
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
+import { normalizeDialogOutput } from "../lib/dialog-output";
 import {
   consumeShellIntegrationChunk,
   createShellIntegrationParserState,
@@ -121,7 +122,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         parserState: parsed.state,
       };
 
-      const normalizedOutput = stripAnsiForDialog(parsed.visibleOutput);
+      const normalizedOutput = normalizeDialogOutput(parsed.visibleOutput);
       const shouldCaptureVisibleOutput =
         tabState.presentation !== "agent-workflow" &&
         !(tabState.mode === "classic" && tabState.modeSource === "manual" && tabState.activeCommandBlockId === null);
@@ -260,6 +261,3 @@ function reconcileShellState(state: TerminalTabViewState, shell: string, cwd: st
   };
 }
 
-function stripAnsiForDialog(data: string): string {
-  return data.replace(/\u001b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*\u0007)/g, "");
-}

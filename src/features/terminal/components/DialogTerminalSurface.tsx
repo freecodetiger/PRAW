@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CommandBlock } from "../../../domain/terminal/dialog";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
+import { tokenizeDialogOutput, type DialogOutputToken } from "../lib/dialog-output";
+import { highlightCommandText, type HistoryHighlightToken } from "../lib/history-highlighting";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { useGhostCompletion } from "../hooks/useGhostCompletion";
@@ -55,7 +57,8 @@ export function DialogTerminalSurface({
   }, [isPinnedBottom, paneState.blocks]);
 
   const history = paneState.composerHistory;
-  const isDisabled = status !== "running";
+  const hasActiveCommand = paneState.activeCommandBlockId !== null;
+  const isDisabled = status !== "running" || hasActiveCommand;
 
   const submit = () => {
     const command = draft.trim();
@@ -97,7 +100,7 @@ export function DialogTerminalSurface({
             ) : (
               <p className="command-block__session-label">session output</p>
             )}
-            <pre className="command-block__output">{block.output || (block.status === "running" ? "" : " ")}</pre>
+            <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
             {block.kind === "command" && block.status === "completed" ? (
               <p className="command-block__status">exit {block.exitCode ?? "unknown"}</p>
             ) : null}
@@ -139,7 +142,7 @@ export function DialogTerminalSurface({
             ref={inputRef}
             className="dialog-terminal__input"
             disabled={isDisabled}
-            placeholder={isDisabled ? "Session is not accepting input." : "Run a command"}
+            placeholder={status !== "running" ? "Session is not accepting input." : hasActiveCommand ? "Current command is still running or waiting for input." : "Run a command"}
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"
@@ -233,12 +236,42 @@ export function DialogTerminalSurface({
   );
 }
 
+function CommandBlockOutput({ output }: { output: string }) {
+  const tokens = useMemo(() => tokenizeDialogOutput(output), [output]);
+
+  return (
+    <pre className="command-block__output">
+      <HighlightedTokens tokens={tokens} />
+    </pre>
+  );
+}
+
 function CommandTranscriptHeader({ block }: { block: CommandBlock }) {
   return (
     <p className="command-block__header">
       <span className="command-block__cwd">{block.cwd}</span>
       <span className="command-block__sigil">$</span>
-      <span>{block.command}</span>
+      <HighlightedTokens tokens={highlightCommandText(block.command ?? "")} />
     </p>
+  );
+}
+
+function HighlightedTokens({ tokens }: { tokens: Array<HistoryHighlightToken | DialogOutputToken> }) {
+  return (
+    <>
+      {tokens.map((token, index) => {
+        const style = "style" in token ? token.style : null;
+
+        return (
+          <span
+            key={`${token.kind}:${index}:${token.text}`}
+            className={style ? undefined : `history-token history-token--${token.kind}`}
+            style={style ?? undefined}
+          >
+            {token.text}
+          </span>
+        );
+      })}
+    </>
   );
 }

@@ -1,0 +1,5 @@
+{"type":"click","text":"A\n      \n        只保留分隔条\n        继续只允许拖容器分隔条，不给每个 Tab 暴露四边热区。","choice":"a","id":null,"timestamp":1775922307056}
+{"type":"click","text":"A\n      \n        只保留分隔条\n        继续只允许拖容器分隔条，不给每个 Tab 暴露四边热区。","choice":"a","id":null,"timestamp":1775922307848}
+{"type":"click","text":"B\n      \n        每个 Tab 四边都可拖\n        Tab 的上下左右边界都变成热区，但实际仍映射到最近的相邻 divider。推荐。","choice":"b","id":null,"timestamp":1775922308577}
+{"type":"click","text":"C\n      \n        悬浮控制柄\n        选中 Tab 后出现四边控制柄，再拖动控制柄调整尺寸。","choice":"c","id":null,"timestamp":1775922309075}
+{"type":"click","text":"A\n      \n        只保留分隔条\n        继续只允许拖容器分隔条，不给每个 Tab 暴露四边热区。","choice":"a","id":null,"timestamp":1775922309542}
