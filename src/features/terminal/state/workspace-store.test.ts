@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { selectActiveTab, selectActiveWorkspace, useWorkspaceStore } from "./workspace-store";
+import { collectLeafIds } from "../../../domain/layout/tree";
+import { selectActiveTab, useWorkspaceStore } from "./workspace-store";
 
 describe("workspace-store", () => {
   beforeEach(() => {
@@ -12,55 +13,53 @@ describe("workspace-store", () => {
     }));
   });
 
-  it("creates and switches tabs while preserving each tab workspace", () => {
+  it("bootstraps a single tab region and splits from an existing tab", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",
       cwd: "~",
     });
 
-    useWorkspaceStore.getState().createTab({
-      shell: "/usr/bin/zsh",
-      cwd: "/tmp",
-    });
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
 
-    expect(useWorkspaceStore.getState().window?.tabOrder).toEqual(["tab:1", "tab:2"]);
+    expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:1", "tab:2"]);
     expect(useWorkspaceStore.getState().window?.activeTabId).toBe("tab:2");
-    expect(selectActiveWorkspace(useWorkspaceStore.getState())?.panes["pane:main"]?.shell).toBe("/usr/bin/zsh");
+    expect(useWorkspaceStore.getState().window?.tabs["tab:2"]).toMatchObject({
+      title: "Tab 2",
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+  });
 
+  it("moves active focus with keyboard navigation across the window layout tree", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    useWorkspaceStore.getState().splitTab("tab:2", "vertical");
     useWorkspaceStore.getState().setActiveTab("tab:1");
-    expect(selectActiveWorkspace(useWorkspaceStore.getState())?.panes["pane:main"]?.shell).toBe("/bin/bash");
+
+    useWorkspaceStore.getState().focusAdjacentTab("right");
+    expect(selectActiveTab(useWorkspaceStore.getState())?.tabId).toBe("tab:2");
+
+    useWorkspaceStore.getState().focusAdjacentTab("down");
+    expect(selectActiveTab(useWorkspaceStore.getState())?.tabId).toBe("tab:3");
   });
 
-  it("moves active focus with keyboard navigation across the active tab layout tree", () => {
+  it("stores drag preview separately from the persisted window layout model", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",
       cwd: "~",
     });
 
-    useWorkspaceStore.getState().splitPane("pane:main", "horizontal");
-    useWorkspaceStore.getState().splitPane("pane:2", "vertical");
-    useWorkspaceStore.getState().setActivePane("pane:main");
-
-    useWorkspaceStore.getState().focusAdjacentPane("right");
-    expect(selectActiveWorkspace(useWorkspaceStore.getState())?.activePaneId).toBe("pane:2");
-
-    useWorkspaceStore.getState().focusAdjacentPane("down");
-    expect(selectActiveWorkspace(useWorkspaceStore.getState())?.activePaneId).toBe("pane:3");
-  });
-
-  it("stores drag preview separately from the persisted active workspace model", () => {
-    useWorkspaceStore.getState().bootstrapWindow({
-      shell: "/bin/bash",
-      cwd: "~",
-    });
-
-    useWorkspaceStore.getState().splitPane("pane:main", "horizontal");
-    useWorkspaceStore.getState().beginPaneDrag("pane:main");
-    useWorkspaceStore.getState().setDragPreview("pane:2", "left");
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    useWorkspaceStore.getState().beginTabDrag("tab:1");
+    useWorkspaceStore.getState().setDragPreview("tab:2", "left");
 
     expect(useWorkspaceStore.getState().dragPreview).toEqual({
-      sourcePaneId: "pane:main",
-      targetPaneId: "pane:2",
+      sourceLeafId: "tab:1",
+      targetLeafId: "tab:2",
       axis: "horizontal",
       order: "before",
     });
@@ -70,54 +69,35 @@ describe("workspace-store", () => {
     expect(useWorkspaceStore.getState().dragPreview).toBeNull();
   });
 
-  it("applies the drag preview by reordering the active workspace layout", () => {
+  it("applies the drag preview by reordering the window layout", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",
       cwd: "~",
     });
 
-    useWorkspaceStore.getState().splitPane("pane:main", "horizontal");
-    useWorkspaceStore.getState().splitPane("pane:2", "vertical");
-    useWorkspaceStore.getState().beginPaneDrag("pane:main");
-    useWorkspaceStore.getState().setDragPreview("pane:3", "top");
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    useWorkspaceStore.getState().splitTab("tab:2", "vertical");
+    useWorkspaceStore.getState().beginTabDrag("tab:1");
+    useWorkspaceStore.getState().setDragPreview("tab:3", "top");
     useWorkspaceStore.getState().applyDragPreview();
 
-    const workspace = selectActiveWorkspace(useWorkspaceStore.getState());
-    expect(workspace?.activePaneId).toBe("pane:main");
-    expect(workspace?.panes["pane:main"]?.title).toBe("Main");
+    expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:2", "tab:1", "tab:3"]);
+    expect(useWorkspaceStore.getState().window?.activeTabId).toBe("tab:1");
     expect(useWorkspaceStore.getState().dragState).toBeNull();
     expect(useWorkspaceStore.getState().dragPreview).toBeNull();
   });
 
-  it("closes a tab and activates a surviving neighbor", () => {
+  it("closes a tab region and activates a surviving neighbor", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",
       cwd: "~",
     });
 
-    useWorkspaceStore.getState().createTab({
-      shell: "/usr/bin/zsh",
-      cwd: "/tmp",
-    });
-    useWorkspaceStore.getState().createTab({
-      shell: "/bin/fish",
-      cwd: "/var/tmp",
-    });
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    useWorkspaceStore.getState().splitTab("tab:2", "vertical");
 
     useWorkspaceStore.getState().closeTab("tab:3");
-    expect(useWorkspaceStore.getState().window?.tabOrder).toEqual(["tab:1", "tab:2"]);
+    expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:1", "tab:2"]);
     expect(selectActiveTab(useWorkspaceStore.getState())?.tabId).toBe("tab:2");
-  });
-
-  it("renames a tab without disturbing the active workspace", () => {
-    useWorkspaceStore.getState().bootstrapWindow({
-      shell: "/bin/bash",
-      cwd: "~",
-    });
-
-    useWorkspaceStore.getState().renameTab("tab:1", "  Build  ");
-
-    expect(selectActiveTab(useWorkspaceStore.getState())?.title).toBe("Build");
-    expect(selectActiveWorkspace(useWorkspaceStore.getState())?.activePaneId).toBe("pane:main");
   });
 });

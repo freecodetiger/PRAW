@@ -3,14 +3,14 @@ import { useEffect, useMemo, useRef } from "react";
 import { closeTerminalSession, resizeTerminalSession, writeTerminalSession } from "../../../lib/tauri/terminal";
 import { useWorkspaceStore } from "../state/workspace-store";
 
-export function useTerminalSession(tabId: string, paneId: string) {
-  const pane = useWorkspaceStore((state) => state.window?.tabs[tabId]?.workspace.panes[paneId]);
-  const restartPane = useWorkspaceStore((state) => state.restartPane);
+export function useTerminalSession(tabId: string) {
+  const tab = useWorkspaceStore((state) => state.window?.tabs[tabId]);
+  const restartTab = useWorkspaceStore((state) => state.restartTab);
   const activeSessionIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    activeSessionIdRef.current = pane?.sessionId;
-  }, [pane?.sessionId]);
+    activeSessionIdRef.current = tab?.sessionId;
+  }, [tab?.sessionId]);
 
   const controls = useMemo(
     () => ({
@@ -38,15 +38,15 @@ export function useTerminalSession(tabId: string, paneId: string) {
           await closeTerminalSession(sessionId).catch(() => undefined);
         }
 
-        restartPane(tabId, paneId);
+        restartTab(tabId);
       },
     }),
-    [paneId, restartPane, tabId],
+    [restartTab, tabId],
   );
 
   return {
-    pane,
-    currentStreamSessionId: pane?.sessionId ?? null,
+    tab,
+    currentStreamSessionId: tab?.sessionId ?? null,
     ...controls,
   };
 }

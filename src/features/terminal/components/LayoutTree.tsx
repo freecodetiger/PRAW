@@ -1,23 +1,23 @@
 import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
+import { getNodeLeafId } from "../../../domain/layout/tree";
 import type { LayoutNode, SplitNode } from "../../../domain/layout/types";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { TerminalPane } from "./TerminalPane";
 
 interface LayoutTreeProps {
-  tabId: string;
   node: LayoutNode;
 }
 
-export function LayoutTree({ tabId, node }: LayoutTreeProps) {
+export function LayoutTree({ node }: LayoutTreeProps) {
   if (node.kind === "leaf") {
-    return <TerminalPane tabId={tabId} paneId={node.paneId} />;
+    return <TerminalPane tabId={getNodeLeafId(node)} />;
   }
 
-  return <SplitLayoutTree tabId={tabId} node={node} />;
+  return <SplitLayoutTree node={node} />;
 }
 
-function SplitLayoutTree({ tabId, node }: { tabId: string; node: SplitNode }) {
+function SplitLayoutTree({ node }: { node: SplitNode }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const resizeSplit = useWorkspaceStore((state) => state.resizeSplit);
   const [isResizing, setIsResizing] = useState(false);
@@ -73,7 +73,7 @@ function SplitLayoutTree({ tabId, node }: { tabId: string; node: SplitNode }) {
       data-layout-node-id={node.id}
     >
       <div className="layout-tree__branch">
-        <LayoutTree tabId={tabId} node={node.first} />
+        <LayoutTree node={node.first} />
       </div>
       <button
         className={`layout-tree__divider layout-tree__divider--${node.axis}`}
@@ -82,7 +82,7 @@ function SplitLayoutTree({ tabId, node }: { tabId: string; node: SplitNode }) {
         onPointerDown={handlePointerDown}
       />
       <div className="layout-tree__branch">
-        <LayoutTree tabId={tabId} node={node.second} />
+        <LayoutTree node={node.second} />
       </div>
     </div>
   );

@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CommandBlock } from "../../../domain/terminal/dialog";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
-import type { TerminalPaneViewState } from "../state/terminal-view-store";
+import type { TerminalTabViewState } from "../state/terminal-view-store";
 
 interface DialogTerminalSurfaceProps {
-  paneState: TerminalPaneViewState;
+  paneState: TerminalTabViewState;
   status: TerminalSessionStatus;
   onSubmitCommand: (command: string) => void;
   isActive: boolean;
@@ -65,14 +65,7 @@ export function DialogTerminalSurface({
           setIsPinnedBottom(distanceFromBottom < 24);
         }}
       >
-        {paneState.blocks.length === 0 ? (
-          <div className="dialog-terminal__empty">
-            <p>Ready for commands.</p>
-            <span>Each command is grouped and separated for easier reading.</span>
-          </div>
-        ) : null}
-
-        {paneState.blocks.map((block, index) => (
+        {paneState.blocks.map((block: CommandBlock, index: number) => (
           <article className="command-block" key={block.id}>
             {index > 0 ? <hr className="command-block__divider" /> : null}
             {block.kind === "command" ? (
@@ -114,7 +107,7 @@ export function DialogTerminalSurface({
           ref={inputRef}
           className="dialog-terminal__input"
           disabled={isDisabled}
-          placeholder={isDisabled ? "Session is not accepting input." : "Enter a shell command"}
+          placeholder={isDisabled ? "Session is not accepting input." : "Run a command"}
           value={draft}
           onChange={(event) => {
             setDraft(event.target.value);

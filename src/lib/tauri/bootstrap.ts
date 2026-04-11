@@ -5,7 +5,7 @@ import type { WindowSnapshot } from "../../domain/window/snapshot";
 
 export interface AppBootstrapState {
   config: AppConfig;
-  windowSnapshot: WindowSnapshot | null;
+  windowSnapshot: unknown | null;
 }
 
 export async function loadAppBootstrapState(): Promise<AppBootstrapState> {

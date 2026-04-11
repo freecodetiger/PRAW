@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { closeTerminalSession, createTerminalSession, onTerminalExit, onTerminalOutput } from "../../../lib/tauri/terminal";
 import { getTerminalBufferKey, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
-import { resolveSessionPaneRef, type SessionPaneRef } from "./runtime-session-routing";
+import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
 
 function asMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -16,124 +16,107 @@ function asMessage(error: unknown): string {
 export function useTerminalRuntime() {
   const windowModel = useWorkspaceStore((state) => state.window);
   const attachSession = useWorkspaceStore((state) => state.attachSession);
-  const markPaneExited = useWorkspaceStore((state) => state.markPaneExited);
-  const markPaneError = useWorkspaceStore((state) => state.markPaneError);
+  const markTabExited = useWorkspaceStore((state) => state.markTabExited);
+  const markTabError = useWorkspaceStore((state) => state.markTabError);
   const appendOutput = useTerminalViewStore((state) => state.appendOutput);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
-  const resetPaneBuffer = useTerminalViewStore((state) => state.resetPaneBuffer);
-  const removePaneBuffer = useTerminalViewStore((state) => state.removePaneBuffer);
-  const syncPaneState = useTerminalViewStore((state) => state.syncPaneState);
-  const resetPaneState = useTerminalViewStore((state) => state.resetPaneState);
-  const removePaneState = useTerminalViewStore((state) => state.removePaneState);
+  const resetTabBuffer = useTerminalViewStore((state) => state.resetTabBuffer);
+  const removeTabBuffer = useTerminalViewStore((state) => state.removeTabBuffer);
+  const syncTabState = useTerminalViewStore((state) => state.syncTabState);
+  const resetTabState = useTerminalViewStore((state) => state.resetTabState);
+  const removeTabState = useTerminalViewStore((state) => state.removeTabState);
   const pendingSessionIdsRef = useRef(new Map<string, string>());
-  const pendingSessionRefsRef = useRef(new Map<string, SessionPaneRef>());
+  const pendingSessionRefsRef = useRef(new Map<string, SessionTabRef>());
   const previousSessionIdsRef = useRef(new Set<string>());
-  const previousPaneKeysRef = useRef(new Set<string>());
+  const previousTabKeysRef = useRef(new Set<string>());
   const windowRef = useRef(windowModel);
 
   windowRef.current = windowModel;
 
-  const panes = useMemo(() => {
+  const tabs = useMemo(() => {
     if (!windowModel) {
       return [];
     }
 
-    return windowModel.tabOrder.flatMap((tabId) => {
-      const tab = windowModel.tabs[tabId];
-      return Object.values(tab.workspace.panes).map((pane) => ({
-        tabId,
-        pane,
-      }));
-    });
+    return Object.values(windowModel.tabs);
   }, [windowModel]);
 
   const sessionIndex = useMemo(() => {
-    const index = new Map<string, { tabId: string; paneId: string }>();
+    const index = new Map<string, SessionTabRef>();
 
-    for (const { tabId, pane } of panes) {
-      if (pane.sessionId) {
-        index.set(pane.sessionId, {
-          tabId,
-          paneId: pane.paneId,
+    for (const tab of tabs) {
+      if (tab.sessionId) {
+        index.set(tab.sessionId, {
+          tabId: tab.tabId,
         });
       }
     }
 
     return index;
-  }, [panes]);
+  }, [tabs]);
   const sessionIndexRef = useRef(sessionIndex);
   sessionIndexRef.current = sessionIndex;
 
   useEffect(() => {
-    for (const { tabId, pane } of panes) {
-      syncPaneState(tabId, pane.paneId, pane.shell, pane.cwd);
+    for (const tab of tabs) {
+      syncTabState(tab.tabId, tab.shell, tab.cwd);
     }
-  }, [panes, syncPaneState]);
+  }, [syncTabState, tabs]);
 
   useEffect(() => {
-    for (const { tabId, pane } of panes) {
-      const pendingKey = `${tabId}:${pane.paneId}`;
-      if (pane.sessionId || pane.status !== "starting" || pendingSessionIdsRef.current.has(pendingKey)) {
+    for (const tab of tabs) {
+      if (tab.sessionId || tab.status !== "starting" || pendingSessionIdsRef.current.has(tab.tabId)) {
         continue;
       }
 
       const requestedSessionId = crypto.randomUUID();
-      resetPaneBuffer(tabId, pane.paneId);
-      resetPaneState(tabId, pane.paneId, pane.shell, pane.cwd);
-      pendingSessionIdsRef.current.set(pendingKey, requestedSessionId);
+      resetTabBuffer(tab.tabId);
+      resetTabState(tab.tabId, tab.shell, tab.cwd);
+      pendingSessionIdsRef.current.set(tab.tabId, requestedSessionId);
       pendingSessionRefsRef.current.set(requestedSessionId, {
-        tabId,
-        paneId: pane.paneId,
+        tabId: tab.tabId,
       });
 
       void createTerminalSession({
         sessionId: requestedSessionId,
-        shell: pane.shell,
-        cwd: pane.cwd,
+        shell: tab.shell,
+        cwd: tab.cwd,
         env: {
           TERM: "xterm-256color",
           COLORTERM: "truecolor",
         },
       })
         .then((response) => {
-          pendingSessionIdsRef.current.delete(pendingKey);
+          pendingSessionIdsRef.current.delete(tab.tabId);
           pendingSessionRefsRef.current.delete(response.sessionId);
 
           const currentWindow = windowRef.current;
-          const currentPane = currentWindow?.tabs[tabId]?.workspace.panes[pane.paneId];
-          if (!currentPane || currentPane.sessionId || currentPane.status !== "starting") {
+          const currentTab = currentWindow?.tabs[tab.tabId];
+          if (!currentTab || currentTab.sessionId || currentTab.status !== "starting") {
             return closeTerminalSession(response.sessionId).catch(() => undefined);
           }
 
-          attachSession(tabId, pane.paneId, response.sessionId, response.shell, response.cwd);
+          attachSession(tab.tabId, response.sessionId, response.shell, response.cwd);
         })
         .catch((error) => {
-          pendingSessionIdsRef.current.delete(pendingKey);
+          pendingSessionIdsRef.current.delete(tab.tabId);
           pendingSessionRefsRef.current.delete(requestedSessionId);
-          markPaneError(tabId, pane.paneId, asMessage(error));
+          markTabError(tab.tabId, asMessage(error));
         });
     }
-  }, [attachSession, markPaneError, panes, resetPaneBuffer, resetPaneState]);
+  }, [attachSession, markTabError, resetTabBuffer, resetTabState, tabs]);
 
   useEffect(() => {
     let disposed = false;
     let unlistenExit: (() => void) | undefined;
 
     void onTerminalExit((event) => {
-      const currentWindow = windowRef.current;
-      if (!currentWindow) {
+      const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
+      if (!tabRef) {
         return;
       }
 
-      for (const tabId of currentWindow.tabOrder) {
-        const tab = currentWindow.tabs[tabId];
-        for (const pane of Object.values(tab.workspace.panes)) {
-          if (pane.sessionId === event.sessionId) {
-            markPaneExited(tabId, pane.paneId, event.exitCode, event.signal, event.error);
-            return;
-          }
-        }
-      }
+      markTabExited(tabRef.tabId, event.exitCode, event.signal, event.error);
     }).then((cleanup) => {
       if (disposed) {
         cleanup();
@@ -147,24 +130,20 @@ export function useTerminalRuntime() {
       disposed = true;
       unlistenExit?.();
     };
-  }, [markPaneExited]);
+  }, [markTabExited]);
 
   useEffect(() => {
     let disposed = false;
     let unlistenOutput: (() => void) | undefined;
 
     void onTerminalOutput((event) => {
-      const paneRef = resolveSessionPaneRef(
-        event.sessionId,
-        sessionIndexRef.current,
-        pendingSessionRefsRef.current,
-      );
-      if (!paneRef) {
+      const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
+      if (!tabRef) {
         return;
       }
 
-      appendOutput(paneRef.tabId, paneRef.paneId, event.data);
-      consumeOutput(paneRef.tabId, paneRef.paneId, event.data);
+      appendOutput(tabRef.tabId, event.data);
+      consumeOutput(tabRef.tabId, event.data);
     }).then((cleanup) => {
       if (disposed) {
         cleanup();
@@ -182,9 +161,9 @@ export function useTerminalRuntime() {
 
   useEffect(() => {
     const currentSessionIds = new Set<string>();
-    for (const { pane } of panes) {
-      if (pane.sessionId) {
-        currentSessionIds.add(pane.sessionId);
+    for (const tab of tabs) {
+      if (tab.sessionId) {
+        currentSessionIds.add(tab.sessionId);
       }
     }
 
@@ -195,35 +174,30 @@ export function useTerminalRuntime() {
     }
 
     previousSessionIdsRef.current = currentSessionIds;
-  }, [panes]);
+  }, [tabs]);
 
   useEffect(() => {
-    const activePaneKeys = new Set(panes.map(({ tabId, pane }) => `${tabId}:${pane.paneId}`));
+    const activeTabIds = new Set(tabs.map((tab) => tab.tabId));
 
-    for (const [sessionId, paneRef] of pendingSessionRefsRef.current) {
-      if (!activePaneKeys.has(`${paneRef.tabId}:${paneRef.paneId}`)) {
+    for (const [sessionId, tabRef] of pendingSessionRefsRef.current) {
+      if (!activeTabIds.has(tabRef.tabId)) {
         pendingSessionRefsRef.current.delete(sessionId);
       }
     }
-  }, [panes]);
+  }, [tabs]);
 
   useEffect(() => {
-    const currentPaneKeys = new Set(panes.map(({ tabId, pane }) => getTerminalBufferKey(tabId, pane.paneId)));
+    const currentTabKeys = new Set(tabs.map((tab) => getTerminalBufferKey(tab.tabId)));
 
-    for (const previousPaneKey of previousPaneKeysRef.current) {
-      if (currentPaneKeys.has(previousPaneKey)) {
+    for (const previousTabKey of previousTabKeysRef.current) {
+      if (currentTabKeys.has(previousTabKey)) {
         continue;
       }
 
-      const separatorIndex = previousPaneKey.indexOf(":pane:");
-      if (separatorIndex === -1) {
-        continue;
-      }
-
-      removePaneBuffer(previousPaneKey.slice(0, separatorIndex), previousPaneKey.slice(separatorIndex + 1));
-      removePaneState(previousPaneKey.slice(0, separatorIndex), previousPaneKey.slice(separatorIndex + 1));
+      removeTabBuffer(previousTabKey);
+      removeTabState(previousTabKey);
     }
 
-    previousPaneKeysRef.current = currentPaneKeys;
-  }, [panes, removePaneBuffer, removePaneState]);
+    previousTabKeysRef.current = currentTabKeys;
+  }, [removeTabBuffer, removeTabState, tabs]);
 }

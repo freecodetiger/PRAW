@@ -1,18 +1,15 @@
 use anyhow::{anyhow, Result};
 use serde::Serialize;
+use serde_json::Value;
 use tauri::AppHandle;
 
-use crate::{
-    config::AppConfig,
-    storage,
-    workspace::{WindowSnapshot, WorkspaceSnapshot},
-};
+use crate::{config::AppConfig, storage, workspace::WindowSnapshot};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppBootstrapState {
     pub config: AppConfig,
-    pub window_snapshot: Option<WindowSnapshot>,
+    pub window_snapshot: Option<Value>,
 }
 
 #[tauri::command]
@@ -23,11 +20,7 @@ pub fn load_app_bootstrap_state(app: AppHandle) -> Result<AppBootstrapState, Str
 
     Ok(AppBootstrapState {
         config,
-        window_snapshot: if snapshot.is_empty() {
-            None
-        } else {
-            Some(snapshot)
-        },
+        window_snapshot: snapshot,
     })
 }
 
@@ -41,30 +34,39 @@ pub fn save_window_snapshot(app: AppHandle, snapshot: WindowSnapshot) -> Result<
     storage::save_json(&app, "workspace/window.json", &snapshot).map_err(|e| e.to_string())
 }
 
-fn load_window_snapshot(app: &AppHandle) -> Result<WindowSnapshot> {
+fn load_window_snapshot(app: &AppHandle) -> Result<Option<Value>> {
     if let Some(raw) = storage::load_raw(app, "workspace/window.json")? {
-        return parse_window_snapshot(&raw, "workspace/window.json");
+        let value = parse_json_value(&raw, "workspace/window.json")?;
+        return Ok(if is_empty_window_snapshot(&value) {
+            None
+        } else {
+            Some(value)
+        });
     }
 
     if let Some(raw) = storage::load_raw(app, "workspace/workspace.json")? {
-        if let Ok(window_snapshot) = parse_window_snapshot(&raw, "workspace/workspace.json") {
-            return Ok(window_snapshot);
-        }
-
-        let legacy_workspace =
-            serde_json::from_str::<WorkspaceSnapshot>(&raw).map_err(|error| {
-                anyhow!(
-                    "failed to parse legacy workspace snapshot workspace/workspace.json: {error}"
-                )
-            })?;
-
-        return Ok(WindowSnapshot::from(legacy_workspace));
+        let value = parse_json_value(&raw, "workspace/workspace.json")?;
+        return Ok(Some(value));
     }
 
-    Ok(WindowSnapshot::default())
+    Ok(None)
 }
 
-fn parse_window_snapshot(raw: &str, path: &str) -> Result<WindowSnapshot> {
-    serde_json::from_str::<WindowSnapshot>(raw)
-        .map_err(|error| anyhow!("failed to parse window snapshot {path}: {error}"))
+fn parse_json_value(raw: &str, path: &str) -> Result<Value> {
+    serde_json::from_str::<Value>(raw)
+        .map_err(|error| anyhow!("failed to parse persisted JSON {path}: {error}"))
+}
+
+fn is_empty_window_snapshot(value: &Value) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+
+    let tabs_empty = object
+        .get("tabs")
+        .and_then(|tabs| tabs.as_array())
+        .is_some_and(|tabs| tabs.is_empty());
+    let layout_missing = object.get("layout").is_none() || object.get("layout").is_some_and(|layout| layout.is_null());
+
+    tabs_empty || layout_missing
 }

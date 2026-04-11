@@ -1,61 +1,46 @@
 import { describe, expect, it } from "vitest";
 
-import { fromWorkspaceSnapshot } from "../workspace/snapshot";
 import type { WindowModel } from "./types";
 import { fromWindowSnapshot, toWindowSnapshot, type WindowSnapshot } from "./snapshot";
 
-const workspaceMain = fromWorkspaceSnapshot({
-  layout: {
-    kind: "leaf",
-    id: "layout:pane:main",
-    paneId: "pane:main",
-  },
-  activePaneId: "pane:main",
-  nextPaneNumber: 2,
-  panes: [
-    {
-      paneId: "pane:main",
-      title: "Main",
-      shell: "/bin/bash",
-      cwd: "~",
-    },
-  ],
-});
-
 const windowModel: WindowModel = {
+  layout: {
+    kind: "split",
+    id: "split:root",
+    axis: "horizontal",
+    ratio: 0.5,
+    first: {
+      kind: "leaf",
+      id: "leaf:tab:1",
+      leafId: "tab:1",
+    },
+    second: {
+      kind: "leaf",
+      id: "leaf:tab:2",
+      leafId: "tab:2",
+    },
+  },
   tabs: {
     "tab:1": {
       tabId: "tab:1",
-      title: "Tab 1",
-      workspace: workspaceMain,
+      title: "Main",
+      shell: "/bin/bash",
+      cwd: "~",
+      status: "starting",
+      exitCode: null,
+      signal: null,
     },
     "tab:2": {
       tabId: "tab:2",
-      title: "Tab 2",
-      workspace: {
-        ...workspaceMain,
-        activePaneId: "pane:2",
-        nextPaneNumber: 3,
-        panes: {
-          "pane:2": {
-            paneId: "pane:2",
-            title: "Pane 2",
-            shell: "/usr/bin/zsh",
-            cwd: "/tmp",
-            status: "starting",
-            exitCode: null,
-            signal: null,
-          },
-        },
-        layout: {
-          kind: "leaf",
-          id: "layout:pane:2",
-          paneId: "pane:2",
-        },
-      },
+      title: "Build",
+      shell: "/usr/bin/zsh",
+      cwd: "/tmp",
+      status: "running",
+      sessionId: "session:2",
+      exitCode: null,
+      signal: null,
     },
   },
-  tabOrder: ["tab:1", "tab:2"],
   activeTabId: "tab:2",
   nextTabNumber: 3,
 };
@@ -63,116 +48,79 @@ const windowModel: WindowModel = {
 describe("window snapshot", () => {
   it("serializes a window model to a window snapshot", () => {
     expect(toWindowSnapshot(windowModel)).toEqual({
+      layout: {
+        kind: "split",
+        id: "split:root",
+        axis: "horizontal",
+        ratio: 0.5,
+        first: {
+          kind: "leaf",
+          id: "leaf:tab:1",
+          leafId: "tab:1",
+        },
+        second: {
+          kind: "leaf",
+          id: "leaf:tab:2",
+          leafId: "tab:2",
+        },
+      },
       tabs: [
         {
           tabId: "tab:1",
-          title: "Tab 1",
-          workspace: {
-            layout: {
-              kind: "leaf",
-              id: "layout:pane:main",
-              paneId: "pane:main",
-            },
-            activePaneId: "pane:main",
-            nextPaneNumber: 2,
-            panes: [
-              {
-                paneId: "pane:main",
-                title: "Main",
-                shell: "/bin/bash",
-                cwd: "~",
-              },
-            ],
-          },
+          title: "Main",
+          shell: "/bin/bash",
+          cwd: "~",
         },
         {
           tabId: "tab:2",
-          title: "Tab 2",
-          workspace: {
-            layout: {
-              kind: "leaf",
-              id: "layout:pane:2",
-              paneId: "pane:2",
-            },
-            activePaneId: "pane:2",
-            nextPaneNumber: 3,
-            panes: [
-              {
-                paneId: "pane:2",
-                title: "Pane 2",
-                shell: "/usr/bin/zsh",
-                cwd: "/tmp",
-              },
-            ],
-          },
+          title: "Build",
+          shell: "/usr/bin/zsh",
+          cwd: "/tmp",
         },
       ],
-      tabOrder: ["tab:1", "tab:2"],
       activeTabId: "tab:2",
       nextTabNumber: 3,
     });
   });
 
-  it("rehydrates snapshots into runtime models with panes in starting state", () => {
+  it("rehydrates snapshots into runtime models with tabs in starting state", () => {
     const snapshot: WindowSnapshot = {
+      layout: {
+        kind: "leaf",
+        id: "leaf:tab:1",
+        leafId: "tab:1",
+      },
       tabs: [
         {
           tabId: "tab:1",
           title: "Main",
-          workspace: {
-            layout: {
-              kind: "leaf",
-              id: "layout:pane:main",
-              paneId: "pane:main",
-            },
-            activePaneId: "pane:main",
-            nextPaneNumber: 2,
-            panes: [
-              {
-                paneId: "pane:main",
-                title: "Main",
-                shell: "/bin/bash",
-                cwd: "~",
-              },
-            ],
-          },
+          shell: "/bin/bash",
+          cwd: "~",
         },
       ],
-      tabOrder: ["tab:1"],
       activeTabId: "tab:1",
       nextTabNumber: 2,
     };
 
     expect(fromWindowSnapshot(snapshot)).toEqual({
+      layout: {
+        kind: "leaf",
+        id: "leaf:tab:1",
+        leafId: "tab:1",
+      },
       tabs: {
         "tab:1": {
           tabId: "tab:1",
           title: "Main",
-          workspace: {
-            layout: {
-              kind: "leaf",
-              id: "layout:pane:main",
-              paneId: "pane:main",
-            },
-            activePaneId: "pane:main",
-            nextPaneNumber: 2,
-            panes: {
-              "pane:main": {
-                paneId: "pane:main",
-                title: "Main",
-                shell: "/bin/bash",
-                cwd: "~",
-                status: "starting",
-                sessionId: undefined,
-                error: undefined,
-                exitCode: null,
-                signal: null,
-              },
-            },
-          },
+          shell: "/bin/bash",
+          cwd: "~",
+          status: "starting",
+          sessionId: undefined,
+          error: undefined,
+          exitCode: null,
+          signal: null,
         },
       },
-      tabOrder: ["tab:1"],
       activeTabId: "tab:1",
       nextTabNumber: 2,
     });

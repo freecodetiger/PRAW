@@ -45,7 +45,7 @@ export function SettingsPanel() {
           <section className="settings-section">
             <div className="settings-section__title">
               <strong>Terminal</strong>
-              <p>These defaults apply to new panes and to xterm rendering.</p>
+              <p>These defaults apply to new tab regions and to xterm rendering.</p>
             </div>
 
             <label className="settings-field">

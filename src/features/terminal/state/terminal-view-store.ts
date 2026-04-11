@@ -16,58 +16,59 @@ import {
   type PaneRenderMode,
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
-import { consumeShellIntegrationChunk, createShellIntegrationParserState, type ShellIntegrationParserState } from "../lib/shell-integration";
+import {
+  consumeShellIntegrationChunk,
+  createShellIntegrationParserState,
+  type ShellIntegrationParserState,
+} from "../lib/shell-integration";
 
 interface TerminalViewStore {
   buffers: Record<string, TerminalBufferSnapshot>;
-  paneStates: Record<string, TerminalPaneViewState>;
-  appendOutput: (tabId: string, paneId: string, data: string) => void;
-  resetPaneBuffer: (tabId: string, paneId: string) => void;
-  removePaneBuffer: (tabId: string, paneId: string) => void;
-  syncPaneState: (tabId: string, paneId: string, shell: string, cwd: string) => void;
-  submitCommand: (tabId: string, paneId: string, command: string) => void;
-  consumeOutput: (tabId: string, paneId: string, data: string) => void;
-  setPaneMode: (tabId: string, paneId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
-  resetPaneState: (tabId: string, paneId: string, shell: string, cwd: string) => void;
-  removePaneState: (tabId: string, paneId: string) => void;
+  tabStates: Record<string, TerminalTabViewState>;
+  appendOutput: (tabId: string, data: string) => void;
+  resetTabBuffer: (tabId: string) => void;
+  removeTabBuffer: (tabId: string) => void;
+  syncTabState: (tabId: string, shell: string, cwd: string) => void;
+  submitCommand: (tabId: string, command: string) => void;
+  consumeOutput: (tabId: string, data: string) => void;
+  setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
+  resetTabState: (tabId: string, shell: string, cwd: string) => void;
+  removeTabState: (tabId: string) => void;
 }
 
-export interface TerminalPaneViewState extends DialogState {
+export interface TerminalTabViewState extends DialogState {
   shell: string;
   parserState: ShellIntegrationParserState;
 }
 
 export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
   buffers: {},
-  paneStates: {},
+  tabStates: {},
 
-  appendOutput: (tabId, paneId, data) =>
-    set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      return {
-        buffers: {
-          ...state.buffers,
-          [key]: appendTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER, data),
-        },
-      };
-    }),
+  appendOutput: (tabId, data) =>
+    set((state) => ({
+      buffers: {
+        ...state.buffers,
+        [getTerminalBufferKey(tabId)]: appendTerminalBuffer(state.buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER, data),
+      },
+    })),
 
-  syncPaneState: (tabId, paneId, shell, cwd) =>
+  syncTabState: (tabId, shell, cwd) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      const existing = state.paneStates[key];
+      const key = getTerminalBufferKey(tabId);
+      const existing = state.tabStates[key];
       if (!existing) {
         return {
-          paneStates: {
-            ...state.paneStates,
-            [key]: createPaneViewState(shell, cwd),
+          tabStates: {
+            ...state.tabStates,
+            [key]: createTabViewState(shell, cwd),
           },
         };
       }
 
       return {
-        paneStates: {
-          ...state.paneStates,
+        tabStates: {
+          ...state.tabStates,
           [key]: {
             ...existing,
             ...reconcileShellState(existing, shell, cwd),
@@ -77,42 +78,42 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
     }),
 
-  submitCommand: (tabId, paneId, command) =>
+  submitCommand: (tabId, command) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      const paneState = state.paneStates[key];
-      if (!paneState || paneState.shellIntegration === "unsupported") {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (!tabState || tabState.shellIntegration === "unsupported") {
         return state;
       }
 
       return {
-        paneStates: {
-          ...state.paneStates,
+        tabStates: {
+          ...state.tabStates,
           [key]: {
-            ...paneState,
-            ...submitDialogCommand(paneState, command, () => crypto.randomUUID()),
+            ...tabState,
+            ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
           },
         },
       };
     }),
 
-  consumeOutput: (tabId, paneId, data) =>
+  consumeOutput: (tabId, data) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      const paneState = state.paneStates[key];
-      if (!paneState) {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (!tabState) {
         return state;
       }
 
-      const parsed = consumeShellIntegrationChunk(paneState.parserState, data);
-      let nextState: TerminalPaneViewState = {
-        ...paneState,
+      const parsed = consumeShellIntegrationChunk(tabState.parserState, data);
+      let nextState: TerminalTabViewState = {
+        ...tabState,
         parserState: parsed.state,
       };
 
       const normalizedOutput = stripAnsiForDialog(parsed.visibleOutput);
       const shouldCaptureVisibleOutput =
-        !(paneState.mode === "classic" && paneState.modeSource === "manual" && paneState.activeCommandBlockId === null);
+        !(tabState.mode === "classic" && tabState.modeSource === "manual" && tabState.activeCommandBlockId === null);
 
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
         nextState = {
@@ -129,26 +130,26 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       }
 
       return {
-        paneStates: {
-          ...state.paneStates,
+        tabStates: {
+          ...state.tabStates,
           [key]: nextState,
         },
       };
     }),
 
-  setPaneMode: (tabId, paneId, mode, source) =>
+  setTabMode: (tabId, mode, source) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      const paneState = state.paneStates[key];
-      if (!paneState) {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (!tabState) {
         return state;
       }
 
       return {
-        paneStates: {
-          ...state.paneStates,
+        tabStates: {
+          ...state.tabStates,
           [key]: {
-            ...paneState,
+            ...tabState,
             mode,
             modeSource: source,
           },
@@ -156,40 +157,37 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
     }),
 
-  resetPaneState: (tabId, paneId, shell, cwd) =>
+  resetTabState: (tabId, shell, cwd) =>
     set((state) => ({
-      paneStates: {
-        ...state.paneStates,
-        [getTerminalBufferKey(tabId, paneId)]: createPaneViewState(shell, cwd),
+      tabStates: {
+        ...state.tabStates,
+        [getTerminalBufferKey(tabId)]: createTabViewState(shell, cwd),
       },
     })),
 
-  removePaneState: (tabId, paneId) =>
+  removeTabState: (tabId) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      if (!state.paneStates[key]) {
+      const key = getTerminalBufferKey(tabId);
+      if (!state.tabStates[key]) {
         return state;
       }
 
-      const paneStates = { ...state.paneStates };
-      delete paneStates[key];
-      return { paneStates };
+      const tabStates = { ...state.tabStates };
+      delete tabStates[key];
+      return { tabStates };
     }),
 
-  resetPaneBuffer: (tabId, paneId) =>
-    set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
-      return {
-        buffers: {
-          ...state.buffers,
-          [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
-        },
-      };
-    }),
+  resetTabBuffer: (tabId) =>
+    set((state) => ({
+      buffers: {
+        ...state.buffers,
+        [getTerminalBufferKey(tabId)]: resetTerminalBuffer(state.buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER),
+      },
+    })),
 
-  removePaneBuffer: (tabId, paneId) =>
+  removeTabBuffer: (tabId) =>
     set((state) => {
-      const key = getTerminalBufferKey(tabId, paneId);
+      const key = getTerminalBufferKey(tabId);
       if (!state.buffers[key]) {
         return state;
       }
@@ -200,27 +198,25 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
     }),
 }));
 
-export function getTerminalBufferKey(tabId: string, paneId: string): string {
-  return `${tabId}:${paneId}`;
+export function getTerminalBufferKey(tabId: string): string {
+  return tabId;
 }
 
 export function selectTerminalBuffer(
   buffers: Record<string, TerminalBufferSnapshot>,
   tabId: string,
-  paneId: string,
 ): TerminalBufferSnapshot {
-  return buffers[getTerminalBufferKey(tabId, paneId)] ?? EMPTY_TERMINAL_BUFFER;
+  return buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER;
 }
 
-export function selectTerminalPaneState(
-  paneStates: Record<string, TerminalPaneViewState>,
+export function selectTerminalTabState(
+  tabStates: Record<string, TerminalTabViewState>,
   tabId: string,
-  paneId: string,
-): TerminalPaneViewState | null {
-  return paneStates[getTerminalBufferKey(tabId, paneId)] ?? null;
+): TerminalTabViewState | null {
+  return tabStates[getTerminalBufferKey(tabId)] ?? null;
 }
 
-function createPaneViewState(shell: string, cwd: string): TerminalPaneViewState {
+function createTabViewState(shell: string, cwd: string): TerminalTabViewState {
   return {
     ...createDialogState(shell, cwd),
     shell,
@@ -228,7 +224,7 @@ function createPaneViewState(shell: string, cwd: string): TerminalPaneViewState 
   };
 }
 
-function reconcileShellState(state: TerminalPaneViewState, shell: string, cwd: string): Partial<TerminalPaneViewState> {
+function reconcileShellState(state: TerminalTabViewState, shell: string, cwd: string): Partial<TerminalTabViewState> {
   const supported = isDialogShellSupported(shell);
   if (!supported) {
     return {
@@ -239,23 +235,20 @@ function reconcileShellState(state: TerminalPaneViewState, shell: string, cwd: s
     };
   }
 
-  if (state.shellIntegration === "unsupported") {
-    const next = createPaneViewState(shell, cwd);
-    return {
-      ...next,
-      shell,
-    };
-  }
-
   return {
     shellIntegration: "supported",
     cwd,
+    mode:
+      state.modeSource === "shell-unsupported"
+        ? "dialog"
+        : state.mode,
+    modeSource:
+      state.modeSource === "shell-unsupported"
+        ? "default"
+        : state.modeSource,
   };
 }
 
-function stripAnsiForDialog(value: string): string {
-  return value
-    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-    .replace(/\u001b[@-_]/g, "");
+function stripAnsiForDialog(data: string): string {
+  return data.replace(/\u001b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*\u0007)/g, "");
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  applyPaneDragPreview,
-  collectLeafPaneIds,
+  applyLeafDragPreview,
+  collectLeafIds,
   createLeafLayout,
-  createPaneDragPreview,
-  findAdjacentPaneId,
+  createLeafDragPreview,
+  findAdjacentLeafId,
   setSplitRatio,
-  toPaneRects,
+  toLeafRects,
   type FocusDirection,
 } from "./tree";
 import type { LayoutNode } from "./types";
@@ -19,8 +19,8 @@ const sampleLayout: LayoutNode = {
   ratio: 0.5,
   first: {
     kind: "leaf",
-    id: "leaf:left",
-    paneId: "pane:left",
+    id: "leaf:tab:1",
+    leafId: "tab:1",
   },
   second: {
     kind: "split",
@@ -29,13 +29,13 @@ const sampleLayout: LayoutNode = {
     ratio: 0.5,
     first: {
       kind: "leaf",
-      id: "leaf:top-right",
-      paneId: "pane:top-right",
+      id: "leaf:tab:2",
+      leafId: "tab:2",
     },
     second: {
       kind: "leaf",
-      id: "leaf:bottom-right",
-      paneId: "pane:bottom-right",
+      id: "leaf:tab:3",
+      leafId: "tab:3",
     },
   },
 };
@@ -52,22 +52,22 @@ describe("setSplitRatio", () => {
   });
 });
 
-describe("findAdjacentPaneId", () => {
+describe("findAdjacentLeafId", () => {
   it.each<[string, FocusDirection, string | null]>([
-    ["pane:left", "right", "pane:top-right"],
-    ["pane:top-right", "left", "pane:left"],
-    ["pane:top-right", "down", "pane:bottom-right"],
-    ["pane:bottom-right", "up", "pane:top-right"],
-    ["pane:left", "up", null],
-  ])("finds the next pane from %s toward %s", (paneId, direction, expected) => {
-    expect(findAdjacentPaneId(sampleLayout, paneId, direction)).toBe(expected);
+    ["tab:1", "right", "tab:2"],
+    ["tab:2", "left", "tab:1"],
+    ["tab:2", "down", "tab:3"],
+    ["tab:3", "up", "tab:2"],
+    ["tab:1", "up", null],
+  ])("finds the next tab from %s toward %s", (leafId, direction, expected) => {
+    expect(findAdjacentLeafId(sampleLayout, leafId, direction)).toBe(expected);
   });
 });
 
-describe("toPaneRects", () => {
+describe("toLeafRects", () => {
   it("projects leaves into normalized rectangles for spatial reasoning", () => {
-    expect(toPaneRects(createLeafLayout("pane:main"))).toEqual({
-      "pane:main": {
+    expect(toLeafRects(createLeafLayout("tab:1"))).toEqual({
+      "tab:1": {
         x: 0,
         y: 0,
         width: 1,
@@ -77,30 +77,30 @@ describe("toPaneRects", () => {
   });
 });
 
-describe("createPaneDragPreview", () => {
+describe("createLeafDragPreview", () => {
   it("maps a hovered edge into split axis and order", () => {
     expect(
-      createPaneDragPreview(sampleLayout, "pane:left", "pane:top-right", "bottom"),
+      createLeafDragPreview(sampleLayout, "tab:1", "tab:2", "bottom"),
     ).toEqual({
-      sourcePaneId: "pane:left",
-      targetPaneId: "pane:top-right",
+      sourceLeafId: "tab:1",
+      targetLeafId: "tab:2",
       axis: "vertical",
       order: "after",
     });
   });
 });
 
-describe("applyPaneDragPreview", () => {
-  it("moves the source pane next to the target pane using the preview geometry", () => {
-    const moved = applyPaneDragPreview(sampleLayout, {
-      sourcePaneId: "pane:left",
-      targetPaneId: "pane:bottom-right",
+describe("applyLeafDragPreview", () => {
+  it("moves the source tab next to the target tab using the preview geometry", () => {
+    const moved = applyLeafDragPreview(sampleLayout, {
+      sourceLeafId: "tab:1",
+      targetLeafId: "tab:3",
       axis: "vertical",
       order: "before",
     });
 
-    expect(collectLeafPaneIds(moved)).toEqual(["pane:top-right", "pane:left", "pane:bottom-right"]);
-    expect(findAdjacentPaneId(moved, "pane:left", "down")).toBe("pane:bottom-right");
-    expect(findAdjacentPaneId(moved, "pane:left", "up")).toBe("pane:top-right");
+    expect(collectLeafIds(moved)).toEqual(["tab:2", "tab:1", "tab:3"]);
+    expect(findAdjacentLeafId(moved, "tab:1", "down")).toBe("tab:3");
+    expect(findAdjacentLeafId(moved, "tab:1", "up")).toBe("tab:2");
   });
 });

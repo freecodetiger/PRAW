@@ -1,12 +1,11 @@
-export interface SessionPaneRef {
+export interface SessionTabRef {
   tabId: string;
-  paneId: string;
 }
 
-export function resolveSessionPaneRef(
+export function resolveSessionTabRef(
   sessionId: string,
-  attachedSessions: Map<string, SessionPaneRef>,
-  pendingSessions: Map<string, SessionPaneRef>,
-): SessionPaneRef | null {
+  attachedSessions: Map<string, SessionTabRef>,
+  pendingSessions: Map<string, SessionTabRef>,
+): SessionTabRef | null {
   return attachedSessions.get(sessionId) ?? pendingSessions.get(sessionId) ?? null;
 }

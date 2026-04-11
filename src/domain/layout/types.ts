@@ -1,7 +1,7 @@
 export type SplitAxis = "horizontal" | "vertical";
 export type FocusDirection = "left" | "right" | "up" | "down";
-export type PaneDropEdge = "left" | "right" | "top" | "bottom";
-export type PaneDropOrder = "before" | "after";
+export type LeafDropEdge = "left" | "right" | "top" | "bottom";
+export type DropOrder = "before" | "after";
 
 export interface SplitNode {
   kind: "split";
@@ -12,24 +12,37 @@ export interface SplitNode {
   second: LayoutNode;
 }
 
-export interface LeafNode {
-  kind: "leaf";
-  id: string;
-  paneId: string;
-}
+export type LeafNode =
+  | {
+      kind: "leaf";
+      id: string;
+      leafId: string;
+    }
+  | {
+      kind: "leaf";
+      id: string;
+      paneId: string;
+    };
 
-export interface PaneRect {
+export interface LeafRect {
   x: number;
   y: number;
   width: number;
   height: number;
 }
 
-export interface PaneDragPreview {
-  sourcePaneId: string;
-  targetPaneId: string;
+export interface LeafDragPreview {
+  sourceLeafId: string;
+  targetLeafId: string;
   axis: SplitAxis;
-  order: PaneDropOrder;
+  order: DropOrder;
+  sourcePaneId?: string;
+  targetPaneId?: string;
 }
+
+export type PaneDropEdge = LeafDropEdge;
+export type PaneDropOrder = DropOrder;
+export type PaneRect = LeafRect;
+export type PaneDragPreview = LeafDragPreview;
 
 export type LayoutNode = SplitNode | LeafNode;

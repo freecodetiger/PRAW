@@ -98,18 +98,8 @@ function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div>
-          <p className="eyebrow">Ubuntu Intelligent Terminal</p>
-          <h1>PRAW</h1>
-        </div>
-        <div className="app-header__meta">
-          <span>Phase 0 / 1</span>
-          <span>Tauri + React + Rust</span>
-          <span>{config.terminal.defaultShell}</span>
-          <span>
-            {config.terminal.fontFamily} {config.terminal.fontSize}px
-          </span>
-          <span>{bootState}</span>
+        <h1>PRAW</h1>
+        <div className="app-header__actions">
           <SettingsPanel />
         </div>
       </header>

@@ -10,10 +10,7 @@ export interface TerminalShortcutEvent {
 }
 
 export type WorkspaceShortcutAction =
-  | { type: "focus-pane"; direction: FocusDirection }
-  | { type: "create-tab" }
-  | { type: "close-tab" }
-  | { type: "rename-active-tab" };
+  | { type: "focus-pane"; direction: FocusDirection };
 
 export type TerminalShortcutAction = { type: "copy-selection" } | { type: "paste" };
 
@@ -31,19 +28,6 @@ export function resolveWorkspaceShortcut(event: TerminalShortcutEvent): Workspac
       case "arrowdown":
         return { type: "focus-pane", direction: "down" };
     }
-  }
-
-  if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey) {
-    switch (key) {
-      case "t":
-        return { type: "create-tab" };
-      case "w":
-        return { type: "close-tab" };
-    }
-  }
-
-  if (!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && key === "f2") {
-    return { type: "rename-active-tab" };
   }
 
   return null;

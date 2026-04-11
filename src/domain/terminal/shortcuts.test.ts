@@ -18,7 +18,7 @@ describe("workspace shortcuts", () => {
     });
   });
 
-  it("maps ctrl+shift+t to new tab", () => {
+  it("ignores legacy tab-management shortcuts in the single-workspace shell", () => {
     expect(
       resolveWorkspaceShortcut({
         key: "t",
@@ -27,12 +27,8 @@ describe("workspace shortcuts", () => {
         shiftKey: true,
         metaKey: false,
       }),
-    ).toEqual({
-      type: "create-tab",
-    });
-  });
+    ).toBeNull();
 
-  it("maps f2 to rename active tab", () => {
     expect(
       resolveWorkspaceShortcut({
         key: "F2",
@@ -41,9 +37,7 @@ describe("workspace shortcuts", () => {
         shiftKey: false,
         metaKey: false,
       }),
-    ).toEqual({
-      type: "rename-active-tab",
-    });
+    ).toBeNull();
   });
 });
 

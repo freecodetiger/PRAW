@@ -1,14 +1,21 @@
-import type { WorkspaceModel } from "../workspace/types";
+import type { LayoutNode } from "../layout/types";
+import type { TerminalSessionStatus } from "../terminal/types";
 
 export interface TabModel {
   tabId: string;
   title: string;
-  workspace: WorkspaceModel;
+  shell: string;
+  cwd: string;
+  status: TerminalSessionStatus;
+  sessionId?: string;
+  error?: string;
+  exitCode?: number | null;
+  signal?: string | null;
 }
 
 export interface WindowModel {
+  layout: LayoutNode;
   tabs: Record<string, TabModel>;
-  tabOrder: string[];
   activeTabId: string;
   nextTabNumber: number;
 }

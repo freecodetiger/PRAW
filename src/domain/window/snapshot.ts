@@ -1,31 +1,33 @@
-import type { WorkspaceSnapshot } from "../workspace/snapshot";
-import { fromWorkspaceSnapshot, toWorkspaceSnapshot } from "../workspace/snapshot";
+import { collectLeafIds } from "../layout/tree";
+import type { LayoutNode } from "../layout/types";
 import type { WindowModel } from "./types";
 
 export interface TabSnapshot {
   tabId: string;
   title: string;
-  workspace: WorkspaceSnapshot;
+  shell: string;
+  cwd: string;
 }
 
 export interface WindowSnapshot {
+  layout: LayoutNode;
   tabs: TabSnapshot[];
-  tabOrder: string[];
   activeTabId: string;
   nextTabNumber: number;
 }
 
 export function toWindowSnapshot(window: WindowModel): WindowSnapshot {
   return {
-    tabs: window.tabOrder
+    layout: window.layout,
+    tabs: collectLeafIds(window.layout)
       .map((tabId) => window.tabs[tabId])
       .filter((tab): tab is NonNullable<typeof tab> => tab !== undefined)
       .map((tab) => ({
         tabId: tab.tabId,
         title: tab.title,
-        workspace: toWorkspaceSnapshot(tab.workspace),
+        shell: tab.shell,
+        cwd: tab.cwd,
       })),
-    tabOrder: window.tabOrder.filter((tabId) => window.tabs[tabId] !== undefined),
     activeTabId: window.activeTabId,
     nextTabNumber: window.nextTabNumber,
   };
@@ -33,17 +35,20 @@ export function toWindowSnapshot(window: WindowModel): WindowSnapshot {
 
 export function fromWindowSnapshot(snapshot: WindowSnapshot): WindowModel {
   return {
+    layout: snapshot.layout,
     tabs: Object.fromEntries(
       snapshot.tabs.map((tab) => [
         tab.tabId,
         {
-          tabId: tab.tabId,
-          title: tab.title,
-          workspace: fromWorkspaceSnapshot(tab.workspace),
+          ...tab,
+          status: "starting" as const,
+          sessionId: undefined,
+          error: undefined,
+          exitCode: null,
+          signal: null,
         },
       ]),
     ),
-    tabOrder: snapshot.tabOrder,
     activeTabId: snapshot.activeTabId,
     nextTabNumber: snapshot.nextTabNumber,
   };
