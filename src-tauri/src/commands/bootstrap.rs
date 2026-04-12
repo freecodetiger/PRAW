@@ -66,7 +66,8 @@ fn is_empty_window_snapshot(value: &Value) -> bool {
         .get("tabs")
         .and_then(|tabs| tabs.as_array())
         .is_some_and(|tabs| tabs.is_empty());
-    let layout_missing = object.get("layout").is_none() || object.get("layout").is_some_and(|layout| layout.is_null());
+    let layout_missing = object.get("layout").is_none()
+        || object.get("layout").is_some_and(|layout| layout.is_null());
 
     tabs_empty || layout_missing
 }

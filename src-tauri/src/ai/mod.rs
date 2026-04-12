@@ -163,7 +163,10 @@ impl GlmProvider {
 #[async_trait]
 impl AiProvider for GlmProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Option<CompletionResponse>> {
-        if request.api_key.trim().is_empty() || request.model.trim().is_empty() || request.prefix.trim().is_empty() {
+        if request.api_key.trim().is_empty()
+            || request.model.trim().is_empty()
+            || request.prefix.trim().is_empty()
+        {
             return Ok(None);
         }
 
@@ -292,7 +295,10 @@ async fn send_openai_request(
 }
 
 fn build_completion_request_payload(request: &CompletionRequest) -> OpenAiChatCompletionRequest {
-    let git_branch = request.git_branch.clone().unwrap_or_else(|| "(none)".to_string());
+    let git_branch = request
+        .git_branch
+        .clone()
+        .unwrap_or_else(|| "(none)".to_string());
     let git_status = join_limited(&request.git_status_summary, MAX_STATUS_LINES);
     let recent_history = join_limited(&request.recent_history, MAX_RECENT_COMMANDS);
     let cwd_dirs = join_limited(&request.cwd_summary.dirs, MAX_SUMMARY_ITEMS);
@@ -425,7 +431,10 @@ fn sanitize_candidate(prefix: &str, candidate: &str) -> Option<String> {
     }
 
     let lowered = trimmed.to_ascii_lowercase();
-    if DANGEROUS_PATTERNS.iter().any(|pattern| lowered.contains(pattern)) {
+    if DANGEROUS_PATTERNS
+        .iter()
+        .any(|pattern| lowered.contains(pattern))
+    {
         return None;
     }
 
@@ -454,7 +463,8 @@ fn classify_candidate_kind(command: &str) -> CompletionCandidateKind {
     if command.starts_with("kubectl ") {
         return CompletionCandidateKind::Kubectl;
     }
-    if command.starts_with("curl ") || command.starts_with("wget ") || command.starts_with("ping ") {
+    if command.starts_with("curl ") || command.starts_with("wget ") || command.starts_with("ping ")
+    {
         return CompletionCandidateKind::Network;
     }
     if command.starts_with("cd ")
@@ -474,7 +484,9 @@ fn extract_json_payload(raw: &str) -> Option<&str> {
     if trimmed.starts_with("```") {
         let without_fence = trimmed.trim_start_matches('`');
         let after_header = without_fence.split_once('\n')?.1;
-        return after_header.rsplit_once("```").map(|(content, _)| content.trim());
+        return after_header
+            .rsplit_once("```")
+            .map(|(content, _)| content.trim());
     }
 
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
@@ -503,10 +515,17 @@ fn join_limited(entries: &[String], limit: usize) -> String {
         return "(none)".to_string();
     }
 
-    entries.iter().take(limit).cloned().collect::<Vec<_>>().join(", ")
+    entries
+        .iter()
+        .take(limit)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
-fn validate_connection_test_request(request: &ConnectionTestRequest) -> std::result::Result<(), ConnectionTestResult> {
+fn validate_connection_test_request(
+    request: &ConnectionTestRequest,
+) -> std::result::Result<(), ConnectionTestResult> {
     if request.api_key.trim().is_empty() {
         return Err(ConnectionTestResult {
             status: "config_error".to_string(),
@@ -668,7 +687,9 @@ mod tests {
         );
 
         assert_eq!(suggestions.len(), 2);
-        assert!(suggestions.iter().all(|candidate| candidate.text.starts_with("git c")));
+        assert!(suggestions
+            .iter()
+            .all(|candidate| candidate.text.starts_with("git c")));
     }
 
     #[test]
@@ -688,7 +709,9 @@ mod tests {
             })
         );
         assert_eq!(
-            classify_http_error_message(r#"http:429:{"error":{"code":"1302","message":"rate limit"}}"#),
+            classify_http_error_message(
+                r#"http:429:{"error":{"code":"1302","message":"rate limit"}}"#
+            ),
             Some(ConnectionTestResult {
                 status: "provider_error".to_string(),
                 message: r#"{"error":{"code":"1302","message":"rate limit"}}"#.to_string(),

@@ -6,12 +6,8 @@ mod tests {
 
     #[test]
     fn bash_shells_are_wrapped_with_a_custom_rcfile() {
-        let command = build_shell_integration_command(
-            "/bin/bash",
-            "session-1",
-            "/home/zpc",
-        )
-        .expect("bash integration should be supported");
+        let command = build_shell_integration_command("/bin/bash", "session-1", "/home/zpc")
+            .expect("bash integration should be supported");
 
         let argv = command.get_argv();
         let args: Vec<String> = argv

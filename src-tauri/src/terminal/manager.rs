@@ -37,7 +37,9 @@ impl TerminalManager {
         let mut command = if let Some(command) =
             shell_integration::build_shell_integration_command(&shell, &request.session_id, &cwd)
         {
-            cleanup_paths.push(shell_integration::install_shell_integration(&request.session_id)?);
+            cleanup_paths.push(shell_integration::install_shell_integration(
+                &request.session_id,
+            )?);
             command
         } else {
             let mut command = CommandBuilder::new(shell.clone());

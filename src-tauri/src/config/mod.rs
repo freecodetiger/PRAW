@@ -132,7 +132,10 @@ mod tests {
         let terminal = json.get("terminal").expect("terminal should exist");
 
         assert_eq!(
-            terminal.get("phrases").and_then(|value| value.as_array()).map(|items| items.len()),
+            terminal
+                .get("phrases")
+                .and_then(|value| value.as_array())
+                .map(|items| items.len()),
             Some(3)
         );
         assert_eq!(

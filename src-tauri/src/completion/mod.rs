@@ -42,7 +42,11 @@ const GIT_SUBCOMMANDS: &[&str] = &[
     "git log --oneline",
 ];
 const DOCKER_SUGGESTIONS: &[&str] = &["docker exec -it ", "docker logs ", "docker run --rm "];
-const SYSTEMCTL_SUGGESTIONS: &[&str] = &["systemctl status ", "systemctl restart ", "systemctl enable "];
+const SYSTEMCTL_SUGGESTIONS: &[&str] = &[
+    "systemctl status ",
+    "systemctl restart ",
+    "systemctl enable ",
+];
 const KUBECTL_SUGGESTIONS: &[&str] = &["kubectl get pods", "kubectl logs ", "kubectl get svc"];
 const NETWORK_SUGGESTIONS: &[&str] = &["curl -I ", "wget ", "ping "];
 const GO_SUGGESTIONS: &[&str] = &["go run .", "go build ./...", "go test ./..."];
@@ -151,9 +155,18 @@ pub fn complete_local(request: LocalCompletionRequest) -> Result<Option<LocalCom
         tool_availability: tool_availability.clone(),
     };
 
-    let suggestions = build_candidates(&request, &cwd, &tool_availability, git_branch.as_deref(), &git_branches)?;
+    let suggestions = build_candidates(
+        &request,
+        &cwd,
+        &tool_availability,
+        git_branch.as_deref(),
+        &git_branches,
+    )?;
 
-    Ok(Some(LocalCompletionResponse { suggestions, context }))
+    Ok(Some(LocalCompletionResponse {
+        suggestions,
+        context,
+    }))
 }
 
 fn build_candidates(
@@ -212,7 +225,11 @@ fn build_history_candidates(prefix: &str, recent_history: &[String]) -> Vec<Comp
 
     for (index, entry) in recent_history.iter().rev().enumerate() {
         let sanitized = sanitize_command(entry);
-        if sanitized.is_empty() || sanitized == prefix || !sanitized.starts_with(prefix) || !seen.insert(sanitized.clone()) {
+        if sanitized.is_empty()
+            || sanitized == prefix
+            || !sanitized.starts_with(prefix)
+            || !seen.insert(sanitized.clone())
+        {
             continue;
         }
 
@@ -280,7 +297,10 @@ fn build_cd_candidates(prefix: &str, cwd: &Path) -> Result<Vec<CompletionCandida
     Ok(candidates)
 }
 
-fn build_command_name_candidates(prefix: &str, tool_availability: &[String]) -> Vec<CompletionCandidate> {
+fn build_command_name_candidates(
+    prefix: &str,
+    tool_availability: &[String],
+) -> Vec<CompletionCandidate> {
     if prefix.contains(char::is_whitespace) {
         return Vec::new();
     }
@@ -465,7 +485,10 @@ fn build_go_candidates(prefix: &str, cwd: &Path) -> Vec<CompletionCandidate> {
     )
 }
 
-fn build_package_candidates(prefix: &str, tool_availability: &[String]) -> Vec<CompletionCandidate> {
+fn build_package_candidates(
+    prefix: &str,
+    tool_availability: &[String],
+) -> Vec<CompletionCandidate> {
     let suggestions = if tool_availability.iter().any(|tool| tool == "apt") {
         &["apt install ", "apt search ", "apt update"] as &[&str]
     } else if tool_availability.iter().any(|tool| tool == "yum") {
@@ -503,7 +526,10 @@ fn dedupe_and_rank(candidates: Vec<CompletionCandidate>) -> Vec<CompletionCandid
     let mut deduped: Vec<CompletionCandidate> = Vec::new();
 
     for candidate in candidates {
-        if let Some(existing) = deduped.iter_mut().find(|entry| entry.text == candidate.text) {
+        if let Some(existing) = deduped
+            .iter_mut()
+            .find(|entry| entry.text == candidate.text)
+        {
             if compare_candidates(&candidate, existing) == Ordering::Less {
                 *existing = candidate;
             }
@@ -625,7 +651,10 @@ fn sanitize_recent_history(recent_history: &[String]) -> Vec<String> {
 
 fn sanitize_command(command: &str) -> String {
     let lowered = command.to_ascii_lowercase();
-    if ["password", "token", "api_key", "apikey", "secret"].iter().any(|needle| lowered.contains(needle)) {
+    if ["password", "token", "api_key", "apikey", "secret"]
+        .iter()
+        .any(|needle| lowered.contains(needle))
+    {
         return "[redacted]".to_string();
     }
 
@@ -836,7 +865,8 @@ mod tests {
         assert!(response
             .suggestions
             .iter()
-            .any(|candidate| candidate.text.starts_with("systemctl") && candidate.source == CompletionCandidateSource::System));
+            .any(|candidate| candidate.text.starts_with("systemctl")
+                && candidate.source == CompletionCandidateSource::System));
     }
 
     #[test]
@@ -844,10 +874,20 @@ mod tests {
         let cwd = temp_dir("git-and-cd");
         fs::create_dir_all(cwd.join("projects")).expect("projects dir should exist");
         fs::create_dir_all(cwd.join(".git")).expect("git dir should exist");
-        fs::write(cwd.join(".git").join("HEAD"), b"ref: refs/heads/main\n").expect("head should exist");
-        fs::create_dir_all(cwd.join(".git").join("refs").join("heads")).expect("refs dir should exist");
-        fs::write(cwd.join(".git").join("refs").join("heads").join("main"), b"123").expect("main ref");
-        fs::write(cwd.join(".git").join("refs").join("heads").join("dev"), b"456").expect("dev ref");
+        fs::write(cwd.join(".git").join("HEAD"), b"ref: refs/heads/main\n")
+            .expect("head should exist");
+        fs::create_dir_all(cwd.join(".git").join("refs").join("heads"))
+            .expect("refs dir should exist");
+        fs::write(
+            cwd.join(".git").join("refs").join("heads").join("main"),
+            b"123",
+        )
+        .expect("main ref");
+        fs::write(
+            cwd.join(".git").join("refs").join("heads").join("dev"),
+            b"456",
+        )
+        .expect("dev ref");
 
         let cd_response = complete_local(LocalCompletionRequest {
             cwd: cwd.to_string_lossy().into_owned(),
@@ -860,7 +900,8 @@ mod tests {
         assert!(cd_response
             .suggestions
             .iter()
-            .any(|candidate| candidate.text == "cd projects/" && candidate.source == CompletionCandidateSource::Local));
+            .any(|candidate| candidate.text == "cd projects/"
+                && candidate.source == CompletionCandidateSource::Local));
 
         let git_response = complete_local(LocalCompletionRequest {
             cwd: cwd.to_string_lossy().into_owned(),
@@ -873,7 +914,8 @@ mod tests {
         assert!(git_response
             .suggestions
             .iter()
-            .any(|candidate| candidate.text == "git checkout dev" && candidate.kind == CompletionCandidateKind::Git));
+            .any(|candidate| candidate.text == "git checkout dev"
+                && candidate.kind == CompletionCandidateKind::Git));
     }
 
     #[test]
@@ -893,9 +935,19 @@ mod tests {
         .expect("completion should succeed")
         .expect("response should exist");
 
-        assert_eq!(response.suggestions[0].source, CompletionCandidateSource::Local);
-        assert_eq!(response.suggestions[0].kind, CompletionCandidateKind::History);
+        assert_eq!(
+            response.suggestions[0].source,
+            CompletionCandidateSource::Local
+        );
+        assert_eq!(
+            response.suggestions[0].kind,
+            CompletionCandidateKind::History
+        );
         assert_eq!(sanitize_command("export API_KEY=secret"), "[redacted]");
-        assert!(response.context.recent_history.iter().any(|entry| entry == "[redacted]"));
+        assert!(response
+            .context
+            .recent_history
+            .iter()
+            .any(|entry| entry == "[redacted]"));
     }
 }

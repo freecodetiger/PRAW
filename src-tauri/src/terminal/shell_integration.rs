@@ -28,10 +28,18 @@ pub fn install_shell_integration(session_id: &str) -> Result<PathBuf> {
     let parent = path
         .parent()
         .context("shell integration rcfile path did not have a parent")?;
-    fs::create_dir_all(parent)
-        .with_context(|| format!("failed to create shell integration dir {}", parent.display()))?;
-    fs::write(&path, build_shell_integration_rcfile(session_id))
-        .with_context(|| format!("failed to write shell integration rcfile {}", path.display()))?;
+    fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "failed to create shell integration dir {}",
+            parent.display()
+        )
+    })?;
+    fs::write(&path, build_shell_integration_rcfile(session_id)).with_context(|| {
+        format!(
+            "failed to write shell integration rcfile {}",
+            path.display()
+        )
+    })?;
     Ok(path)
 }
 
