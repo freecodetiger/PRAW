@@ -5,6 +5,7 @@ export type PaneRenderModeSource = "default" | "manual" | "auto-interactive" | "
 export type ShellIntegrationStatus = "supported" | "unsupported";
 
 export type TerminalPresentation = "default" | "agent-workflow";
+export type DialogComposerMode = "command" | "pty";
 
 export type CommandBlockKind = "command" | "session";
 
@@ -26,10 +27,12 @@ export interface DialogState {
   mode: PaneRenderMode;
   modeSource: PaneRenderModeSource;
   presentation: TerminalPresentation;
+  composerMode: DialogComposerMode;
   shellIntegration: ShellIntegrationStatus;
   cwd: string;
   blocks: CommandBlock[];
   activeCommandBlockId: string | null;
+  captureActiveOutputInTranscript: boolean;
   composerHistory: string[];
 }
 
@@ -39,6 +42,12 @@ export type ShellLifecycleEvent =
   | { type: "prompt-state"; cwd: string };
 
 const AUTO_INTERACTIVE_COMMANDS = new Set([
+  "python",
+  "ipython",
+  "node",
+  "ssh",
+  "scp",
+  "sftp",
   "vim",
   "nvim",
   "nano",
@@ -48,12 +57,21 @@ const AUTO_INTERACTIVE_COMMANDS = new Set([
   "top",
   "htop",
   "btop",
-  "python",
-  "ipython",
-  "node",
-  "ssh",
-  "scp",
-  "sftp",
+  "tmux",
+  "fzf",
+  "lazygit",
+]);
+
+const CLASSIC_REQUIRED_COMMANDS = new Set([
+  "vim",
+  "nvim",
+  "nano",
+  "less",
+  "more",
+  "man",
+  "top",
+  "htop",
+  "btop",
   "tmux",
   "fzf",
   "lazygit",
@@ -102,10 +120,12 @@ export function createDialogState(shell: string, cwd: string, preferredMode: Pan
     mode: supported ? preferredMode : "classic",
     modeSource: supported ? "default" : "shell-unsupported",
     presentation: "default",
+    composerMode: "command",
     shellIntegration: supported ? "supported" : "unsupported",
     cwd,
     blocks: [],
     activeCommandBlockId: null,
+    captureActiveOutputInTranscript: true,
     composerHistory: [],
   };
 }
@@ -122,6 +142,7 @@ export function applyPreferredMode(state: DialogState, preferredMode: PaneRender
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
+      composerMode: "command",
     };
   }
 
@@ -148,9 +169,10 @@ export function submitDialogCommand(
   }
 
   const commandKind = classifyCommand(normalizedCommand);
-  const interactive = commandKind !== "default";
-  const mode = interactive ? "classic" : state.mode;
-  const modeSource: PaneRenderModeSource = interactive ? "auto-interactive" : state.modeSource;
+  const startsInClassic = commandKind === "classic-required" || commandKind === "agent-workflow";
+  const interactive = commandKind !== "dialog-stream";
+  const mode = startsInClassic ? "classic" : state.mode;
+  const modeSource: PaneRenderModeSource = startsInClassic ? "auto-interactive" : state.modeSource;
   const id = createId();
 
   return {
@@ -158,7 +180,9 @@ export function submitDialogCommand(
     mode,
     modeSource,
     presentation: state.presentation,
+    composerMode: "pty",
     activeCommandBlockId: id,
+    captureActiveOutputInTranscript: !startsInClassic,
     composerHistory: [...state.composerHistory, normalizedCommand],
     blocks: [
       ...state.blocks,
@@ -182,6 +206,10 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
   }
 
   if (state.activeCommandBlockId) {
+    if (!state.captureActiveOutputInTranscript) {
+      return state;
+    }
+
     return {
       ...state,
       blocks: state.blocks.map((block) =>
@@ -231,6 +259,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           mode: "classic",
           modeSource: "auto-interactive",
           presentation: "agent-workflow",
+          captureActiveOutputInTranscript: false,
         };
       }
 
@@ -244,6 +273,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           mode: "classic",
           modeSource: "auto-interactive",
           presentation: "agent-workflow",
+          captureActiveOutputInTranscript: false,
         };
       }
 
@@ -255,12 +285,14 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
         cwd: event.cwd,
       };
     case "command-end": {
-      const nextState =
+      const nextState: DialogState =
         state.activeCommandBlockId === null
           ? state
           : {
               ...state,
+              composerMode: "command",
               activeCommandBlockId: null,
+              captureActiveOutputInTranscript: true,
               blocks: state.blocks.map((block): CommandBlock =>
                 block.id === state.activeCommandBlockId
                   ? ({
@@ -286,11 +318,24 @@ export function isDialogShellSupported(shell: string): boolean {
 }
 
 export function isAutoInteractiveCommand(command: string): boolean {
-  return classifyCommand(command) !== "default";
+  return classifyCommand(command) !== "dialog-stream";
 }
 
 export function isAgentWorkflowCommand(command: string): boolean {
   return classifyCommand(command) === "agent-workflow";
+}
+
+export function requireClassicTerminal(state: DialogState): DialogState {
+  if (state.activeCommandBlockId === null || state.presentation === "agent-workflow" || state.mode === "classic") {
+    return state;
+  }
+
+  return {
+    ...state,
+    mode: "classic",
+    modeSource: "auto-interactive",
+    captureActiveOutputInTranscript: false,
+  };
 }
 
 function restorePreferredPresentation(state: DialogState): DialogState {
@@ -300,6 +345,8 @@ function restorePreferredPresentation(state: DialogState): DialogState {
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
+      composerMode: "command",
+      captureActiveOutputInTranscript: true,
     };
   }
 
@@ -308,29 +355,33 @@ function restorePreferredPresentation(state: DialogState): DialogState {
     mode: state.preferredMode,
     modeSource: "default",
     presentation: "default",
+    composerMode: state.activeCommandBlockId === null ? "command" : "pty",
+    captureActiveOutputInTranscript: true,
   };
 }
 
-function classifyCommand(command: string): "default" | "interactive" | "agent-workflow" {
+type CommandKind = "dialog-stream" | "dialog-interactive" | "classic-required" | "agent-workflow";
+
+function classifyCommand(command: string): CommandKind {
   const entry = resolvePrimaryCommand(command);
   if (!entry) {
-    return "default";
+    return "dialog-stream";
   }
 
   if (entry === "sudo" || SHELL_CONTINUATION_COMMANDS.has(entry)) {
-    return "interactive";
+    return "dialog-interactive";
   }
   if (isAgentWorkflowEntry(entry)) {
     return "agent-workflow";
   }
   if (entry === "git" && isGitPagerCommand(command)) {
-    return "interactive";
+    return "classic-required";
   }
   if (AUTO_INTERACTIVE_COMMANDS.has(entry)) {
-    return "interactive";
+    return CLASSIC_REQUIRED_COMMANDS.has(entry) ? "classic-required" : "dialog-interactive";
   }
 
-  return "default";
+  return "dialog-stream";
 }
 
 function isGitPagerCommand(command: string): boolean {

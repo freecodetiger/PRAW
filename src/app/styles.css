@@ -605,6 +605,11 @@ button {
   color: var(--text-primary);
 }
 
+.dialog-terminal__input--pty {
+  min-height: 41px;
+  resize: none;
+}
+
 .dialog-terminal__input:focus {
   outline: none;
 }

@@ -78,4 +78,24 @@ describe("shell integration parser", () => {
     expect(second.state.pending).toBe("");
   });
 
+  it("marks alternate-screen sequences as requiring classic terminal semantics", () => {
+    const result = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "loading\u001b[?1049h\u001b[2J",
+    );
+
+    expect(result.visibleOutput).toBe("loading");
+    expect(result.requiresClassic).toBe(true);
+  });
+
+  it("does not escalate ordinary command output when bash toggles bracketed paste mode", () => {
+    const result = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "\u001b[?2004lfile-a\nfile-b\n\u001b[?2004h",
+    );
+
+    expect(result.visibleOutput).toBe("file-a\nfile-b\n");
+    expect(result.requiresClassic).toBe(false);
+  });
+
 });

@@ -56,12 +56,13 @@ describe("dialog terminal state", () => {
     ]);
   });
 
-  it("treats sudo-prefixed commands as interactive and keeps them out of dialog mode", () => {
+  it("keeps sudo-prefixed commands in dialog mode and switches the composer into PTY input", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const next = submitDialogCommand(state, "sudo du -sh /var/log", () => "cmd:sudo");
 
-    expect(next.mode).toBe("classic");
-    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.mode).toBe("dialog");
+    expect(next.modeSource).toBe("default");
+    expect(next.composerMode).toBe("pty");
     expect(next.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:sudo",
@@ -72,16 +73,34 @@ describe("dialog terminal state", () => {
     ]);
   });
 
-  it("treats shell continuation commands like if as interactive to avoid dialog deadlocks", () => {
+  it("keeps shell continuation commands like if in dialog mode to avoid dialog deadlocks", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const next = submitDialogCommand(state, "if", () => "cmd:if");
 
-    expect(next.mode).toBe("classic");
-    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.mode).toBe("dialog");
+    expect(next.modeSource).toBe("default");
+    expect(next.composerMode).toBe("pty");
     expect(next.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:if",
         command: "if",
+        interactive: true,
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("keeps REPL commands in dialog mode so they can continue receiving PTY input", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const next = submitDialogCommand(state, "python", () => "cmd:python");
+
+    expect(next.mode).toBe("dialog");
+    expect(next.modeSource).toBe("default");
+    expect(next.composerMode).toBe("pty");
+    expect(next.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:python",
+        command: "python",
         interactive: true,
         status: "running",
       }),
@@ -140,6 +159,17 @@ describe("dialog terminal state", () => {
     expect(next.activeCommandBlockId).toBe("cmd:1");
     expect(next.composerHistory).toEqual(["ls"]);
     expect(next.blocks).toHaveLength(1);
+  });
+
+  it("switches the composer back to command mode when the active command exits", () => {
+    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "git push", () => "cmd:push");
+    const finished = applyShellLifecycleEvent(state, {
+      type: "command-end",
+      exitCode: 0,
+    });
+
+    expect(finished.activeCommandBlockId).toBeNull();
+    expect(finished.composerMode).toBe("command");
   });
 
   it("keeps codex and claude submissions in default presentation until shell markers confirm agent workflow", () => {

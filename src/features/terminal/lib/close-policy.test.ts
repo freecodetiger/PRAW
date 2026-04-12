@@ -23,10 +23,12 @@ function createDialogState(overrides: Partial<DialogState> = {}): DialogState {
     mode: "dialog",
     modeSource: "default",
     presentation: "default",
+    composerMode: "command",
     shellIntegration: "supported",
     cwd: "~",
     blocks: [],
     activeCommandBlockId: null,
+    captureActiveOutputInTranscript: true,
     composerHistory: [],
     ...overrides,
   };

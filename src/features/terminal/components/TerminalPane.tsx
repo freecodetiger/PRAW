@@ -340,6 +340,9 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
             submitCommand(tabId, command);
             void write(`${command}\n`);
           }}
+          onWriteInput={(data) => {
+            void write(data);
+          }}
         />
       ) : (
         <ClassicTerminalSurface

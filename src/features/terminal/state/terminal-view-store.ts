@@ -13,6 +13,7 @@ import {
   createDialogState,
   isDialogShellSupported,
   isAgentWorkflowCommand,
+  requireClassicTerminal,
   submitDialogCommand,
   type DialogState,
   type PaneRenderMode,
@@ -118,12 +119,21 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         parserState: parsed.state,
       };
 
+      if (parsed.requiresClassic) {
+        nextState = {
+          ...nextState,
+          ...requireClassicTerminal(nextState),
+        };
+      }
+
       const normalizedOutput = normalizeDialogOutput(parsed.visibleOutput);
       const entersAgentWorkflow = parsed.events.some(
         (event) => event.type === "command-start" && typeof event.entry === "string" && isAgentWorkflowCommand(event.entry),
       );
       const shouldCaptureVisibleOutput =
         !entersAgentWorkflow &&
+        !parsed.requiresClassic &&
+        nextState.captureActiveOutputInTranscript &&
         tabState.presentation !== "agent-workflow" &&
         !(tabState.mode === "classic" && tabState.activeCommandBlockId === null);
 
@@ -258,7 +268,9 @@ function reconcileShellState(
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
+      composerMode: "command",
       cwd,
+      captureActiveOutputInTranscript: true,
     };
   }
 
@@ -280,6 +292,8 @@ function reconcileShellState(
     cwd: nextState.cwd,
     blocks: nextState.blocks,
     activeCommandBlockId: nextState.activeCommandBlockId,
+    composerMode: nextState.composerMode,
+    captureActiveOutputInTranscript: nextState.captureActiveOutputInTranscript,
     composerHistory: nextState.composerHistory,
   };
 }

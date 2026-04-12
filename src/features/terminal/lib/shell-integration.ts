@@ -16,6 +16,7 @@ export interface ShellIntegrationChunkResult {
   state: ShellIntegrationParserState;
   visibleOutput: string;
   events: ShellLifecycleEvent[];
+  requiresClassic: boolean;
 }
 
 export function createShellIntegrationParserState(): ShellIntegrationParserState {
@@ -111,16 +112,18 @@ function finalizeVisibleOutput(
     },
     visibleOutput: sanitized.visibleOutput,
     events: result.events,
+    requiresClassic: sanitized.requiresClassic,
   };
 }
 
 function sanitizeVisibleTerminalOutput(
   pendingControl: string,
   chunk: string,
-): { visibleOutput: string; pendingControl: string } {
+): { visibleOutput: string; pendingControl: string; requiresClassic: boolean } {
   const source = `${pendingControl}${chunk}`;
   let cursor = 0;
   let visibleOutput = "";
+  let requiresClassic = false;
 
   while (cursor < source.length) {
     const escapeIndex = source.indexOf(ESC, cursor);
@@ -129,6 +132,7 @@ function sanitizeVisibleTerminalOutput(
       return {
         visibleOutput,
         pendingControl: "",
+        requiresClassic,
       };
     }
 
@@ -138,7 +142,12 @@ function sanitizeVisibleTerminalOutput(
       return {
         visibleOutput,
         pendingControl: source.slice(escapeIndex),
+        requiresClassic,
       };
+    }
+
+    if (requiresClassicSequence(source.slice(escapeIndex, sequence.end))) {
+      requiresClassic = true;
     }
 
     if (sequence.preserve) {
@@ -151,7 +160,16 @@ function sanitizeVisibleTerminalOutput(
   return {
     visibleOutput,
     pendingControl: "",
+    requiresClassic,
   };
+}
+
+function requiresClassicSequence(sequence: string): boolean {
+  if (!sequence.startsWith(`${ESC}[`)) {
+    return false;
+  }
+
+  return /^\u001b\[\?(?:1|9|1000|1002|1003|1004|1005|1006|1015|1016|1047|1048|1049)[hl]$/u.test(sequence);
 }
 
 function consumeEscapeSequence(

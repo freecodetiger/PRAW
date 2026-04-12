@@ -53,6 +53,23 @@ describe("terminal-view-store", () => {
     ]);
   });
 
+  it("keeps ordinary long-running commands in dialog mode while exposing PTY input", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "git push origin main");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.mode).toBe("dialog");
+    expect(tabState.modeSource).toBe("default");
+    expect(tabState.composerMode).toBe("pty");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "git push origin main",
+        interactive: false,
+        status: "running",
+      }),
+    ]);
+  });
+
   it("keeps transcript and shell state isolated per tab", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace/app", "dialog");
     useTerminalViewStore.getState().syncTabState("tab:2", "/bin/bash", "/workspace/api", "dialog");
@@ -151,6 +168,29 @@ describe("terminal-view-store", () => {
         exitCode: 0,
       }),
     ]);
+  });
+
+  it("upgrades an active dialog command to classic mode when output requires full terminal semantics", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "custom-dashboard");
+    useTerminalViewStore.getState().appendOutput("tab:1", "\u001b[?1049h\u001b[2J");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b[?1049h\u001b[2J");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.mode).toBe("classic");
+    expect(tabState.modeSource).toBe("auto-interactive");
+    expect(tabState.composerMode).toBe("pty");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "custom-dashboard",
+        output: "",
+        status: "running",
+      }),
+    ]);
+    expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
+      content: "\u001b[?1049h\u001b[2J",
+      revision: 1,
+    });
   });
 
   it("clears the classic terminal buffer when shell markers enter agent workflow mode", () => {
