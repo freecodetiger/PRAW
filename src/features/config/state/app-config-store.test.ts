@@ -16,18 +16,28 @@ describe("app-config-store", () => {
   it("patches terminal settings and normalizes invalid values", () => {
     useAppConfigStore.getState().patchTerminalConfig({
       defaultShell: "/usr/bin/zsh",
-      fontFamily: "   ",
-      fontSize: 99,
+      dialogFontFamily: "   ",
+      dialogFontSize: 99,
       preferredMode: "classic",
-    });
+    } as never);
 
     expect(useAppConfigStore.getState().config.terminal).toEqual({
       ...DEFAULT_APP_CONFIG.terminal,
       defaultShell: "/usr/bin/zsh",
-      fontFamily: DEFAULT_APP_CONFIG.terminal.fontFamily,
-      fontSize: 32,
+      dialogFontFamily: DEFAULT_APP_CONFIG.terminal.dialogFontFamily,
+      dialogFontSize: 32,
       preferredMode: "classic",
     });
+  });
+
+  it("patches dialog font settings without reintroducing shared terminal font fields", () => {
+    useAppConfigStore.getState().patchTerminalConfig({
+      dialogFontFamily: "IBM Plex Mono",
+      dialogFontSize: 15,
+    } as never);
+
+    expect(useAppConfigStore.getState().config.terminal.dialogFontFamily).toBe("IBM Plex Mono");
+    expect(useAppConfigStore.getState().config.terminal.dialogFontSize).toBe(15);
   });
 
   it("patches ai settings without disturbing terminal config", () => {

@@ -1,3 +1,4 @@
+import { DEFAULT_BUNDLED_MONO_FONT_FAMILY, DEFAULT_DIALOG_FONT_SIZE } from "./font-defaults";
 import { isThemePresetId } from "../theme/presets";
 import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode } from "./types";
 
@@ -5,9 +6,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   terminal: {
     defaultShell: "/bin/bash",
     defaultCwd: "~",
-    fontFamily:
-      "\"CaskaydiaCove Nerd Font\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono\", \"JetBrains Mono\", monospace",
-    fontSize: 14,
+    dialogFontFamily: DEFAULT_BUNDLED_MONO_FONT_FAMILY,
+    dialogFontSize: DEFAULT_DIALOG_FONT_SIZE,
     preferredMode: "dialog",
     themePreset: "light",
     phrases: [],
@@ -23,8 +23,21 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
 };
 
+export interface TerminalConfigInput {
+  defaultShell?: string;
+  defaultCwd?: string;
+  dialogFontFamily?: string;
+  dialogFontSize?: number;
+  fontFamily?: string;
+  fontSize?: number;
+  preferredMode?: string;
+  themePreset?: string;
+  phrases?: string[];
+  phraseUsage?: Record<string, number>;
+}
+
 export interface AppConfigInput {
-  terminal?: Partial<TerminalConfig>;
+  terminal?: TerminalConfigInput;
   ai?: Partial<AiConfig>;
 }
 
@@ -40,8 +53,8 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
     terminal: {
       defaultShell: normalizeString(terminal?.defaultShell, DEFAULT_APP_CONFIG.terminal.defaultShell),
       defaultCwd: normalizeString(terminal?.defaultCwd, DEFAULT_APP_CONFIG.terminal.defaultCwd),
-      fontFamily: normalizeString(terminal?.fontFamily, DEFAULT_APP_CONFIG.terminal.fontFamily),
-      fontSize: normalizeFontSize(terminal?.fontSize),
+      dialogFontFamily: normalizeDialogFontFamily(terminal),
+      dialogFontSize: normalizeDialogFontSize(terminal),
       preferredMode: normalizePreferredMode(terminal?.preferredMode),
       themePreset: normalizeThemePreset(terminal?.themePreset),
       phrases,
@@ -56,6 +69,14 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
     },
   };
+}
+
+function normalizeDialogFontFamily(value: TerminalConfigInput | undefined): string {
+  return normalizeString(value?.dialogFontFamily ?? value?.fontFamily, DEFAULT_APP_CONFIG.terminal.dialogFontFamily);
+}
+
+function normalizeDialogFontSize(value: TerminalConfigInput | undefined): number {
+  return normalizeFontSize(value?.dialogFontSize ?? value?.fontSize);
 }
 
 function normalizeString(value: string | undefined, fallback: string): string {
@@ -85,7 +106,7 @@ function normalizeOptionalString(value: string | undefined): string {
 
 function normalizeFontSize(value: number | undefined): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_APP_CONFIG.terminal.fontSize;
+    return DEFAULT_APP_CONFIG.terminal.dialogFontSize;
   }
 
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));

@@ -5,8 +5,8 @@ export type TerminalPreferredMode = "dialog" | "classic";
 export interface TerminalConfig {
   defaultShell: string;
   defaultCwd: string;
-  fontFamily: string;
-  fontSize: number;
+  dialogFontFamily: string;
+  dialogFontSize: number;
   preferredMode: TerminalPreferredMode;
   themePreset: ThemePresetId;
   phrases: string[];

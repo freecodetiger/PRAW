@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_APP_CONFIG, resolveAppConfig } from "./model";
 
 describe("resolveAppConfig", () => {
-  it("uses the expected terminal font default", () => {
-    expect(DEFAULT_APP_CONFIG.terminal.fontFamily).toBe(
-      "\"CaskaydiaCove Nerd Font\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono\", \"JetBrains Mono\", monospace",
+  it("uses the bundled mono font as the default dialog font", () => {
+    expect(DEFAULT_APP_CONFIG.terminal.dialogFontFamily).toBe(
+      "\"CaskaydiaCove Nerd Font Mono\", \"CaskaydiaCove Nerd Font\", monospace",
     );
+    expect(DEFAULT_APP_CONFIG.terminal.dialogFontSize).toBe(14);
   });
 
   it("does not preconfigure a default ai provider or model", () => {
@@ -88,7 +89,7 @@ describe("resolveAppConfig", () => {
     });
   });
 
-  it("clamps invalid terminal presentation values", () => {
+  it("clamps invalid dialog font settings and terminal presentation values", () => {
     expect(
       resolveAppConfig({
         terminal: {
@@ -101,10 +102,28 @@ describe("resolveAppConfig", () => {
       ...DEFAULT_APP_CONFIG,
       terminal: {
         ...DEFAULT_APP_CONFIG.terminal,
-        fontFamily: DEFAULT_APP_CONFIG.terminal.fontFamily,
-        fontSize: 10,
+        dialogFontFamily: DEFAULT_APP_CONFIG.terminal.dialogFontFamily,
+        dialogFontSize: 10,
         preferredMode: DEFAULT_APP_CONFIG.terminal.preferredMode,
       },
+    });
+  });
+
+  it("migrates legacy shared font keys into dialog font settings", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          fontFamily: "JetBrains Mono",
+          fontSize: 16,
+        } as never,
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        dialogFontFamily: "JetBrains Mono",
+        dialogFontSize: 16,
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
     });
   });
 
