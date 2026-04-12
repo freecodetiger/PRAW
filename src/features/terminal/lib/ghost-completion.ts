@@ -21,9 +21,14 @@ export interface GhostCompletionContext {
   browsingHistory: boolean;
   isComposing: boolean;
   isFocused: boolean;
+  suppressAsyncCompletion?: boolean;
 }
 
 export function shouldRequestLocalCompletion(context: GhostCompletionContext): boolean {
+  if (context.suppressAsyncCompletion) {
+    return false;
+  }
+
   if (context.status !== "running" || context.mode !== "dialog") {
     return false;
   }

@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { AiConnectionTestResult } from "../../../domain/ai/types";
+import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
 import type { AiConfig } from "../../../domain/config/types";
 import { testAiConnection } from "../../../lib/tauri/ai";
 import { describeAiConnectionResult } from "../lib/ai-connection";
@@ -13,6 +14,8 @@ export function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<AiConnectionTestResult | null>(null);
+  const [phraseImportError, setPhraseImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const aiStatus = useMemo(
     () => (config.ai.enabled ? `${config.ai.provider} / ${config.ai.model}` : "disabled"),
@@ -23,6 +26,29 @@ export function SettingsPanel() {
   const patchAi = (partial: Partial<AiConfig>) => {
     patchAiConfig(partial);
     setConnectionResult(null);
+  };
+
+  const importPhraseFile = async (file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const phrases = normalizeImportedPhraseText(text);
+      if (phrases.length === 0) {
+        setPhraseImportError("No valid phrases were found in the selected file.");
+        return;
+      }
+
+      patchTerminalConfig({
+        phrases,
+        phraseUsage: {},
+      });
+      setPhraseImportError(null);
+    } catch {
+      setPhraseImportError("Failed to read the selected phrase file.");
+    }
   };
 
   const runConnectionTest = async () => {
@@ -128,6 +154,44 @@ export function SettingsPanel() {
                 />
               </label>
             </div>
+
+            <div className="settings-section__title">
+              <strong>Common Phrases</strong>
+              <p>Import a text file with one phrase per line. Import replaces the current phrase list.</p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,text/plain"
+              hidden
+              onChange={(event) => {
+                void importPhraseFile(event.target.files?.[0] ?? null);
+                event.currentTarget.value = "";
+              }}
+            />
+
+            <div className="settings-actions">
+              <button className="button" type="button" onClick={() => fileInputRef.current?.click()}>
+                Import Phrase File
+              </button>
+              <button
+                className="button button--ghost"
+                type="button"
+                disabled={config.terminal.phrases.length === 0}
+                onClick={() => {
+                  patchTerminalConfig({ phrases: [], phraseUsage: {} });
+                  setPhraseImportError(null);
+                }}
+              >
+                Clear Phrases
+              </button>
+            </div>
+
+            <p className="settings-panel__summary">{config.terminal.phrases.length} phrases imported</p>
+            {phraseImportError ? (
+              <p className="settings-status settings-status--error">{phraseImportError}</p>
+            ) : null}
           </section>
 
           <section className="settings-section">

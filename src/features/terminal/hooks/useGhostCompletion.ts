@@ -22,6 +22,7 @@ interface UseGhostCompletionOptions {
   browsingHistory: boolean;
   isComposing: boolean;
   isFocused: boolean;
+  disabled?: boolean;
 }
 
 interface GhostCompletionState {
@@ -38,6 +39,7 @@ export function useGhostCompletion({
   browsingHistory,
   isComposing,
   isFocused,
+  disabled = false,
 }: UseGhostCompletionOptions): GhostCompletionState {
   const aiConfig = useAppConfigStore((state) => state.config.ai);
   const [suggestion, setSuggestion] = useState("");
@@ -63,6 +65,7 @@ export function useGhostCompletion({
       browsingHistory,
       isComposing,
       isFocused,
+      suppressAsyncCompletion: disabled,
     });
     const aiRequest = buildGhostCompletionRequest({
       aiEnabled: aiConfig.enabled,
@@ -79,6 +82,7 @@ export function useGhostCompletion({
       browsingHistory,
       isComposing,
       isFocused,
+      suppressAsyncCompletion: disabled,
     });
 
     if (!localRequest && !aiRequest) {
@@ -131,6 +135,7 @@ export function useGhostCompletion({
     aiConfig.provider,
     browsingHistory,
     cursorAtEnd,
+    disabled,
     draft,
     isComposing,
     isFocused,

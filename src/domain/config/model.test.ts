@@ -118,4 +118,29 @@ describe("resolveAppConfig", () => {
       },
     });
   });
+
+  it("normalizes imported phrase lists and drops stale usage entries", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          phrases: ["  codex  ", "claude", "codex", "   "] as never,
+          phraseUsage: {
+            codex: 9,
+            claude: 3,
+            "cd projects/": 7,
+          } as never,
+        },
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        phrases: ["codex", "claude"],
+        phraseUsage: {
+          codex: 9,
+          claude: 3,
+        },
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
+    });
+  });
 });

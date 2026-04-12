@@ -50,4 +50,17 @@ describe("app-config-store", () => {
     });
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
   });
+
+  it("patches terminal phrase config through the app config store", () => {
+    useAppConfigStore.getState().patchTerminalConfig({
+      phrases: ["  codex  ", "claude", "codex"] as never,
+      phraseUsage: { codex: 4, claude: 2, ghost: 1 } as never,
+    });
+
+    expect(useAppConfigStore.getState().config.terminal).toEqual({
+      ...DEFAULT_APP_CONFIG.terminal,
+      phrases: ["codex", "claude"],
+      phraseUsage: { codex: 4, claude: 2 },
+    });
+  });
 });

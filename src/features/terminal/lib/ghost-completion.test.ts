@@ -65,4 +65,30 @@ describe("ghost-completion", () => {
   it("applies only suffix suggestions to the current draft", () => {
     expect(applyGhostCompletion("git ch", "eckout ")).toBe("git checkout ");
   });
+
+  it("suppresses async completion requests while phrase completion is active", () => {
+    expect(
+      shouldRequestLocalCompletion({
+        ...baseContext,
+        draft: "cd p",
+        suppressAsyncCompletion: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      buildLocalCompletionRequest({
+        ...baseContext,
+        draft: "cd p",
+        suppressAsyncCompletion: true,
+      }),
+    ).toBeNull();
+
+    expect(
+      buildGhostCompletionRequest({
+        ...baseContext,
+        draft: "cd p",
+        suppressAsyncCompletion: true,
+      }),
+    ).toBeNull();
+  });
 });

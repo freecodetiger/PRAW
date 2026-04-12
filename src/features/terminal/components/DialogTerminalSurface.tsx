@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CommandBlock } from "../../../domain/terminal/dialog";
+import { getNextPhraseSelection, getPhraseMatches } from "../../../domain/terminal/phrase-completion";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
+import { useAppConfigStore } from "../../config/state/app-config-store";
+import { useGhostCompletion } from "../hooks/useGhostCompletion";
 import { tokenizeDialogOutput, type DialogOutputToken } from "../lib/dialog-output";
 import { highlightCommandText, type HistoryHighlightToken } from "../lib/history-highlighting";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
-import { useGhostCompletion } from "../hooks/useGhostCompletion";
 
 interface DialogTerminalSurfaceProps {
   paneState: TerminalTabViewState;
@@ -21,6 +23,8 @@ export function DialogTerminalSurface({
   onSubmitCommand,
   isActive,
 }: DialogTerminalSurfaceProps) {
+  const terminalConfig = useAppConfigStore((state) => state.config.terminal);
+  const patchTerminalConfig = useAppConfigStore((state) => state.patchTerminalConfig);
   const [draft, setDraft] = useState("");
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [historyDraft, setHistoryDraft] = useState("");
@@ -28,10 +32,38 @@ export function DialogTerminalSurface({
   const [isComposing, setIsComposing] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [cursorAtEnd, setCursorAtEnd] = useState(true);
+  const [phraseIndex, setPhraseIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const manualJumpPendingRef = useRef(false);
-  const { suggestion, acceptSuggestion, clearSuggestion } = useGhostCompletion({
+
+  const phraseCompletionEnabled =
+    status === "running" &&
+    paneState.mode === "dialog" &&
+    historyIndex === null &&
+    isFocused &&
+    cursorAtEnd &&
+    !isComposing;
+
+  const phraseMatches = useMemo(
+    () =>
+      phraseCompletionEnabled
+        ? getPhraseMatches(draft, terminalConfig.phrases, terminalConfig.phraseUsage)
+        : [],
+    [
+      draft,
+      phraseCompletionEnabled,
+      terminalConfig.phraseUsage,
+      terminalConfig.phrases,
+    ],
+  );
+  const activePhrase = phraseMatches[phraseIndex] ?? null;
+
+  const {
+    suggestion: asyncSuggestion,
+    acceptSuggestion,
+    clearSuggestion,
+  } = useGhostCompletion({
     paneState,
     status,
     draft,
@@ -39,7 +71,9 @@ export function DialogTerminalSurface({
     browsingHistory: historyIndex !== null,
     isComposing,
     isFocused,
+    disabled: phraseMatches.length > 0,
   });
+  const suggestion = activePhrase?.suffix ?? asyncSuggestion;
 
   useEffect(() => {
     if (isActive) {
@@ -55,6 +89,10 @@ export function DialogTerminalSurface({
 
     node.scrollTop = node.scrollHeight;
   }, [isPinnedBottom, paneState.blocks]);
+
+  useEffect(() => {
+    setPhraseIndex(0);
+  }, [draft, terminalConfig.phrases, terminalConfig.phraseUsage]);
 
   const history = paneState.composerHistory;
   const hasActiveCommand = paneState.activeCommandBlockId !== null;
@@ -72,6 +110,7 @@ export function DialogTerminalSurface({
     setHistoryIndex(null);
     setHistoryDraft("");
     setCursorAtEnd(true);
+    setPhraseIndex(0);
   };
 
   const syncCursorState = (input: HTMLInputElement) => {
@@ -174,6 +213,41 @@ export function DialogTerminalSurface({
               syncCursorState(event.currentTarget);
             }}
             onKeyDown={(event) => {
+              if (event.ctrlKey && event.key === "ArrowUp" && phraseMatches.length > 1) {
+                event.preventDefault();
+                clearSuggestion();
+                setPhraseIndex((index) =>
+                  getNextPhraseSelection(index, phraseMatches.length, "previous"),
+                );
+                return;
+              }
+
+              if (event.ctrlKey && event.key === "ArrowDown" && phraseMatches.length > 1) {
+                event.preventDefault();
+                clearSuggestion();
+                setPhraseIndex((index) => getNextPhraseSelection(index, phraseMatches.length, "next"));
+                return;
+              }
+
+              if (event.key === "Tab" && activePhrase && !isComposing) {
+                event.preventDefault();
+                const nextDraft = draft + activePhrase.suffix;
+                const nextUsageScore = Math.max(0, ...Object.values(terminalConfig.phraseUsage)) + 1;
+
+                patchTerminalConfig({
+                  phraseUsage: {
+                    ...terminalConfig.phraseUsage,
+                    [activePhrase.phrase]: nextUsageScore,
+                  },
+                });
+
+                setDraft(nextDraft);
+                setHistoryIndex(null);
+                setCursorAtEnd(true);
+                setPhraseIndex(0);
+                return;
+              }
+
               if (event.key === "Tab" && suggestion && !isComposing) {
                 event.preventDefault();
                 const nextDraft = acceptSuggestion();

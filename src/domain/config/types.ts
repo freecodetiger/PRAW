@@ -6,6 +6,8 @@ export interface TerminalConfig {
   fontFamily: string;
   fontSize: number;
   preferredMode: TerminalPreferredMode;
+  phrases: string[];
+  phraseUsage: Record<string, number>;
 }
 
 export interface AiConfig {

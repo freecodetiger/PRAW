@@ -8,6 +8,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       "\"CaskaydiaCove Nerd Font\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono\", \"JetBrains Mono\", monospace",
     fontSize: 14,
     preferredMode: "dialog",
+    phrases: [],
+    phraseUsage: {},
   },
   ai: {
     provider: "glm",
@@ -30,6 +32,7 @@ const MAX_FONT_SIZE = 32;
 export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
   const terminal = input?.terminal;
   const ai = input?.ai;
+  const phrases = normalizePhraseList(terminal?.phrases);
 
   return {
     terminal: {
@@ -38,6 +41,8 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       fontFamily: normalizeString(terminal?.fontFamily, DEFAULT_APP_CONFIG.terminal.fontFamily),
       fontSize: normalizeFontSize(terminal?.fontSize),
       preferredMode: normalizePreferredMode(terminal?.preferredMode),
+      phrases,
+      phraseUsage: normalizePhraseUsage(terminal?.phraseUsage, phrases),
     },
     ai: {
       provider: normalizeAiIdentifier(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
@@ -95,4 +100,51 @@ function normalizeHexColor(value: string | undefined, fallback: string): string 
 
   const normalized = value.trim();
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized) ? normalized : fallback;
+}
+
+function normalizePhraseList(value: string[] | undefined): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+
+    const phrase = entry.trim();
+    if (!phrase || seen.has(phrase)) {
+      continue;
+    }
+
+    seen.add(phrase);
+    normalized.push(phrase);
+  }
+
+  return normalized;
+}
+
+function normalizePhraseUsage(
+  value: Record<string, number> | undefined,
+  phrases: string[],
+): Record<string, number> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const allowed = new Set(phrases);
+  const normalized: Record<string, number> = {};
+
+  for (const [phrase, score] of Object.entries(value)) {
+    if (!allowed.has(phrase) || typeof score !== "number" || !Number.isFinite(score) || score < 0) {
+      continue;
+    }
+
+    normalized[phrase] = Math.floor(score);
+  }
+
+  return normalized;
 }
