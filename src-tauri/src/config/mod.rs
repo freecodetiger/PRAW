@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 pub struct TerminalConfig {
     pub default_shell: String,
     pub default_cwd: String,
-    pub font_family: String,
-    pub font_size: u16,
+    #[serde(default = "default_terminal_dialog_font_family", alias = "fontFamily")]
+    pub dialog_font_family: String,
+    #[serde(default = "default_terminal_dialog_font_size", alias = "fontSize")]
+    pub dialog_font_size: u16,
     #[serde(default = "default_terminal_preferred_mode")]
     pub preferred_mode: String,
     #[serde(default)]
@@ -41,14 +43,22 @@ fn default_terminal_preferred_mode() -> String {
     "dialog".to_string()
 }
 
+fn default_terminal_dialog_font_family() -> String {
+    "\"CaskaydiaCove Nerd Font Mono\", \"CaskaydiaCove Nerd Font\", monospace".to_string()
+}
+
+fn default_terminal_dialog_font_size() -> u16 {
+    14
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             terminal: TerminalConfig {
                 default_shell: std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()),
                 default_cwd: "~".to_string(),
-                font_family: "JetBrains Mono".to_string(),
-                font_size: 14,
+                dialog_font_family: default_terminal_dialog_font_family(),
+                dialog_font_size: default_terminal_dialog_font_size(),
                 preferred_mode: "dialog".to_string(),
                 phrases: Vec::new(),
                 phrase_usage: BTreeMap::new(),
@@ -145,5 +155,43 @@ mod tests {
                 .and_then(|value| value.as_u64()),
             Some(6)
         );
+    }
+
+    #[test]
+    fn deserializes_legacy_shared_font_keys_into_dialog_font_fields() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "fontFamily": "JetBrains Mono",
+                    "fontSize": 16,
+                    "preferredMode": "classic"
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "enabled": false,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                }
+            }"##,
+        )
+        .expect("legacy config should deserialize");
+
+        assert_eq!(config.terminal.dialog_font_family, "JetBrains Mono");
+        assert_eq!(config.terminal.dialog_font_size, 16);
+    }
+
+    #[test]
+    fn serializes_dialog_only_font_keys() {
+        let json = serde_json::to_value(AppConfig::default()).expect("config should serialize");
+        let terminal = json.get("terminal").expect("terminal should exist");
+
+        assert!(terminal.get("dialogFontFamily").is_some());
+        assert!(terminal.get("dialogFontSize").is_some());
+        assert!(terminal.get("fontFamily").is_none());
+        assert!(terminal.get("fontSize").is_none());
     }
 }
