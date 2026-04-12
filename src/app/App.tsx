@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { loadAppBootstrapState, saveAppConfig, saveWindowSnapshot } from "../lib/tauri/bootstrap";
 import { DEFAULT_APP_CONFIG, resolveAppConfig } from "../domain/config/model";
+import { getThemePreset } from "../domain/theme/presets";
 import { normalizeWindowSnapshot } from "../domain/window/restore";
 import { toWindowSnapshot } from "../domain/window/snapshot";
 import { SettingsPanel } from "../features/config/components/SettingsPanel";
-import { TerminalWorkspace } from "../features/terminal/components/TerminalWorkspace";
 import { useAppConfigStore } from "../features/config/state/app-config-store";
+import { TerminalWorkspace } from "../features/terminal/components/TerminalWorkspace";
 import { useTerminalRuntime } from "../features/terminal/hooks/useTerminalRuntime";
 import { useWorkspaceStore } from "../features/terminal/state/workspace-store";
 
@@ -18,6 +19,7 @@ function App() {
   const windowModel = useWorkspaceStore((state) => state.window);
   const [bootState, setBootState] = useState<"loading" | "ready" | "error">("loading");
   const [bootMessage, setBootMessage] = useState<string>("");
+  const themePreset = useMemo(() => getThemePreset(config.terminal.themePreset), [config.terminal.themePreset]);
 
   useTerminalRuntime();
 
@@ -30,16 +32,16 @@ function App() {
           return;
         }
 
-        const config = resolveAppConfig(bootstrap.config);
-        hydrateConfig(config);
+        const nextConfig = resolveAppConfig(bootstrap.config);
+        hydrateConfig(nextConfig);
 
         const restoredSnapshot = normalizeWindowSnapshot(bootstrap.windowSnapshot);
         if (restoredSnapshot) {
           hydrateWindow(restoredSnapshot);
         } else {
           bootstrapWindow({
-            shell: config.terminal.defaultShell,
-            cwd: config.terminal.defaultCwd,
+            shell: nextConfig.terminal.defaultShell,
+            cwd: nextConfig.terminal.defaultCwd,
           });
 
           if (bootstrap.windowSnapshot) {
@@ -96,7 +98,7 @@ function App() {
   }, [bootState, windowModel]);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={themePreset.id} style={{ colorScheme: themePreset.colorScheme }}>
       <header className="app-header">
         <h1>PRAW</h1>
         <div className="app-header__actions">

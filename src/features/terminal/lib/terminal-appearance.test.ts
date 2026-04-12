@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { applyTerminalAppearance } from "./terminal-appearance";
 
 describe("terminal appearance", () => {
-  it("updates only mutable font options", () => {
+  it("updates mutable font and theme options", () => {
     const options = {
       cols: 120,
       rows: 30,
@@ -17,7 +17,13 @@ describe("terminal appearance", () => {
     applyTerminalAppearance(terminal, {
       fontFamily: "JetBrains Mono",
       fontSize: 14,
-      backgroundColor: "#eef4ff",
+      theme: {
+        background: "#10141c",
+        foreground: "#f3f5f7",
+        cursor: "#f3f5f7",
+        black: "#1b2330",
+        brightBlack: "#4e5d78",
+      },
     });
 
     expect(terminal.options).toBe(options);
@@ -27,7 +33,11 @@ describe("terminal appearance", () => {
       fontFamily: "JetBrains Mono",
       fontSize: 14,
       theme: {
-        background: "#eef4ff",
+        background: "#10141c",
+        foreground: "#f3f5f7",
+        cursor: "#f3f5f7",
+        black: "#1b2330",
+        brightBlack: "#4e5d78",
       },
     });
   });

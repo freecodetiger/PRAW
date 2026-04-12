@@ -9,6 +9,11 @@ describe("resolveAppConfig", () => {
     );
   });
 
+  it("does not preconfigure a default ai provider or model", () => {
+    expect(DEFAULT_APP_CONFIG.ai.provider).toBe("");
+    expect(DEFAULT_APP_CONFIG.ai.model).toBe("");
+  });
+
   it("fills missing terminal and ai settings from defaults", () => {
     expect(
       resolveAppConfig({
@@ -61,6 +66,24 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         provider: "glm",
         model: "glm-4.7-flash",
+      },
+    });
+  });
+
+  it("preserves blank ai provider and model values instead of falling back", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          provider: "   ",
+          model: "   ",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        provider: "",
+        model: "",
       },
     });
   });
@@ -139,6 +162,22 @@ describe("resolveAppConfig", () => {
           codex: 9,
           claude: 3,
         },
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
+    });
+  });
+
+  it("defaults invalid theme presets back to light", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          themePreset: "noir" as never,
+        },
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        themePreset: "light",
       },
       ai: DEFAULT_APP_CONFIG.ai,
     });

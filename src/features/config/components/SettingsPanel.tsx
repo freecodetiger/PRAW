@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 
-import type { AiConnectionTestResult } from "../../../domain/ai/types";
-import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
+import { AI_PROVIDER_OPTIONS, type AiProviderOption } from "../../../domain/ai/catalog";
+import type { CompletionProvider, AiConnectionTestResult } from "../../../domain/ai/types";
 import type { AiConfig } from "../../../domain/config/types";
+import { THEME_PRESET_OPTIONS, type ThemePresetId } from "../../../domain/theme/presets";
+import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
 import { testAiConnection } from "../../../lib/tauri/ai";
 import { describeAiConnectionResult } from "../lib/ai-connection";
 import { useAppConfigStore } from "../state/app-config-store";
@@ -17,11 +19,19 @@ export function SettingsPanel() {
   const [phraseImportError, setPhraseImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const aiStatus = useMemo(
-    () => (config.ai.enabled ? `${config.ai.provider} / ${config.ai.model}` : "disabled"),
-    [config.ai.enabled, config.ai.model, config.ai.provider],
-  );
+  const aiStatus = useMemo(() => {
+    if (!config.ai.provider || !config.ai.model) {
+      return "not configured";
+    }
+
+    const summary = `${config.ai.provider} / ${config.ai.model}`;
+    return config.ai.enabled ? summary : `${summary} · disabled`;
+  }, [config.ai.enabled, config.ai.model, config.ai.provider]);
   const terminalModeLabel = config.terminal.preferredMode === "classic" ? "Classic" : "Dialog";
+  const themePresetLabel =
+    THEME_PRESET_OPTIONS.find((option) => option.value === config.terminal.themePreset)?.label ?? "Light";
+  const canTestConnection =
+    config.ai.provider === "glm" && config.ai.model.trim().length > 0 && config.ai.apiKey.trim().length > 0;
 
   const patchAi = (partial: Partial<AiConfig>) => {
     patchAiConfig(partial);
@@ -52,12 +62,16 @@ export function SettingsPanel() {
   };
 
   const runConnectionTest = async () => {
+    if (!canTestConnection) {
+      return;
+    }
+
     setIsTestingConnection(true);
     setConnectionResult(null);
 
     try {
       const result = await testAiConnection({
-        provider: config.ai.provider as "glm",
+        provider: config.ai.provider as CompletionProvider,
         model: config.ai.model,
         apiKey: config.ai.apiKey,
       });
@@ -85,8 +99,7 @@ export function SettingsPanel() {
             <p className="eyebrow">Workspace Settings</p>
             <strong>Runtime profile</strong>
             <p className="settings-panel__summary">
-              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Font {config.terminal.fontFamily} {config.terminal.fontSize}px · AI{" "}
-              {aiStatus}
+              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Theme {themePresetLabel} · Font {config.terminal.fontFamily} {config.terminal.fontSize}px · AI {aiStatus}
             </p>
           </div>
 
@@ -131,11 +144,17 @@ export function SettingsPanel() {
 
             <div className="settings-grid">
               <label className="settings-field">
-                <span>Font family</span>
-                <input
-                  value={config.terminal.fontFamily}
-                  onChange={(event) => patchTerminalConfig({ fontFamily: event.target.value })}
-                />
+                <span>Theme preset</span>
+                <select
+                  value={config.terminal.themePreset}
+                  onChange={(event) => patchTerminalConfig({ themePreset: event.target.value as ThemePresetId })}
+                >
+                  {THEME_PRESET_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="settings-field">
@@ -154,6 +173,14 @@ export function SettingsPanel() {
                 />
               </label>
             </div>
+
+            <label className="settings-field">
+              <span>Font family</span>
+              <input
+                value={config.terminal.fontFamily}
+                onChange={(event) => patchTerminalConfig({ fontFamily: event.target.value })}
+              />
+            </label>
 
             <div className="settings-section__title">
               <strong>Common Phrases</strong>
@@ -197,7 +224,7 @@ export function SettingsPanel() {
           <section className="settings-section">
             <div className="settings-section__title">
               <strong>AI</strong>
-              <p>Ghost completion uses the current tab input, cwd, shell, and recent commands only.</p>
+              <p>Ghost completion uses the current tab input, cwd, shell, recent commands, and local directory summary.</p>
             </div>
 
             <label className="settings-toggle">
@@ -212,16 +239,28 @@ export function SettingsPanel() {
             <div className="settings-grid">
               <label className="settings-field">
                 <span>Provider</span>
-                <input
+                <select
                   value={config.ai.provider}
-                  onChange={(event) => patchAi({ provider: event.target.value })}
-                />
+                  onChange={(event) => {
+                    const nextProvider = event.target.value as AiProviderOption["value"] | "";
+                    patchAi({ provider: nextProvider });
+                  }}
+                >
+                  <option value="">Select provider</option>
+                  {AI_PROVIDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="settings-field">
                 <span>Model</span>
                 <input
                   value={config.ai.model}
+                  disabled={!config.ai.provider}
+                  placeholder={config.ai.provider ? "Enter official model name" : "Select provider first"}
                   onChange={(event) => patchAi({ model: event.target.value })}
                 />
               </label>
@@ -241,7 +280,7 @@ export function SettingsPanel() {
               <button
                 className="button"
                 type="button"
-                disabled={isTestingConnection}
+                disabled={isTestingConnection || !canTestConnection}
                 onClick={() => void runConnectionTest()}
               >
                 {isTestingConnection ? "Testing..." : "Test AI Connection"}
@@ -259,28 +298,17 @@ export function SettingsPanel() {
 
             <div className="settings-section__title">
               <strong>AI Appearance</strong>
-              <p>These colors only affect AI workflow panes.</p>
+              <p>AI workflow panes follow the active theme. Accent color remains configurable.</p>
             </div>
 
-            <div className="settings-grid">
-              <label className="settings-field">
-                <span>Theme color</span>
-                <input
-                  type="color"
-                  value={config.ai.themeColor}
-                  onChange={(event) => patchAi({ themeColor: event.target.value })}
-                />
-              </label>
-
-              <label className="settings-field">
-                <span>Background color</span>
-                <input
-                  type="color"
-                  value={config.ai.backgroundColor}
-                  onChange={(event) => patchAi({ backgroundColor: event.target.value })}
-                />
-              </label>
-            </div>
+            <label className="settings-field">
+              <span>Theme color</span>
+              <input
+                type="color"
+                value={config.ai.themeColor}
+                onChange={(event) => patchAi({ themeColor: event.target.value })}
+              />
+            </label>
           </section>
         </div>
       </aside>

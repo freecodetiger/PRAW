@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
@@ -8,12 +9,64 @@ use reqwest::{Client, Error as ReqwestError, StatusCode};
 use serde::{Deserialize, Serialize};
 
 const GLM_CHAT_COMPLETIONS_URL: &str = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
-const COMPLETION_REQUEST_TIMEOUT_MS: u64 = 1_200;
+const COMPLETION_REQUEST_TIMEOUT_MS: u64 = 1_500;
 const CONNECTION_TEST_TIMEOUT_MS: u64 = 8_000;
 const MAX_RECENT_COMMANDS: usize = 8;
-const MAX_SUGGESTION_CHARS: usize = 120;
+const MAX_STATUS_LINES: usize = 8;
+const MAX_SUMMARY_ITEMS: usize = 8;
+const MAX_SUGGESTION_CHARS: usize = 160;
 const COMPLETION_TEMPERATURE: f32 = 0.1;
-const COMPLETION_MAX_TOKENS: u16 = 48;
+const COMPLETION_MAX_TOKENS: u16 = 160;
+const MAX_COMPLETION_CANDIDATES: usize = 5;
+const DANGEROUS_PATTERNS: &[&str] = &["rm -rf /", "mkfs", "shutdown", "reboot", "dd if="];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CwdSummary {
+    pub dirs: Vec<String>,
+    pub files: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSummary {
+    pub os: String,
+    pub shell: String,
+    pub package_manager: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CompletionCandidateSource {
+    Local,
+    Ai,
+    System,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CompletionCandidateKind {
+    Command,
+    History,
+    Path,
+    Git,
+    Docker,
+    Ssh,
+    Systemctl,
+    Go,
+    Package,
+    Kubectl,
+    Network,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionCandidate {
+    pub text: String,
+    pub source: CompletionCandidateSource,
+    pub score: u16,
+    pub kind: CompletionCandidateKind,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,18 +74,22 @@ pub struct CompletionRequest {
     pub provider: String,
     pub model: String,
     pub api_key: String,
-    pub shell: String,
-    pub os: String,
-    pub cwd: String,
-    pub input_prefix: String,
-    pub recent_commands: Vec<String>,
+    pub prefix: String,
+    pub pwd: String,
+    pub git_branch: Option<String>,
+    pub git_status_summary: Vec<String>,
+    pub recent_history: Vec<String>,
+    pub cwd_summary: CwdSummary,
+    pub system_summary: SystemSummary,
+    pub tool_availability: Vec<String>,
+    pub session_id: String,
+    pub user_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompletionResponse {
-    pub suggestion: String,
-    pub replace_range: Option<(usize, usize)>,
+    pub suggestions: Vec<CompletionCandidate>,
     pub latency_ms: u64,
 }
 
@@ -106,7 +163,7 @@ impl GlmProvider {
 #[async_trait]
 impl AiProvider for GlmProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Option<CompletionResponse>> {
-        if request.api_key.trim().is_empty() || request.input_prefix.trim().is_empty() {
+        if request.api_key.trim().is_empty() || request.model.trim().is_empty() || request.prefix.trim().is_empty() {
             return Ok(None);
         }
 
@@ -127,13 +184,13 @@ impl AiProvider for GlmProvider {
             return Ok(None);
         };
 
-        let Some(suggestion) = sanitize_completion_suffix(&request, &content) else {
+        let suggestions = parse_completion_candidates(&request, &content);
+        if suggestions.is_empty() {
             return Ok(None);
-        };
+        }
 
         Ok(Some(CompletionResponse {
-            suggestion,
-            replace_range: None,
+            suggestions,
             latency_ms: started_at.elapsed().as_millis() as u64,
         }))
     }
@@ -197,6 +254,11 @@ struct OpenAiMessage {
     content: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CompletionEnvelope {
+    suggestions: Vec<String>,
+}
+
 fn build_client(timeout_ms: u64) -> Client {
     Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
@@ -230,21 +292,12 @@ async fn send_openai_request(
 }
 
 fn build_completion_request_payload(request: &CompletionRequest) -> OpenAiChatCompletionRequest {
-    let recent_commands = request
-        .recent_commands
-        .iter()
-        .rev()
-        .take(MAX_RECENT_COMMANDS)
-        .cloned()
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>();
-    let recent_commands_block = if recent_commands.is_empty() {
-        "(none)".to_string()
-    } else {
-        recent_commands.join("\n")
-    };
+    let git_branch = request.git_branch.clone().unwrap_or_else(|| "(none)".to_string());
+    let git_status = join_limited(&request.git_status_summary, MAX_STATUS_LINES);
+    let recent_history = join_limited(&request.recent_history, MAX_RECENT_COMMANDS);
+    let cwd_dirs = join_limited(&request.cwd_summary.dirs, MAX_SUMMARY_ITEMS);
+    let cwd_files = join_limited(&request.cwd_summary.files, MAX_SUMMARY_ITEMS);
+    let tool_availability = join_limited(&request.tool_availability, MAX_SUMMARY_ITEMS);
 
     OpenAiChatCompletionRequest {
         model: normalize_identifier(&request.model),
@@ -254,22 +307,48 @@ fn build_completion_request_payload(request: &CompletionRequest) -> OpenAiChatCo
             OpenAiChatMessage {
                 role: "system",
                 content: [
-                    "You produce ghost completions for an Ubuntu shell composer.",
-                    "Return only the missing suffix that should be appended to the user input.",
-                    "Never explain, never use markdown, never wrap the answer in quotes, and never emit more than one line.",
-                    "If no strong completion is available, return an empty response.",
+                    "You are a Linux terminal command prediction assistant.",
+                    "Return JSON array only.",
+                    "Return up to 5 executable commands.",
+                    "Each command must begin with the user's prefix exactly.",
+                    "Prefer the most likely next command based on cwd, git state, history, and available tools.",
+                    "Never explain, never use markdown outside the raw JSON array, and never include placeholders like <branch>.",
+                    "Do not suggest destructive commands or anything requiring secret values.",
                 ]
                 .join(" "),
             },
             OpenAiChatMessage {
                 role: "user",
                 content: format!(
-                    "shell: {}\nos: {}\ncwd: {}\nrecent_commands:\n{}\ninput_prefix: {}\ncompletion_suffix:",
-                    request.shell,
-                    request.os,
-                    request.cwd,
-                    recent_commands_block,
-                    request.input_prefix,
+                    concat!(
+                        "Return JSON array only.\n",
+                        "prefix: {}\n",
+                        "pwd: {}\n",
+                        "git_branch: {}\n",
+                        "git_status: {}\n",
+                        "recent_history: {}\n",
+                        "cwd_dirs: {}\n",
+                        "cwd_files: {}\n",
+                        "os: {}\n",
+                        "shell: {}\n",
+                        "package_manager: {}\n",
+                        "tool_availability: {}\n",
+                        "session_id: {}\n",
+                        "user_id: {}"
+                    ),
+                    request.prefix,
+                    request.pwd,
+                    git_branch,
+                    git_status,
+                    recent_history,
+                    cwd_dirs,
+                    cwd_files,
+                    request.system_summary.os,
+                    request.system_summary.shell,
+                    request.system_summary.package_manager,
+                    tool_availability,
+                    request.session_id,
+                    request.user_id,
                 ),
             },
         ],
@@ -292,6 +371,139 @@ fn build_connection_test_payload(model: &str) -> OpenAiChatCompletionRequest {
             },
         ],
     }
+}
+
+fn parse_completion_candidates(request: &CompletionRequest, raw: &str) -> Vec<CompletionCandidate> {
+    let Some(payload) = extract_json_payload(raw) else {
+        return Vec::new();
+    };
+
+    let entries = serde_json::from_str::<Vec<String>>(payload)
+        .ok()
+        .or_else(|| {
+            serde_json::from_str::<CompletionEnvelope>(payload)
+                .ok()
+                .map(|envelope| envelope.suggestions)
+        })
+        .unwrap_or_default();
+
+    let mut seen = HashSet::new();
+    let mut suggestions = Vec::new();
+    for (index, entry) in entries.into_iter().enumerate() {
+        let Some(text) = sanitize_candidate(&request.prefix, &entry) else {
+            continue;
+        };
+        if !seen.insert(text.clone()) {
+            continue;
+        }
+
+        suggestions.push(CompletionCandidate {
+            text: text.clone(),
+            source: CompletionCandidateSource::Ai,
+            score: 900u16.saturating_sub((index as u16) * 10),
+            kind: classify_candidate_kind(&text),
+        });
+
+        if suggestions.len() >= MAX_COMPLETION_CANDIDATES {
+            break;
+        }
+    }
+
+    suggestions
+}
+
+fn sanitize_candidate(prefix: &str, candidate: &str) -> Option<String> {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > MAX_SUGGESTION_CHARS {
+        return None;
+    }
+    if trimmed.contains('\n') || trimmed.contains('\r') {
+        return None;
+    }
+    if !trimmed.starts_with(prefix) || trimmed == prefix {
+        return None;
+    }
+
+    let lowered = trimmed.to_ascii_lowercase();
+    if DANGEROUS_PATTERNS.iter().any(|pattern| lowered.contains(pattern)) {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
+fn classify_candidate_kind(command: &str) -> CompletionCandidateKind {
+    if command.starts_with("git ") {
+        return CompletionCandidateKind::Git;
+    }
+    if command.starts_with("docker ") {
+        return CompletionCandidateKind::Docker;
+    }
+    if command.starts_with("ssh ") {
+        return CompletionCandidateKind::Ssh;
+    }
+    if command.starts_with("systemctl ") {
+        return CompletionCandidateKind::Systemctl;
+    }
+    if command.starts_with("go ") {
+        return CompletionCandidateKind::Go;
+    }
+    if command.starts_with("apt ") || command.starts_with("yum ") || command.starts_with("brew ") {
+        return CompletionCandidateKind::Package;
+    }
+    if command.starts_with("kubectl ") {
+        return CompletionCandidateKind::Kubectl;
+    }
+    if command.starts_with("curl ") || command.starts_with("wget ") || command.starts_with("ping ") {
+        return CompletionCandidateKind::Network;
+    }
+    if command.starts_with("cd ")
+        || command.starts_with("ls ")
+        || command.starts_with("cat ")
+        || command.starts_with("less ")
+        || command.starts_with("tail ")
+    {
+        return CompletionCandidateKind::Path;
+    }
+
+    CompletionCandidateKind::Command
+}
+
+fn extract_json_payload(raw: &str) -> Option<&str> {
+    let trimmed = raw.trim();
+    if trimmed.starts_with("```") {
+        let without_fence = trimmed.trim_start_matches('`');
+        let after_header = without_fence.split_once('\n')?.1;
+        return after_header.rsplit_once("```").map(|(content, _)| content.trim());
+    }
+
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        return Some(trimmed);
+    }
+    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+        return Some(trimmed);
+    }
+
+    if let Some(start) = trimmed.find('[') {
+        if let Some(end) = trimmed.rfind(']') {
+            return Some(trimmed[start..=end].trim());
+        }
+    }
+    if let Some(start) = trimmed.find('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            return Some(trimmed[start..=end].trim());
+        }
+    }
+
+    None
+}
+
+fn join_limited(entries: &[String], limit: usize) -> String {
+    if entries.is_empty() {
+        return "(none)".to_string();
+    }
+
+    entries.iter().take(limit).cloned().collect::<Vec<_>>().join(", ")
 }
 
 fn validate_connection_test_request(request: &ConnectionTestRequest) -> std::result::Result<(), ConnectionTestResult> {
@@ -385,91 +597,82 @@ fn parse_http_error_message(message: &str) -> Option<(u16, &str)> {
     Some((status_code, body))
 }
 
-fn sanitize_completion_suffix(request: &CompletionRequest, raw: &str) -> Option<String> {
-    let candidate = raw.trim_matches(|character| character == '\n' || character == '\r');
-    if candidate.trim().is_empty() || candidate.contains('\n') || candidate.contains('\r') {
-        return None;
-    }
-
-    let suffix = candidate
-        .strip_prefix(request.input_prefix.as_str())
-        .unwrap_or(candidate);
-
-    if suffix.is_empty() || suffix.chars().count() > MAX_SUGGESTION_CHARS {
-        return None;
-    }
-
-    Some(suffix.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        build_completion_request_payload, build_connection_test_payload, classify_http_error_message,
-        sanitize_completion_suffix, validate_connection_test_request, CompletionRequest,
-        CompletionResponse, ConnectionTestRequest, ConnectionTestResult, GlmProvider,
+        build_completion_request_payload, classify_http_error_message, parse_completion_candidates,
+        validate_connection_test_request, CompletionCandidateSource, CompletionRequest,
+        ConnectionTestRequest, ConnectionTestResult, CwdSummary, SystemSummary,
     };
 
     fn request(prefix: &str) -> CompletionRequest {
         CompletionRequest {
             provider: "glm".to_string(),
-            model: "glm-5-flash".to_string(),
+            model: "glm-4.7-flash".to_string(),
             api_key: "secret-key".to_string(),
-            shell: "/bin/bash".to_string(),
-            os: "ubuntu".to_string(),
-            cwd: "/workspace".to_string(),
-            input_prefix: prefix.to_string(),
-            recent_commands: vec!["git status".to_string(), "git add .".to_string()],
+            prefix: prefix.to_string(),
+            pwd: "/USER/project".to_string(),
+            git_branch: Some("main".to_string()),
+            git_status_summary: vec!["M src/main.tsx".to_string()],
+            recent_history: vec!["git status".to_string(), "git add .".to_string()],
+            cwd_summary: CwdSummary {
+                dirs: vec!["src".to_string(), "docs".to_string()],
+                files: vec!["package.json".to_string()],
+            },
+            system_summary: SystemSummary {
+                os: "ubuntu".to_string(),
+                shell: "/bin/bash".to_string(),
+                package_manager: "apt".to_string(),
+            },
+            tool_availability: vec!["git".to_string(), "docker".to_string()],
+            session_id: "sess-1".to_string(),
+            user_id: "user-1".to_string(),
         }
     }
 
     #[test]
-    fn strips_echoed_prefix_and_keeps_only_suffix() {
-        let suggestion = sanitize_completion_suffix(&request("git ch"), "git checkout ");
-        assert_eq!(suggestion, Some("eckout ".to_string()));
-    }
-
-    #[test]
-    fn rejects_multiline_and_blank_responses() {
-        assert_eq!(sanitize_completion_suffix(&request("git ch"), "\n"), None);
-        assert_eq!(sanitize_completion_suffix(&request("git ch"), "checkout\nstatus"), None);
-    }
-
-    #[test]
-    fn builds_a_clean_completion_response() {
-        let response = CompletionResponse {
-            suggestion: sanitize_completion_suffix(&request("git ch"), "git checkout ")
-                .expect("suffix should survive"),
-            replace_range: None,
-            latency_ms: 12,
-        };
-
-        assert_eq!(
-            response,
-            CompletionResponse {
-                suggestion: "eckout ".to_string(),
-                replace_range: None,
-                latency_ms: 12,
-            }
+    fn parses_json_array_candidates_into_ai_suggestions() {
+        let suggestions = parse_completion_candidates(
+            &request("git c"),
+            r#"```json
+["git commit -m \"update\"", "git checkout dev"]
+```"#,
         );
+
+        assert_eq!(suggestions.len(), 2);
+        assert_eq!(suggestions[0].text, "git commit -m \"update\"");
+        assert_eq!(suggestions[0].source, CompletionCandidateSource::Ai);
     }
 
     #[test]
-    fn builds_openai_compatible_prompt_with_recent_commands() {
-        let payload = build_completion_request_payload(&request("git ch"));
+    fn builds_prompt_with_context_snapshot_and_json_contract() {
+        let payload = build_completion_request_payload(&request("git c"));
         let user_message = payload
             .messages
             .iter()
             .find(|message| message.role == "user")
             .expect("user message should exist");
 
-        assert!(user_message.content.contains("input_prefix: git ch"));
-        assert!(user_message.content.contains("git status"));
-        assert!(user_message.content.contains("git add ."));
+        assert!(user_message.content.contains("prefix: git c"));
+        assert!(user_message.content.contains("pwd: /USER/project"));
+        assert!(user_message.content.contains("git_branch: main"));
+        assert!(user_message.content.contains("cwd_dirs: src, docs"));
+        assert!(user_message.content.contains("Return JSON array only."));
     }
 
     #[test]
-    fn validates_connection_test_requests_before_network_calls() {
+    fn filters_non_matching_or_dangerous_candidates() {
+        let suggestions = parse_completion_candidates(
+            &request("git c"),
+            r#"["git commit -m \"ok\"", "docker logs api", "git checkout dev", "git c", "git checkout main && reboot"]"#,
+        );
+
+        assert_eq!(suggestions.len(), 2);
+        assert!(suggestions.iter().all(|candidate| candidate.text.starts_with("git c")));
+    }
+
+    #[test]
+    fn validates_connection_requests_and_classifies_provider_errors() {
         let result = validate_connection_test_request(&ConnectionTestRequest {
             provider: "glm".to_string(),
             model: "".to_string(),
@@ -484,47 +687,13 @@ mod tests {
                 latency_ms: None,
             })
         );
-    }
-
-    #[test]
-    fn classifies_http_auth_and_provider_failures() {
         assert_eq!(
-            classify_http_error_message("http:401:invalid api key"),
-            Some(ConnectionTestResult {
-                status: "auth_error".to_string(),
-                message: "invalid api key".to_string(),
-                latency_ms: None,
-            })
-        );
-        assert_eq!(
-            classify_http_error_message("http:404:model not found"),
+            classify_http_error_message(r#"http:429:{"error":{"code":"1302","message":"rate limit"}}"#),
             Some(ConnectionTestResult {
                 status: "provider_error".to_string(),
-                message: "model not found".to_string(),
+                message: r#"{"error":{"code":"1302","message":"rate limit"}}"#.to_string(),
                 latency_ms: None,
             })
         );
-    }
-
-    #[test]
-    fn normalizes_connection_probe_model_identifiers() {
-        let payload = build_connection_test_payload("GLM-4.7-Flash");
-        assert_eq!(payload.model, "glm-4.7-flash");
-        assert_eq!(payload.messages.len(), 2);
-        assert_eq!(payload.messages[1].content, "ping");
-    }
-
-    #[test]
-    fn uses_longer_timeout_for_connection_probes() {
-        let provider = GlmProvider::default();
-        assert!(provider.connection_test_timeout_ms() > provider.completion_timeout_ms());
-    }
-
-    #[test]
-    fn builds_a_minimal_connection_probe_payload() {
-        let payload = build_connection_test_payload("glm-5-flash");
-        assert_eq!(payload.model, "glm-5-flash");
-        assert_eq!(payload.messages.len(), 2);
-        assert_eq!(payload.messages[1].content, "ping");
     }
 }

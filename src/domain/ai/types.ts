@@ -1,19 +1,66 @@
 export type CompletionProvider = "glm";
 
+export type CompletionCandidateSource = "local" | "ai" | "system";
+
+export type CompletionCandidateKind =
+  | "command"
+  | "history"
+  | "path"
+  | "git"
+  | "docker"
+  | "ssh"
+  | "systemctl"
+  | "go"
+  | "package"
+  | "kubectl"
+  | "network";
+
+export interface CwdSummary {
+  dirs: string[];
+  files: string[];
+}
+
+export interface SystemSummary {
+  os: "ubuntu";
+  shell: string;
+  packageManager: string;
+}
+
+export interface CompletionContextSnapshot {
+  pwd: string;
+  gitBranch: string | null;
+  gitStatusSummary: string[];
+  recentHistory: string[];
+  cwdSummary: CwdSummary;
+  systemSummary: SystemSummary;
+  toolAvailability: string[];
+}
+
+export interface CompletionCandidate {
+  text: string;
+  source: CompletionCandidateSource;
+  score: number;
+  kind: CompletionCandidateKind;
+}
+
 export interface CompletionRequest {
   provider: CompletionProvider;
   model: string;
   apiKey: string;
-  shell: string;
-  os: "ubuntu";
-  cwd: string;
-  inputPrefix: string;
-  recentCommands: string[];
+  prefix: string;
+  pwd: string;
+  gitBranch: string | null;
+  gitStatusSummary: string[];
+  recentHistory: string[];
+  cwdSummary: CwdSummary;
+  systemSummary: SystemSummary;
+  toolAvailability: string[];
+  sessionId: string;
+  userId: string;
 }
 
 export interface CompletionResponse {
-  suggestion: string;
-  replaceRange?: [number, number];
+  suggestions: CompletionCandidate[];
   latencyMs: number;
 }
 

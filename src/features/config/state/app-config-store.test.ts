@@ -63,4 +63,12 @@ describe("app-config-store", () => {
       phraseUsage: { codex: 4, claude: 2 },
     });
   });
+
+  it("patches terminal theme presets through the app config store", () => {
+    useAppConfigStore.getState().patchTerminalConfig({
+      themePreset: "sepia" as never,
+    });
+
+    expect(useAppConfigStore.getState().config.terminal.themePreset).toBe("sepia");
+  });
 });

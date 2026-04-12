@@ -23,6 +23,18 @@ describe("describeAiConnectionResult", () => {
     ).toBe("Authentication failed: invalid API key");
   });
 
+  it("explains provider rate limiting clearly for GLM error code 1302", () => {
+    expect(
+      describeAiConnectionResult(
+        result({
+          status: "provider_error",
+          message:
+            '{"error":{"code":"1302","message":"您的账户已达到速率限制，请您控制请求频率"}}',
+        }),
+      ),
+    ).toBe("GLM rate limit reached (1302): 您的账户已达到速率限制，请您控制请求频率");
+  });
+
   it("formats timeout and provider failures distinctly", () => {
     expect(describeAiConnectionResult(result({ status: "timeout", message: "request timed out" }))).toBe(
       "Request timed out: request timed out",

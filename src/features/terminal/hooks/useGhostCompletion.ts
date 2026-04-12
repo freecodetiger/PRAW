@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { CompletionRequest } from "../../../domain/ai/types";
+import type { CompletionCandidate, CompletionRequest } from "../../../domain/ai/types";
+import { buildGhostSuffix, mergeCompletionCandidates } from "../../../domain/completion/candidates";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { requestGhostCompletion } from "../../../lib/tauri/ai";
 import { requestLocalCompletion } from "../../../lib/tauri/completion";
@@ -13,6 +14,7 @@ import {
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 
 const COMPLETION_DEBOUNCE_MS = 180;
+const USER_ID_STORAGE_KEY = "praw-completion-user-id";
 
 interface UseGhostCompletionOptions {
   paneState: TerminalTabViewState;
@@ -27,8 +29,9 @@ interface UseGhostCompletionOptions {
 
 interface GhostCompletionState {
   suggestion: string;
+  candidates: CompletionCandidate[];
   clearSuggestion: () => void;
-  acceptSuggestion: () => string | null;
+  acceptSuggestion: (index?: number) => string | null;
 }
 
 export function useGhostCompletion({
@@ -42,15 +45,17 @@ export function useGhostCompletion({
   disabled = false,
 }: UseGhostCompletionOptions): GhostCompletionState {
   const aiConfig = useAppConfigStore((state) => state.config.ai);
-  const [suggestion, setSuggestion] = useState("");
+  const [candidates, setCandidates] = useState<CompletionCandidate[]>([]);
   const generationRef = useRef(0);
+  const sessionIdRef = useRef(crypto.randomUUID());
+  const userIdRef = useRef(getOrCreateUserId());
 
   useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
-    setSuggestion("");
+    setCandidates([]);
 
-    const localRequest = buildLocalCompletionRequest({
+    const baseContext = {
       aiEnabled: aiConfig.enabled,
       apiKey: aiConfig.apiKey,
       provider: aiConfig.provider as CompletionRequest["provider"],
@@ -66,45 +71,36 @@ export function useGhostCompletion({
       isComposing,
       isFocused,
       suppressAsyncCompletion: disabled,
-    });
-    const aiRequest = buildGhostCompletionRequest({
-      aiEnabled: aiConfig.enabled,
-      apiKey: aiConfig.apiKey,
-      provider: aiConfig.provider as CompletionRequest["provider"],
-      model: aiConfig.model,
-      shell: paneState.shell,
-      cwd: paneState.cwd,
-      draft,
-      recentCommands: paneState.composerHistory,
-      status,
-      mode: paneState.mode,
-      cursorAtEnd,
-      browsingHistory,
-      isComposing,
-      isFocused,
-      suppressAsyncCompletion: disabled,
-    });
+      sessionId: sessionIdRef.current,
+      userId: userIdRef.current,
+      localContext: null,
+    };
 
-    if (!localRequest && !aiRequest) {
+    const localRequest = buildLocalCompletionRequest(baseContext);
+    if (!localRequest) {
       return;
     }
 
     const timer = window.setTimeout(() => {
       const run = async () => {
-        if (localRequest) {
-          const localResponse = await requestLocalCompletion(localRequest);
-          if (generationRef.current !== generation) {
-            return;
-          }
-
-          if (localResponse?.suggestion) {
-            setSuggestion(localResponse.suggestion);
-            return;
-          }
+        const localResponse = await requestLocalCompletion(localRequest);
+        if (generationRef.current !== generation) {
+          return;
         }
 
+        const localCandidates = localResponse?.suggestions ?? [];
+        const localMerged = mergeCompletionCandidates({
+          local: localCandidates.filter((candidate) => candidate.source === "local"),
+          ai: [],
+          system: localCandidates.filter((candidate) => candidate.source === "system"),
+        });
+        setCandidates(localMerged);
+
+        const aiRequest = buildGhostCompletionRequest({
+          ...baseContext,
+          localContext: localResponse?.context ?? null,
+        });
         if (!aiRequest) {
-          setSuggestion("");
           return;
         }
 
@@ -113,7 +109,12 @@ export function useGhostCompletion({
           return;
         }
 
-        setSuggestion(aiResponse?.suggestion ?? "");
+        const merged = mergeCompletionCandidates({
+          local: localCandidates.filter((candidate) => candidate.source === "local"),
+          ai: aiResponse?.suggestions ?? [],
+          system: localCandidates.filter((candidate) => candidate.source === "system"),
+        });
+        setCandidates(merged);
       };
 
       void run().catch(() => {
@@ -121,7 +122,7 @@ export function useGhostCompletion({
           return;
         }
 
-        setSuggestion("");
+        setCandidates([]);
       });
     }, COMPLETION_DEBOUNCE_MS);
 
@@ -146,20 +147,45 @@ export function useGhostCompletion({
     status,
   ]);
 
+  const suggestion = buildGhostSuffix(draft, candidates);
+
   return {
     suggestion,
+    candidates,
     clearSuggestion() {
       generationRef.current += 1;
-      setSuggestion("");
+      setCandidates([]);
     },
-    acceptSuggestion() {
+    acceptSuggestion(index = 0) {
+      const candidate = candidates[index];
+      if (candidate) {
+        generationRef.current += 1;
+        setCandidates([]);
+        return candidate.text;
+      }
+
       if (!suggestion) {
         return null;
       }
 
       generationRef.current += 1;
-      setSuggestion("");
+      setCandidates([]);
       return applyGhostCompletion(draft, suggestion);
     },
   };
+}
+
+function getOrCreateUserId(): string {
+  if (typeof window === "undefined") {
+    return crypto.randomUUID();
+  }
+
+  const stored = window.localStorage.getItem(USER_ID_STORAGE_KEY);
+  if (stored) {
+    return stored;
+  }
+
+  const nextId = crypto.randomUUID();
+  window.localStorage.setItem(USER_ID_STORAGE_KEY, nextId);
+  return nextId;
 }

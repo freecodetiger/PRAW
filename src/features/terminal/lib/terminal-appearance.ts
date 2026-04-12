@@ -1,16 +1,16 @@
+import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
+
 interface TerminalAppearance {
   fontFamily: string;
   fontSize: number;
-  backgroundColor: string;
+  theme: Partial<ThemeTerminalPalette>;
 }
 
 interface TerminalLike {
   options: {
     fontFamily?: string;
     fontSize?: number;
-    theme?: {
-      background?: string;
-    };
+    theme?: Partial<ThemeTerminalPalette>;
   };
 }
 
@@ -19,6 +19,6 @@ export function applyTerminalAppearance(terminal: TerminalLike, appearance: Term
   terminal.options.fontSize = appearance.fontSize;
   terminal.options.theme = {
     ...terminal.options.theme,
-    background: appearance.backgroundColor,
+    ...appearance.theme,
   };
 }

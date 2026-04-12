@@ -1,3 +1,5 @@
+import type { ThemePresetId } from "../theme/presets";
+
 export type TerminalPreferredMode = "dialog" | "classic";
 
 export interface TerminalConfig {
@@ -6,6 +8,7 @@ export interface TerminalConfig {
   fontFamily: string;
   fontSize: number;
   preferredMode: TerminalPreferredMode;
+  themePreset: ThemePresetId;
   phrases: string[];
   phraseUsage: Record<string, number>;
 }

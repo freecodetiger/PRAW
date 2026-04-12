@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,6 +13,10 @@ pub struct TerminalConfig {
     pub font_size: u16,
     #[serde(default = "default_terminal_preferred_mode")]
     pub preferred_mode: String,
+    #[serde(default)]
+    pub phrases: Vec<String>,
+    #[serde(default)]
+    pub phrase_usage: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +50,8 @@ impl Default for AppConfig {
                 font_family: "JetBrains Mono".to_string(),
                 font_size: 14,
                 preferred_mode: "dialog".to_string(),
+                phrases: Vec::new(),
+                phrase_usage: BTreeMap::new(),
             },
             ai: AiConfig {
                 provider: "glm".to_string(),
@@ -88,5 +96,51 @@ mod tests {
         assert_eq!(config.ai.api_key, "secret-key");
         assert_eq!(config.ai.theme_color, "#1f5eff");
         assert_eq!(config.ai.background_color, "#eef4ff");
+        assert!(config.terminal.phrases.is_empty());
+        assert!(config.terminal.phrase_usage.is_empty());
+    }
+
+    #[test]
+    fn deserializes_and_serializes_phrase_configuration() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "fontFamily": "CaskaydiaCove Nerd Font",
+                    "fontSize": 14,
+                    "preferredMode": "dialog",
+                    "phrases": ["codex", "claude", "cd projects/"],
+                    "phraseUsage": {
+                        "codex": 6,
+                        "claude": 3
+                    }
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "enabled": false,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                }
+            }"##,
+        )
+        .expect("config should deserialize with phrases");
+
+        let json = serde_json::to_value(&config).expect("config should serialize");
+        let terminal = json.get("terminal").expect("terminal should exist");
+
+        assert_eq!(
+            terminal.get("phrases").and_then(|value| value.as_array()).map(|items| items.len()),
+            Some(3)
+        );
+        assert_eq!(
+            terminal
+                .get("phraseUsage")
+                .and_then(|value| value.get("codex"))
+                .and_then(|value| value.as_u64()),
+            Some(6)
+        );
     }
 }

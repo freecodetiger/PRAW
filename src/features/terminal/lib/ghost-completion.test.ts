@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { CompletionContextSnapshot } from "../../../domain/ai/types";
 import {
   applyGhostCompletion,
   buildGhostCompletionRequest,
@@ -9,11 +10,28 @@ import {
   type GhostCompletionContext,
 } from "./ghost-completion";
 
+const completionContext: CompletionContextSnapshot = {
+  pwd: "/USER/project",
+  gitBranch: "main",
+  gitStatusSummary: ["M src/main.tsx"],
+  recentHistory: ["git status", "git add .", "pnpm test"],
+  cwdSummary: {
+    dirs: ["src", "docs"],
+    files: ["package.json", "README.md"],
+  },
+  systemSummary: {
+    os: "ubuntu",
+    shell: "/bin/bash",
+    packageManager: "apt",
+  },
+  toolAvailability: ["git", "docker"],
+};
+
 const baseContext: GhostCompletionContext = {
   aiEnabled: true,
   apiKey: "secret-key",
   provider: "glm",
-  model: "glm-5-flash",
+  model: "glm-4.7-flash",
   shell: "/bin/bash",
   cwd: "/workspace",
   draft: "git ch",
@@ -24,6 +42,9 @@ const baseContext: GhostCompletionContext = {
   browsingHistory: false,
   isComposing: false,
   isFocused: true,
+  sessionId: "sess-123",
+  userId: "user-123",
+  localContext: completionContext,
 };
 
 describe("ghost-completion", () => {
@@ -31,20 +52,38 @@ describe("ghost-completion", () => {
     expect(buildLocalCompletionRequest({ ...baseContext, draft: "cd" })).toEqual({
       cwd: "/workspace",
       inputPrefix: "cd",
+      shell: "/bin/bash",
+      recentHistory: ["git status", "git add .", "pnpm test"],
     });
   });
 
-  it("builds an ai request from the current tab context", () => {
+  it("builds an ai request from the current tab context and local snapshot", () => {
     expect(buildGhostCompletionRequest(baseContext)).toEqual({
       provider: "glm",
-      model: "glm-5-flash",
+      model: "glm-4.7-flash",
       apiKey: "secret-key",
-      shell: "/bin/bash",
-      os: "ubuntu",
-      cwd: "/workspace",
-      inputPrefix: "git ch",
-      recentCommands: ["git status", "git add .", "pnpm test"],
+      prefix: "git ch",
+      pwd: "/USER/project",
+      gitBranch: "main",
+      gitStatusSummary: ["M src/main.tsx"],
+      recentHistory: ["git status", "git add .", "pnpm test"],
+      cwdSummary: {
+        dirs: ["src", "docs"],
+        files: ["package.json", "README.md"],
+      },
+      systemSummary: {
+        os: "ubuntu",
+        shell: "/bin/bash",
+        packageManager: "apt",
+      },
+      toolAvailability: ["git", "docker"],
+      sessionId: "sess-123",
+      userId: "user-123",
     });
+  });
+
+  it("suppresses ai requests until local context is available", () => {
+    expect(buildGhostCompletionRequest({ ...baseContext, localContext: null })).toBeNull();
   });
 
   it("suppresses requests when the composer is mid-IME composition or cursor is not at the end", () => {
@@ -55,6 +94,13 @@ describe("ghost-completion", () => {
   it("allows local completion without ai and still suppresses ai when disabled", () => {
     expect(shouldRequestLocalCompletion({ ...baseContext, aiEnabled: false, apiKey: "" })).toBe(true);
     expect(shouldRequestGhostCompletion({ ...baseContext, aiEnabled: false, apiKey: "" })).toBe(false);
+  });
+
+  it("suppresses ai requests when provider or model is missing", () => {
+    expect(shouldRequestGhostCompletion({ ...baseContext, provider: "" as never })).toBe(false);
+    expect(shouldRequestGhostCompletion({ ...baseContext, model: "" })).toBe(false);
+    expect(buildGhostCompletionRequest({ ...baseContext, provider: "" as never })).toBeNull();
+    expect(buildGhostCompletionRequest({ ...baseContext, model: "" })).toBeNull();
   });
 
   it("suppresses all completion requests when the draft is too short", () => {

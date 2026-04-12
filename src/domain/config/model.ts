@@ -1,3 +1,4 @@
+import { isThemePresetId } from "../theme/presets";
 import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode } from "./types";
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -8,12 +9,13 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       "\"CaskaydiaCove Nerd Font\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono\", \"JetBrains Mono\", monospace",
     fontSize: 14,
     preferredMode: "dialog",
+    themePreset: "light",
     phrases: [],
     phraseUsage: {},
   },
   ai: {
-    provider: "glm",
-    model: "glm-5-flash",
+    provider: "",
+    model: "",
     enabled: false,
     apiKey: "",
     themeColor: "#1f5eff",
@@ -41,12 +43,13 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       fontFamily: normalizeString(terminal?.fontFamily, DEFAULT_APP_CONFIG.terminal.fontFamily),
       fontSize: normalizeFontSize(terminal?.fontSize),
       preferredMode: normalizePreferredMode(terminal?.preferredMode),
+      themePreset: normalizeThemePreset(terminal?.themePreset),
       phrases,
       phraseUsage: normalizePhraseUsage(terminal?.phraseUsage, phrases),
     },
     ai: {
-      provider: normalizeAiIdentifier(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
-      model: normalizeAiIdentifier(ai?.model, DEFAULT_APP_CONFIG.ai.model),
+      provider: normalizeAiIdentifier(ai?.provider),
+      model: normalizeAiIdentifier(ai?.model),
       enabled: typeof ai?.enabled === "boolean" ? ai.enabled : DEFAULT_APP_CONFIG.ai.enabled,
       apiKey: normalizeOptionalString(ai?.apiKey),
       themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
@@ -64,13 +67,12 @@ function normalizeString(value: string | undefined, fallback: string): string {
   return normalized.length > 0 ? normalized : fallback;
 }
 
-function normalizeAiIdentifier(value: string | undefined, fallback: string): string {
+function normalizeAiIdentifier(value: string | undefined): string {
   if (typeof value !== "string") {
-    return fallback;
+    return "";
   }
 
-  const normalized = value.trim().toLowerCase();
-  return normalized.length > 0 ? normalized : fallback;
+  return value.trim().toLowerCase();
 }
 
 function normalizeOptionalString(value: string | undefined): string {
@@ -91,6 +93,10 @@ function normalizeFontSize(value: number | undefined): number {
 
 function normalizePreferredMode(value: string | undefined): TerminalPreferredMode {
   return value === "classic" ? "classic" : "dialog";
+}
+
+function normalizeThemePreset(value: string | undefined): TerminalConfig["themePreset"] {
+  return isThemePresetId(value) ? value : DEFAULT_APP_CONFIG.terminal.themePreset;
 }
 
 function normalizeHexColor(value: string | undefined, fallback: string): string {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { canSplitPaneAtSize } from "../../../domain/layout/constraints";
 import { countLeaves } from "../../../domain/layout/tree";
 import type { PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
+import { getThemePreset } from "../../../domain/theme/presets";
 import { formatTabLabel } from "../../../domain/window/label";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalSession } from "../hooks/useTerminalSession";
@@ -41,8 +42,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const clearPaneDrag = useWorkspaceStore((state) => state.clearPaneDrag);
   const fontFamily = useAppConfigStore((state) => state.config.terminal.fontFamily);
   const fontSize = useAppConfigStore((state) => state.config.terminal.fontSize);
+  const themePresetId = useAppConfigStore((state) => state.config.terminal.themePreset);
   const aiThemeColor = useAppConfigStore((state) => state.config.ai.themeColor);
-  const aiBackgroundColor = useAppConfigStore((state) => state.config.ai.backgroundColor);
   const bufferedOutput = useTerminalViewStore((state) => selectTerminalBuffer(state.buffers, tabId));
   const tabState = useTerminalViewStore((state) => selectTerminalTabState(state.tabStates, tabId));
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
@@ -57,6 +58,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
+  const themePreset = getThemePreset(themePresetId);
   const isDragSource = dragState?.sourceTabId === tabId;
   const previewEdge =
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
@@ -159,10 +161,9 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   }
 
   const label = formatTabLabel(tab.title, tab.note);
-  const terminalBackgroundColor = isAgentWorkflow ? aiBackgroundColor : "#ffffff";
   const paneStyle = {
     "--ai-theme-color": aiThemeColor,
-    "--ai-background-color": aiBackgroundColor,
+    "--ai-background-color": isAgentWorkflow ? themePreset.app.surfaceMuted : themePreset.app.surface,
   } as CSSProperties;
 
   const canSplitHorizontal = canSplitPaneAtSize("horizontal", paneSize.width, {
@@ -339,7 +340,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           bufferedOutput={bufferedOutput}
           fontFamily={fontFamily}
           fontSize={fontSize}
-          backgroundColor={terminalBackgroundColor}
+          theme={themePreset.terminal}
           isActive={Boolean(isActive)}
           presentation={tabState?.presentation ?? "default"}
           write={write}

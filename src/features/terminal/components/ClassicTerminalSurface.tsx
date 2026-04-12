@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 
 import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
 import type { TerminalPresentation } from "../../../domain/terminal/dialog";
+import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
 import {
   buildClassicTerminalWorkflowResetSequence,
@@ -20,7 +21,7 @@ interface ClassicTerminalSurfaceProps {
   bufferedOutput: TerminalBufferSnapshot;
   fontFamily: string;
   fontSize: number;
-  backgroundColor: string;
+  theme: ThemeTerminalPalette;
   isActive: boolean;
   presentation: TerminalPresentation;
   write: (data: string) => Promise<void>;
@@ -32,7 +33,7 @@ export function ClassicTerminalSurface({
   bufferedOutput,
   fontFamily,
   fontSize,
-  backgroundColor,
+  theme,
   isActive,
   presentation,
   write,
@@ -57,27 +58,7 @@ export function ClassicTerminalSurface({
       fontFamily,
       fontSize,
       lineHeight: 1.3,
-      theme: {
-        background: backgroundColor,
-        foreground: "#000000",
-        cursor: "#000000",
-        black: "#000000",
-        brightBlack: "#4a4a4a",
-        red: "#8a0000",
-        brightRed: "#b30000",
-        green: "#006400",
-        brightGreen: "#008000",
-        yellow: "#7a5c00",
-        brightYellow: "#9b7500",
-        blue: "#003d99",
-        brightBlue: "#0052cc",
-        magenta: "#6b2f8a",
-        brightMagenta: "#8a3fb3",
-        cyan: "#005f5f",
-        brightCyan: "#007a7a",
-        white: "#d8d8d8",
-        brightWhite: "#f2f2f2",
-      },
+      theme,
     });
 
     const removeProtocolGuards = installClassicTerminalProtocolGuards(terminal);
@@ -128,7 +109,7 @@ export function ClassicTerminalSurface({
       fitAddonRef.current = null;
       appliedBufferContentRef.current = "";
     };
-  }, [backgroundColor, fontFamily, fontSize, handleShortcutKeyDown, resize, write]);
+  }, [fontFamily, fontSize, handleShortcutKeyDown, presentation, resize, theme, write]);
 
   useEffect(() => {
     if (!xtermRef.current) {
@@ -138,7 +119,7 @@ export function ClassicTerminalSurface({
     applyTerminalAppearance(xtermRef.current, {
       fontFamily,
       fontSize,
-      backgroundColor,
+      theme,
     });
 
     queueMicrotask(() => {
@@ -147,7 +128,7 @@ export function ClassicTerminalSurface({
         void resize(xtermRef.current.cols, xtermRef.current.rows);
       }
     });
-  }, [backgroundColor, fontFamily, fontSize, resize]);
+  }, [fontFamily, fontSize, resize, theme]);
 
   useEffect(() => {
     const previousPresentation = previousPresentationRef.current;
@@ -219,9 +200,5 @@ export function ClassicTerminalSurface({
     appliedBufferContentRef.current = replayPlan.content;
   }, [bufferedOutput]);
 
-  return (
-    <div className="terminal-pane__body">
-      <div className="terminal-pane__xterm" ref={containerRef} />
-    </div>
-  );
+  return <div ref={containerRef} className="terminal-pane__xterm" />;
 }
