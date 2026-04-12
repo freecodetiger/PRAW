@@ -10,6 +10,7 @@ import { useTerminalSession } from "../hooks/useTerminalSession";
 import { calculateContextMenuPosition, shouldCloseContextMenu } from "../lib/context-menu";
 import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
+import { resolveTerminalRenderFont } from "../lib/terminal-fonts";
 import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
@@ -40,8 +41,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const setDragPreview = useWorkspaceStore((state) => state.setDragPreview);
   const applyDragPreview = useWorkspaceStore((state) => state.applyDragPreview);
   const clearPaneDrag = useWorkspaceStore((state) => state.clearPaneDrag);
-  const fontFamily = useAppConfigStore((state) => state.config.terminal.fontFamily);
-  const fontSize = useAppConfigStore((state) => state.config.terminal.fontSize);
+  const dialogFontFamily = useAppConfigStore((state) => state.config.terminal.dialogFontFamily);
+  const dialogFontSize = useAppConfigStore((state) => state.config.terminal.dialogFontSize);
   const themePresetId = useAppConfigStore((state) => state.config.terminal.themePreset);
   const aiThemeColor = useAppConfigStore((state) => state.config.ai.themeColor);
   const bufferedOutput = useTerminalViewStore((state) => selectTerminalBuffer(state.buffers, tabId));
@@ -64,6 +65,10 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
   const renderMode = tabState?.mode ?? "classic";
   const isAgentWorkflow = tabState?.presentation === "agent-workflow";
+  const resolvedTerminalFont = resolveTerminalRenderFont(renderMode, {
+    dialogFontFamily,
+    dialogFontSize,
+  });
 
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current) {
@@ -164,6 +169,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const paneStyle = {
     "--ai-theme-color": aiThemeColor,
     "--ai-background-color": isAgentWorkflow ? themePreset.app.surfaceMuted : themePreset.app.surface,
+    "--dialog-terminal-font-family": dialogFontFamily,
+    "--dialog-terminal-font-size": `${dialogFontSize}px`,
   } as CSSProperties;
 
   const canSplitHorizontal = canSplitPaneAtSize("horizontal", paneSize.width, {
@@ -338,8 +345,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         <ClassicTerminalSurface
           sessionId={currentStreamSessionId}
           bufferedOutput={bufferedOutput}
-          fontFamily={fontFamily}
-          fontSize={fontSize}
+          fontFamily={resolvedTerminalFont.fontFamily}
+          fontSize={resolvedTerminalFont.fontSize}
           theme={themePreset.terminal}
           isActive={Boolean(isActive)}
           presentation={tabState?.presentation ?? "default"}

@@ -99,7 +99,7 @@ export function SettingsPanel() {
             <p className="eyebrow">Workspace Settings</p>
             <strong>Runtime profile</strong>
             <p className="settings-panel__summary">
-              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Theme {themePresetLabel} · Font {config.terminal.fontFamily} {config.terminal.fontSize}px · AI {aiStatus}
+              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Theme {themePresetLabel} · Classic Font CaskaydiaCove Nerd Font Mono · Dialog Font {config.terminal.dialogFontFamily} {config.terminal.dialogFontSize}px · AI {aiStatus}
             </p>
           </div>
 
@@ -112,7 +112,7 @@ export function SettingsPanel() {
           <section className="settings-section">
             <div className="settings-section__title">
               <strong>Terminal</strong>
-              <p>These defaults apply to new tab regions and to xterm rendering.</p>
+              <p>Classic keeps a bundled fixed-width font for stability. Dialog mode remains configurable.</p>
             </div>
 
             <label className="settings-field">
@@ -156,18 +156,30 @@ export function SettingsPanel() {
                   ))}
                 </select>
               </label>
+            </div>
 
+            <div className="settings-section__title">
+              <strong>Classic Terminal Font</strong>
+              <p>CaskaydiaCove Nerd Font Mono is bundled and fixed in classic mode for stable xterm rendering.</p>
+            </div>
+
+            <div className="settings-section__title">
+              <strong>Dialog Terminal Font</strong>
+              <p>These controls apply only to dialog mode.</p>
+            </div>
+
+            <div className="settings-grid">
               <label className="settings-field">
-                <span>Font size</span>
+                <span>Dialog font size</span>
                 <input
                   type="number"
                   min={10}
                   max={32}
                   step={1}
-                  value={config.terminal.fontSize}
+                  value={config.terminal.dialogFontSize}
                   onChange={(event) =>
                     patchTerminalConfig({
-                      fontSize: Number(event.target.value),
+                      dialogFontSize: Number(event.target.value),
                     })
                   }
                 />
@@ -175,10 +187,10 @@ export function SettingsPanel() {
             </div>
 
             <label className="settings-field">
-              <span>Font family</span>
+              <span>Dialog font family</span>
               <input
-                value={config.terminal.fontFamily}
-                onChange={(event) => patchTerminalConfig({ fontFamily: event.target.value })}
+                value={config.terminal.dialogFontFamily}
+                onChange={(event) => patchTerminalConfig({ dialogFontFamily: event.target.value })}
               />
             </label>
 

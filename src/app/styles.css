@@ -527,6 +527,8 @@ button {
   flex: 1;
   min-height: 0;
   flex-direction: column;
+  font-family: var(--dialog-terminal-font-family);
+  font-size: var(--dialog-terminal-font-size);
   background: var(--surface);
 }
 
@@ -558,7 +560,7 @@ button {
 }
 
 .dialog-terminal__prompt {
-  font-size: 12px;
+  font-size: var(--dialog-terminal-font-size);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -669,7 +671,7 @@ button {
 .command-block__session-label,
 .command-block__status {
   margin: 0 0 6px;
-  font-size: 12px;
+  font-size: var(--dialog-terminal-font-size);
 }
 
 .command-block__header {
@@ -689,7 +691,7 @@ button {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--dialog-terminal-font-size);
   line-height: 1.45;
 }
 
