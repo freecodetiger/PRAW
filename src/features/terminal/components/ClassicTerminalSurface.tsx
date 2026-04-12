@@ -109,7 +109,7 @@ export function ClassicTerminalSurface({
       fitAddonRef.current = null;
       appliedBufferContentRef.current = "";
     };
-  }, [fontFamily, fontSize, handleShortcutKeyDown, presentation, resize, theme, write]);
+  }, [fontFamily, fontSize, handleShortcutKeyDown, resize, theme, write]);
 
   useEffect(() => {
     if (!xtermRef.current) {

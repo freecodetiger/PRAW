@@ -88,6 +88,50 @@ describe("dialog terminal state", () => {
     ]);
   });
 
+  it("routes pager-heavy git commands to classic mode", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const next = submitDialogCommand(state, "git log --stat", () => "cmd:git-log");
+
+    expect(next.mode).toBe("classic");
+    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:git-log",
+        command: "git log --stat",
+        interactive: true,
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("keeps safe git commands in dialog mode and respects --no-pager", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const status = submitDialogCommand(state, "git status", () => "cmd:git-status");
+    const noPagerLog = submitDialogCommand(state, "git --no-pager log -n 1", () => "cmd:git-log-no-pager");
+
+    expect(status.mode).toBe("dialog");
+    expect(status.modeSource).toBe("default");
+    expect(status.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:git-status",
+        command: "git status",
+        interactive: false,
+        status: "running",
+      }),
+    ]);
+
+    expect(noPagerLog.mode).toBe("dialog");
+    expect(noPagerLog.modeSource).toBe("default");
+    expect(noPagerLog.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:git-log-no-pager",
+        command: "git --no-pager log -n 1",
+        interactive: false,
+        status: "running",
+      }),
+    ]);
+  });
+
   it("ignores a second dialog submission while a command block is still active", () => {
     const running = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "ls", () => "cmd:1");
     const next = submitDialogCommand(running, "pwd", () => "cmd:2");

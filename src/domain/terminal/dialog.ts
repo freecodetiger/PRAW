@@ -82,6 +82,16 @@ const COMMAND_PREFIXES_TO_SKIP = new Set([
   "dlx",
 ]);
 
+const GIT_PAGER_SUBCOMMANDS = new Set([
+  "log",
+  "diff",
+  "show",
+  "blame",
+  "reflog",
+  "whatchanged",
+  "shortlog",
+]);
+
 let nextSessionBlockId = 1;
 
 export function createDialogState(shell: string, cwd: string, preferredMode: PaneRenderMode = "dialog"): DialogState {
@@ -313,6 +323,9 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
   if (isAgentWorkflowEntry(entry)) {
     return "agent-workflow";
   }
+  if (entry === "git" && isGitPagerCommand(command)) {
+    return "interactive";
+  }
   if (AUTO_INTERACTIVE_COMMANDS.has(entry)) {
     return "interactive";
   }
@@ -320,10 +333,54 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
   return "default";
 }
 
+function isGitPagerCommand(command: string): boolean {
+  const words = resolveCommandWords(command);
+  if (words[0] !== "git") {
+    return false;
+  }
+
+  let index = 1;
+  while (index < words.length) {
+    const token = words[index];
+    if (!token) {
+      break;
+    }
+
+    if (token === "--no-pager") {
+      return false;
+    }
+
+    if (token === "-c" || token === "-C" || token === "--git-dir" || token === "--work-tree") {
+      index += 2;
+      continue;
+    }
+
+    if (token.startsWith("-c") || token.startsWith("--config-env=") || token.startsWith("--git-dir=") || token.startsWith("--work-tree=") || token.startsWith("-C")) {
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("-")) {
+      index += 1;
+      continue;
+    }
+
+    return GIT_PAGER_SUBCOMMANDS.has(token);
+  }
+
+  return false;
+}
+
 function resolvePrimaryCommand(command: string): string | null {
+  const words = resolveCommandWords(command);
+  return words[0] ?? null;
+}
+
+function resolveCommandWords(command: string): string[] {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
 
-  for (const token of tokens) {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
     if (isEnvironmentAssignmentToken(token) || isWrapperOptionToken(token)) {
       continue;
     }
@@ -333,10 +390,10 @@ function resolvePrimaryCommand(command: string): string | null {
       continue;
     }
 
-    return entry;
+    return [entry, ...tokens.slice(index + 1).map(normalizeCommandToken)];
   }
 
-  return null;
+  return [];
 }
 
 function isAgentWorkflowEntry(entry: string): boolean {
@@ -355,4 +412,8 @@ function normalizeCommandEntry(token: string): string {
   const bare = token.replace(/^['"`]|['"`]$/g, "").toLowerCase();
   const slashIndex = bare.lastIndexOf("/");
   return slashIndex >= 0 ? bare.slice(slashIndex + 1) : bare;
+}
+
+function normalizeCommandToken(token: string): string {
+  return token.replace(/^['"`]|['"`]$/g, "").toLowerCase();
 }
