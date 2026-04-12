@@ -93,12 +93,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
       };
-      const nextBuffers = isAgentWorkflowCommand(command)
-        ? {
-            ...state.buffers,
-            [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
-          }
-        : state.buffers;
+      const nextBuffers = state.buffers;
 
       return {
         tabStates: {

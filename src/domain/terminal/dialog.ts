@@ -59,8 +59,6 @@ const AUTO_INTERACTIVE_COMMANDS = new Set([
   "lazygit",
 ]);
 
-const AGENT_WORKFLOW_COMMANDS = new Set(["codex", "claude"]);
-
 const SHELL_CONTINUATION_COMMANDS = new Set([
   "if",
   "for",
@@ -73,7 +71,16 @@ const SHELL_CONTINUATION_COMMANDS = new Set([
   "(",
 ]);
 
-const COMMAND_PREFIXES_TO_SKIP = new Set(["env", "command", "npx", "pnpm", "bunx", "uvx"]);
+const COMMAND_PREFIXES_TO_SKIP = new Set([
+  "env",
+  "command",
+  "exec",
+  "npx",
+  "pnpm",
+  "bunx",
+  "uvx",
+  "dlx",
+]);
 
 let nextSessionBlockId = 1;
 
@@ -134,15 +141,13 @@ export function submitDialogCommand(
   const interactive = commandKind !== "default";
   const mode = interactive ? "classic" : state.mode;
   const modeSource: PaneRenderModeSource = interactive ? "auto-interactive" : state.modeSource;
-  const presentation: TerminalPresentation =
-    commandKind === "agent-workflow" ? "agent-workflow" : state.presentation;
   const id = createId();
 
   return {
     ...state,
     mode,
     modeSource,
-    presentation,
+    presentation: state.presentation,
     activeCommandBlockId: id,
     composerHistory: [...state.composerHistory, normalizedCommand],
     blocks: [
@@ -210,6 +215,15 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
 export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecycleEvent): DialogState {
   switch (event.type) {
     case "command-start": {
+      if (state.activeCommandBlockId !== null && event.entry && classifyCommand(event.entry) === "agent-workflow") {
+        return {
+          ...state,
+          mode: "classic",
+          modeSource: "auto-interactive",
+          presentation: "agent-workflow",
+        };
+      }
+
       if (state.activeCommandBlockId !== null) {
         return state;
       }
@@ -288,33 +302,53 @@ function restorePreferredPresentation(state: DialogState): DialogState {
 }
 
 function classifyCommand(command: string): "default" | "interactive" | "agent-workflow" {
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) {
+  const entry = resolvePrimaryCommand(command);
+  if (!entry) {
     return "default";
   }
 
-  let index = 0;
-  while (index < tokens.length && COMMAND_PREFIXES_TO_SKIP.has(normalizeCommandEntry(tokens[index]))) {
-    index += 1;
-  }
-
-  if (index >= tokens.length) {
-    return "default";
-  }
-
-  const entry = normalizeCommandEntry(tokens[index]);
   if (entry === "sudo" || SHELL_CONTINUATION_COMMANDS.has(entry)) {
     return "interactive";
   }
-  if (AGENT_WORKFLOW_COMMANDS.has(entry)) {
+  if (isAgentWorkflowEntry(entry)) {
     return "agent-workflow";
   }
-
   if (AUTO_INTERACTIVE_COMMANDS.has(entry)) {
     return "interactive";
   }
 
   return "default";
+}
+
+function resolvePrimaryCommand(command: string): string | null {
+  const tokens = command.trim().split(/\s+/).filter(Boolean);
+
+  for (const token of tokens) {
+    if (isEnvironmentAssignmentToken(token) || isWrapperOptionToken(token)) {
+      continue;
+    }
+
+    const entry = normalizeCommandEntry(token);
+    if (!entry || COMMAND_PREFIXES_TO_SKIP.has(entry)) {
+      continue;
+    }
+
+    return entry;
+  }
+
+  return null;
+}
+
+function isAgentWorkflowEntry(entry: string): boolean {
+  return entry === "claude" || entry === "claude-code" || entry === "codex";
+}
+
+function isEnvironmentAssignmentToken(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=.*$/u.test(token.trim());
+}
+
+function isWrapperOptionToken(token: string): boolean {
+  return /^-{1,2}[A-Za-z0-9][A-Za-z0-9-]*$/u.test(token.trim());
 }
 
 function normalizeCommandEntry(token: string): string {

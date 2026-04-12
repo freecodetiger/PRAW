@@ -98,7 +98,7 @@ describe("dialog terminal state", () => {
     expect(next.blocks).toHaveLength(1);
   });
 
-  it("switches codex and claude commands into agent workflow presentation", () => {
+  it("keeps codex and claude submissions in default presentation until shell markers confirm agent workflow", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const codex = submitDialogCommand(state, "codex", () => "cmd:codex");
     const claude = submitDialogCommand(state, "claude", () => "cmd:claude");
@@ -106,14 +106,69 @@ describe("dialog terminal state", () => {
     expect(codex).toMatchObject({
       mode: "classic",
       modeSource: "auto-interactive",
-      presentation: "agent-workflow",
+      presentation: "default",
     });
 
     expect(claude).toMatchObject({
       mode: "classic",
       modeSource: "auto-interactive",
-      presentation: "agent-workflow",
+      presentation: "default",
     });
+  });
+
+  it("keeps environment-prefixed claude submissions in default presentation until shell markers confirm agent workflow", () => {
+    const state = createDialogState("/bin/bash", "/workspace");
+    const next = submitDialogCommand(
+      state,
+      "ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic claude --dangerously-skip-permissions --model glm-5",
+      () => "cmd:claude-env",
+    );
+
+    expect(next).toMatchObject({
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "default",
+    });
+    expect(next.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:claude-env",
+        interactive: true,
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("recognizes launcher and wrapper forms only when shell markers confirm the AI CLI", () => {
+    const npxStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "npx @anthropic-ai/claude-code --model glm-5",
+    });
+    const uvxStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "uvx codex --model glm-5",
+    });
+    const envStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "env ANTHROPIC_BASE_URL=https://example.com claude",
+    });
+
+    expect(npxStarted.presentation).toBe("agent-workflow");
+    expect(uvxStarted.presentation).toBe("agent-workflow");
+    expect(envStarted.presentation).toBe("agent-workflow");
+  });
+
+  it("does not enter agent workflow mode for ordinary commands that merely mention claude or codex", () => {
+    const grepStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "grep claude README.md",
+    });
+    const echoStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "echo codex",
+    });
+
+    expect(grepStarted.presentation).toBe("default");
+    expect(echoStarted.presentation).toBe("default");
   });
 
   it("routes plain output into the active command block and finalizes it on command end", () => {
@@ -148,8 +203,11 @@ describe("dialog terminal state", () => {
   });
 
   it("restores the preferred presentation after an agent workflow command exits", () => {
-    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "codex", () => "cmd:1");
-    const finished = applyShellLifecycleEvent(state, {
+    const started = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
+      type: "command-start",
+      entry: "codex",
+    });
+    const finished = applyShellLifecycleEvent(started, {
       type: "command-end",
       exitCode: 0,
     });

@@ -19,19 +19,23 @@ describe("theme presets", () => {
     });
   });
 
-  it("returns a dark preset with dark app and terminal colors", () => {
+  it("returns a dark preset with traditional near-black terminal contrast", () => {
     expect(getThemePreset("dark")).toMatchObject({
       id: "dark",
       colorScheme: "dark",
       app: {
-        background: "#0f1115",
-        surface: "#151922",
-        textPrimary: "#f5f7fb",
+        background: "#000000",
+        surface: "#050505",
+        textPrimary: "#f7f7f7",
+        historyCommand: "#8ab4ff",
+        historyAccent: "#e0b7ff",
       },
       terminal: {
-        background: "#10141c",
-        foreground: "#f3f5f7",
-        cursor: "#f3f5f7",
+        background: "#000000",
+        foreground: "#f5f5f5",
+        cursor: "#f5f5f5",
+        blue: "#61afef",
+        brightBlue: "#8fc7ff",
       },
     });
   });
