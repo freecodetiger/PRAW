@@ -8,6 +8,7 @@ import {
 } from "../../../domain/terminal/buffer";
 import {
   appendDialogOutput,
+  applyPreferredMode,
   applyShellLifecycleEvent,
   createDialogState,
   isDialogShellSupported,
@@ -30,11 +31,11 @@ interface TerminalViewStore {
   appendOutput: (tabId: string, data: string) => void;
   resetTabBuffer: (tabId: string) => void;
   removeTabBuffer: (tabId: string) => void;
-  syncTabState: (tabId: string, shell: string, cwd: string) => void;
+  syncTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   submitCommand: (tabId: string, command: string) => void;
   consumeOutput: (tabId: string, data: string) => void;
   setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
-  resetTabState: (tabId: string, shell: string, cwd: string) => void;
+  resetTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   removeTabState: (tabId: string) => void;
 }
 
@@ -55,7 +56,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       },
     })),
 
-  syncTabState: (tabId, shell, cwd) =>
+  syncTabState: (tabId, shell, cwd, preferredMode) =>
     set((state) => {
       const key = getTerminalBufferKey(tabId);
       const existing = state.tabStates[key];
@@ -63,7 +64,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         return {
           tabStates: {
             ...state.tabStates,
-            [key]: createTabViewState(shell, cwd),
+            [key]: createTabViewState(shell, cwd, preferredMode),
           },
         };
       }
@@ -73,7 +74,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           ...state.tabStates,
           [key]: {
             ...existing,
-            ...reconcileShellState(existing, shell, cwd),
+            ...reconcileShellState(existing, shell, cwd, preferredMode),
             shell,
           },
         },
@@ -123,9 +124,13 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
 
       const normalizedOutput = normalizeDialogOutput(parsed.visibleOutput);
+      const entersAgentWorkflow = parsed.events.some(
+        (event) => event.type === "command-start" && typeof event.entry === "string" && isAgentWorkflowCommand(event.entry),
+      );
       const shouldCaptureVisibleOutput =
+        !entersAgentWorkflow &&
         tabState.presentation !== "agent-workflow" &&
-        !(tabState.mode === "classic" && tabState.modeSource === "manual" && tabState.activeCommandBlockId === null);
+        !(tabState.mode === "classic" && tabState.activeCommandBlockId === null);
 
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
         nextState = {
@@ -141,11 +146,19 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         };
       }
 
+      const nextBuffers = entersAgentWorkflow
+        ? {
+            ...state.buffers,
+            [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
+          }
+        : state.buffers;
+
       return {
         tabStates: {
           ...state.tabStates,
           [key]: nextState,
         },
+        buffers: nextBuffers,
       };
     }),
 
@@ -169,11 +182,11 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
     }),
 
-  resetTabState: (tabId, shell, cwd) =>
+  resetTabState: (tabId, shell, cwd, preferredMode) =>
     set((state) => ({
       tabStates: {
         ...state.tabStates,
-        [getTerminalBufferKey(tabId)]: createTabViewState(shell, cwd),
+        [getTerminalBufferKey(tabId)]: createTabViewState(shell, cwd, preferredMode),
       },
     })),
 
@@ -228,36 +241,50 @@ export function selectTerminalTabState(
   return tabStates[getTerminalBufferKey(tabId)] ?? null;
 }
 
-function createTabViewState(shell: string, cwd: string): TerminalTabViewState {
+function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
   return {
-    ...createDialogState(shell, cwd),
+    ...createDialogState(shell, cwd, preferredMode),
     shell,
     parserState: createShellIntegrationParserState(),
   };
 }
 
-function reconcileShellState(state: TerminalTabViewState, shell: string, cwd: string): Partial<TerminalTabViewState> {
+function reconcileShellState(
+  state: TerminalTabViewState,
+  shell: string,
+  cwd: string,
+  preferredMode: PaneRenderMode,
+): Partial<TerminalTabViewState> {
   const supported = isDialogShellSupported(shell);
   if (!supported) {
     return {
+      preferredMode,
       shellIntegration: "unsupported",
       mode: "classic",
       modeSource: "shell-unsupported",
+      presentation: "default",
       cwd,
     };
   }
 
+  const nextState = applyPreferredMode(
+    {
+      ...state,
+      shellIntegration: "supported",
+      cwd,
+    },
+    preferredMode,
+  );
+
   return {
-    shellIntegration: "supported",
-    cwd,
-    mode:
-      state.modeSource === "shell-unsupported"
-        ? "dialog"
-        : state.mode,
-    modeSource:
-      state.modeSource === "shell-unsupported"
-        ? "default"
-        : state.modeSource,
+    preferredMode: nextState.preferredMode,
+    shellIntegration: nextState.shellIntegration,
+    mode: nextState.mode,
+    modeSource: nextState.modeSource,
+    presentation: nextState.presentation,
+    cwd: nextState.cwd,
+    blocks: nextState.blocks,
+    activeCommandBlockId: nextState.activeCommandBlockId,
+    composerHistory: nextState.composerHistory,
   };
 }
-

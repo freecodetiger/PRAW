@@ -1,8 +1,11 @@
+export type TerminalPreferredMode = "dialog" | "classic";
+
 export interface TerminalConfig {
   defaultShell: string;
   defaultCwd: string;
   fontFamily: string;
   fontSize: number;
+  preferredMode: TerminalPreferredMode;
 }
 
 export interface AiConfig {

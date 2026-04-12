@@ -59,9 +59,21 @@ __praw_emit_prompt_markers() {{
   printf '\033]133;P;cwd=%s\a' "$PWD"
 }}
 
+__praw_emit_command_start() {{
+  local history_line command entry
+  history_line="$(HISTTIMEFORMAT= history 1 2>/dev/null || true)"
+  command="$(printf '%s' "$history_line" | sed 's/^[[:space:]]*[0-9]\+[[:space:]]*//')"
+  entry="${{command%%[[:space:]]*}}"
+  if [[ -n "$entry" ]]; then
+    printf '\033]133;C;entry=%s\a' "$entry"
+  else
+    printf '\033]133;C\a'
+  fi
+}}
+
 PROMPT_COMMAND="__praw_emit_prompt_markers${{PROMPT_COMMAND:+; $PROMPT_COMMAND}}"
 PS1=$'\033]133;A\a'"${{PS1}}"$'\033]133;B\a'
-PS0=$'\033]133;C\a'
+PS0='$(__praw_emit_command_start)'
 "#
     )
 }

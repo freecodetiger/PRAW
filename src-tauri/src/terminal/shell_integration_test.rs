@@ -38,5 +38,7 @@ mod tests {
         assert!(script.contains("133;D;"));
         assert!(script.contains("133;P;cwd="));
         assert!(script.contains("__praw_prompt_ready"));
+        assert!(script.contains("__praw_emit_command_start"));
+        assert!(script.contains("entry="));
     }
 }

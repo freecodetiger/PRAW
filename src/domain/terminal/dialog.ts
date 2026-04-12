@@ -22,6 +22,7 @@ export interface CommandBlock {
 }
 
 export interface DialogState {
+  preferredMode: PaneRenderMode;
   mode: PaneRenderMode;
   modeSource: PaneRenderModeSource;
   presentation: TerminalPresentation;
@@ -33,7 +34,7 @@ export interface DialogState {
 }
 
 export type ShellLifecycleEvent =
-  | { type: "command-start" }
+  | { type: "command-start"; entry?: string }
   | { type: "command-end"; exitCode: number }
   | { type: "prompt-state"; cwd: string };
 
@@ -76,11 +77,12 @@ const COMMAND_PREFIXES_TO_SKIP = new Set(["env", "command", "npx", "pnpm", "bunx
 
 let nextSessionBlockId = 1;
 
-export function createDialogState(shell: string, cwd: string): DialogState {
+export function createDialogState(shell: string, cwd: string, preferredMode: PaneRenderMode = "dialog"): DialogState {
   const supported = isDialogShellSupported(shell);
 
   return {
-    mode: supported ? "dialog" : "classic",
+    preferredMode,
+    mode: supported ? preferredMode : "classic",
     modeSource: supported ? "default" : "shell-unsupported",
     presentation: "default",
     shellIntegration: supported ? "supported" : "unsupported",
@@ -88,6 +90,33 @@ export function createDialogState(shell: string, cwd: string): DialogState {
     blocks: [],
     activeCommandBlockId: null,
     composerHistory: [],
+  };
+}
+
+export function applyPreferredMode(state: DialogState, preferredMode: PaneRenderMode): DialogState {
+  const nextState: DialogState = {
+    ...state,
+    preferredMode,
+  };
+
+  if (nextState.shellIntegration === "unsupported") {
+    return {
+      ...nextState,
+      mode: "classic",
+      modeSource: "shell-unsupported",
+      presentation: "default",
+    };
+  }
+
+  if (nextState.modeSource === "auto-interactive" || nextState.activeCommandBlockId !== null) {
+    return nextState;
+  }
+
+  return {
+    ...nextState,
+    mode: preferredMode,
+    modeSource: "default",
+    presentation: "default",
   };
 }
 
@@ -180,8 +209,22 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
 
 export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecycleEvent): DialogState {
   switch (event.type) {
-    case "command-start":
+    case "command-start": {
+      if (state.activeCommandBlockId !== null) {
+        return state;
+      }
+
+      if (event.entry && classifyCommand(event.entry) === "agent-workflow") {
+        return {
+          ...state,
+          mode: "classic",
+          modeSource: "auto-interactive",
+          presentation: "agent-workflow",
+        };
+      }
+
       return state;
+    }
     case "prompt-state":
       return {
         ...state,
@@ -205,13 +248,8 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
               ),
             };
 
-      if (nextState.mode === "classic" && nextState.modeSource === "auto-interactive") {
-        return {
-          ...nextState,
-          mode: "dialog",
-          modeSource: "default",
-          presentation: "default",
-        };
+      if (nextState.modeSource === "auto-interactive" || nextState.presentation === "agent-workflow") {
+        return restorePreferredPresentation(nextState);
       }
 
       return nextState;
@@ -231,6 +269,24 @@ export function isAgentWorkflowCommand(command: string): boolean {
   return classifyCommand(command) === "agent-workflow";
 }
 
+function restorePreferredPresentation(state: DialogState): DialogState {
+  if (state.shellIntegration === "unsupported") {
+    return {
+      ...state,
+      mode: "classic",
+      modeSource: "shell-unsupported",
+      presentation: "default",
+    };
+  }
+
+  return {
+    ...state,
+    mode: state.preferredMode,
+    modeSource: "default",
+    presentation: "default",
+  };
+}
+
 function classifyCommand(command: string): "default" | "interactive" | "agent-workflow" {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) {
@@ -238,7 +294,7 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
   }
 
   let index = 0;
-  while (index < tokens.length && COMMAND_PREFIXES_TO_SKIP.has(tokens[index])) {
+  while (index < tokens.length && COMMAND_PREFIXES_TO_SKIP.has(normalizeCommandEntry(tokens[index]))) {
     index += 1;
   }
 
@@ -246,7 +302,7 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
     return "default";
   }
 
-  const entry = tokens[index];
+  const entry = normalizeCommandEntry(tokens[index]);
   if (entry === "sudo" || SHELL_CONTINUATION_COMMANDS.has(entry)) {
     return "interactive";
   }
@@ -259,4 +315,10 @@ function classifyCommand(command: string): "default" | "interactive" | "agent-wo
   }
 
   return "default";
+}
+
+function normalizeCommandEntry(token: string): string {
+  const bare = token.replace(/^['"`]|['"`]$/g, "").toLowerCase();
+  const slashIndex = bare.lastIndexOf("/");
+  return slashIndex >= 0 ? bare.slice(slashIndex + 1) : bare;
 }

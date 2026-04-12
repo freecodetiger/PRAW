@@ -18,6 +18,7 @@ describe("app-config-store", () => {
       defaultShell: "/usr/bin/zsh",
       fontFamily: "   ",
       fontSize: 99,
+      preferredMode: "classic",
     });
 
     expect(useAppConfigStore.getState().config.terminal).toEqual({
@@ -25,6 +26,7 @@ describe("app-config-store", () => {
       defaultShell: "/usr/bin/zsh",
       fontFamily: DEFAULT_APP_CONFIG.terminal.fontFamily,
       fontSize: 32,
+      preferredMode: "classic",
     });
   });
 

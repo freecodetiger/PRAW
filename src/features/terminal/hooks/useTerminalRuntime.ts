@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 
+import { useAppConfigStore } from "../../config/state/app-config-store";
 import { closeTerminalSession, createTerminalSession, onTerminalExit, onTerminalOutput } from "../../../lib/tauri/terminal";
 import { getTerminalBufferKey, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -14,6 +15,7 @@ function asMessage(error: unknown): string {
 }
 
 export function useTerminalRuntime() {
+  const preferredMode = useAppConfigStore((state) => state.config.terminal.preferredMode);
   const windowModel = useWorkspaceStore((state) => state.window);
   const attachSession = useWorkspaceStore((state) => state.attachSession);
   const markTabExited = useWorkspaceStore((state) => state.markTabExited);
@@ -59,9 +61,9 @@ export function useTerminalRuntime() {
 
   useEffect(() => {
     for (const tab of tabs) {
-      syncTabState(tab.tabId, tab.shell, tab.cwd);
+      syncTabState(tab.tabId, tab.shell, tab.cwd, preferredMode);
     }
-  }, [syncTabState, tabs]);
+  }, [preferredMode, syncTabState, tabs]);
 
   useEffect(() => {
     for (const tab of tabs) {
@@ -71,7 +73,7 @@ export function useTerminalRuntime() {
 
       const requestedSessionId = crypto.randomUUID();
       resetTabBuffer(tab.tabId);
-      resetTabState(tab.tabId, tab.shell, tab.cwd);
+      resetTabState(tab.tabId, tab.shell, tab.cwd, preferredMode);
       pendingSessionIdsRef.current.set(tab.tabId, requestedSessionId);
       pendingSessionRefsRef.current.set(requestedSessionId, {
         tabId: tab.tabId,
@@ -104,7 +106,7 @@ export function useTerminalRuntime() {
           markTabError(tab.tabId, asMessage(error));
         });
     }
-  }, [attachSession, markTabError, resetTabBuffer, resetTabState, tabs]);
+  }, [attachSession, markTabError, preferredMode, resetTabBuffer, resetTabState, tabs]);
 
   useEffect(() => {
     let disposed = false;

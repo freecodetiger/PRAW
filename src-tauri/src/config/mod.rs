@@ -9,6 +9,8 @@ pub struct TerminalConfig {
     pub default_cwd: String,
     pub font_family: String,
     pub font_size: u16,
+    #[serde(default = "default_terminal_preferred_mode")]
+    pub preferred_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +31,10 @@ pub struct AppConfig {
     pub ai: AiConfig,
 }
 
+fn default_terminal_preferred_mode() -> String {
+    "dialog".to_string()
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -37,6 +43,7 @@ impl Default for AppConfig {
                 default_cwd: "~".to_string(),
                 font_family: "JetBrains Mono".to_string(),
                 font_size: 14,
+                preferred_mode: "dialog".to_string(),
             },
             ai: AiConfig {
                 provider: "glm".to_string(),
@@ -62,7 +69,8 @@ mod tests {
                     "defaultShell": "/bin/bash",
                     "defaultCwd": "~",
                     "fontFamily": "CaskaydiaCove Nerd Font",
-                    "fontSize": 14
+                    "fontSize": 14,
+                    "preferredMode": "classic"
                 },
                 "ai": {
                     "provider": "glm",
@@ -76,6 +84,7 @@ mod tests {
         )
         .expect("config should deserialize");
 
+        assert_eq!(config.terminal.preferred_mode, "classic");
         assert_eq!(config.ai.api_key, "secret-key");
         assert_eq!(config.ai.theme_color, "#1f5eff");
         assert_eq!(config.ai.background_color, "#eef4ff");

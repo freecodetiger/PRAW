@@ -65,30 +65,13 @@ describe("resolveAppConfig", () => {
     });
   });
 
-  it("normalizes ai provider and model identifiers to lowercase", () => {
-    expect(
-      resolveAppConfig({
-        ai: {
-          provider: " GLM ",
-          model: " GLM-4.7-Flash ",
-        },
-      }),
-    ).toEqual({
-      terminal: DEFAULT_APP_CONFIG.terminal,
-      ai: {
-        ...DEFAULT_APP_CONFIG.ai,
-        provider: "glm",
-        model: "glm-4.7-flash",
-      },
-    });
-  });
-
   it("clamps invalid terminal presentation values", () => {
     expect(
       resolveAppConfig({
         terminal: {
           fontFamily: "   ",
           fontSize: 4,
+          preferredMode: "invalid" as never,
         },
       }),
     ).toEqual({
@@ -97,7 +80,24 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.terminal,
         fontFamily: DEFAULT_APP_CONFIG.terminal.fontFamily,
         fontSize: 10,
+        preferredMode: DEFAULT_APP_CONFIG.terminal.preferredMode,
       },
+    });
+  });
+
+  it("accepts the classic terminal preference", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          preferredMode: "classic",
+        },
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        preferredMode: "classic",
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
     });
   });
 

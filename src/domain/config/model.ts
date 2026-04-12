@@ -1,4 +1,4 @@
-import type { AiConfig, AppConfig, TerminalConfig } from "./types";
+import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode } from "./types";
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   terminal: {
@@ -7,6 +7,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     fontFamily:
       "\"CaskaydiaCove Nerd Font\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono\", \"JetBrains Mono\", monospace",
     fontSize: 14,
+    preferredMode: "dialog",
   },
   ai: {
     provider: "glm",
@@ -36,6 +37,7 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       defaultCwd: normalizeString(terminal?.defaultCwd, DEFAULT_APP_CONFIG.terminal.defaultCwd),
       fontFamily: normalizeString(terminal?.fontFamily, DEFAULT_APP_CONFIG.terminal.fontFamily),
       fontSize: normalizeFontSize(terminal?.fontSize),
+      preferredMode: normalizePreferredMode(terminal?.preferredMode),
     },
     ai: {
       provider: normalizeAiIdentifier(ai?.provider, DEFAULT_APP_CONFIG.ai.provider),
@@ -80,6 +82,10 @@ function normalizeFontSize(value: number | undefined): number {
   }
 
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));
+}
+
+function normalizePreferredMode(value: string | undefined): TerminalPreferredMode {
+  return value === "classic" ? "classic" : "dialog";
 }
 
 function normalizeHexColor(value: string | undefined, fallback: string): string {

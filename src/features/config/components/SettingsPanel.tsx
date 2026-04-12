@@ -18,6 +18,7 @@ export function SettingsPanel() {
     () => (config.ai.enabled ? `${config.ai.provider} / ${config.ai.model}` : "disabled"),
     [config.ai.enabled, config.ai.model, config.ai.provider],
   );
+  const terminalModeLabel = config.terminal.preferredMode === "classic" ? "Classic" : "Dialog";
 
   const patchAi = (partial: Partial<AiConfig>) => {
     patchAiConfig(partial);
@@ -58,7 +59,7 @@ export function SettingsPanel() {
             <p className="eyebrow">Workspace Settings</p>
             <strong>Runtime profile</strong>
             <p className="settings-panel__summary">
-              Shell {config.terminal.defaultShell} · Font {config.terminal.fontFamily} {config.terminal.fontSize}px · AI{" "}
+              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Font {config.terminal.fontFamily} {config.terminal.fontSize}px · AI{" "}
               {aiStatus}
             </p>
           </div>
@@ -89,6 +90,17 @@ export function SettingsPanel() {
                 value={config.terminal.defaultCwd}
                 onChange={(event) => patchTerminalConfig({ defaultCwd: event.target.value })}
               />
+            </label>
+
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={config.terminal.preferredMode === "classic"}
+                onChange={(event) =>
+                  patchTerminalConfig({ preferredMode: event.target.checked ? "classic" : "dialog" })
+                }
+              />
+              <span>Prefer classic terminal mode</span>
             </label>
 
             <div className="settings-grid">

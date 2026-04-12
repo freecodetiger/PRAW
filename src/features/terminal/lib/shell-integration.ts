@@ -1,11 +1,14 @@
 import type { ShellLifecycleEvent } from "../../../domain/terminal/dialog";
 
+const ESC = "\u001b";
+const BEL = "\u0007";
 const MARKER_PREFIX = "\u001b]133;";
-const MARKER_SUFFIX = "\u0007";
+const MARKER_SUFFIX = BEL;
 const MARKER_SUFFIX_ST = "\u001b\\";
 
 export interface ShellIntegrationParserState {
   pending: string;
+  pendingControl: string;
   suppressPrompt: boolean;
 }
 
@@ -18,6 +21,7 @@ export interface ShellIntegrationChunkResult {
 export function createShellIntegrationParserState(): ShellIntegrationParserState {
   return {
     pending: "",
+    pendingControl: "",
     suppressPrompt: false,
   };
 }
@@ -28,7 +32,7 @@ export function consumeShellIntegrationChunk(
 ): ShellIntegrationChunkResult {
   const source = `${state.pending}${chunk}`;
   let cursor = 0;
-  let visibleOutput = "";
+  let rawVisibleOutput = "";
   const events: ShellLifecycleEvent[] = [];
   let suppressPrompt = state.suppressPrompt;
 
@@ -36,32 +40,26 @@ export function consumeShellIntegrationChunk(
     const markerIndex = source.indexOf(MARKER_PREFIX, cursor);
     if (markerIndex === -1) {
       if (!suppressPrompt) {
-        visibleOutput += source.slice(cursor);
+        rawVisibleOutput += source.slice(cursor);
       }
-      return {
-        state: {
-          pending: "",
-          suppressPrompt,
-        },
-        visibleOutput,
+      return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+        pending: "",
+        suppressPrompt,
         events,
-      };
+      });
     }
 
     if (!suppressPrompt) {
-      visibleOutput += source.slice(cursor, markerIndex);
+      rawVisibleOutput += source.slice(cursor, markerIndex);
     }
 
     const markerEnd = findMarkerEnd(source, markerIndex + MARKER_PREFIX.length);
     if (!markerEnd) {
-      return {
-        state: {
-          pending: source.slice(markerIndex),
-          suppressPrompt,
-        },
-        visibleOutput,
+      return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+        pending: source.slice(markerIndex),
+        suppressPrompt,
         events,
-      };
+      });
     }
 
     const payload = source.slice(markerIndex + MARKER_PREFIX.length, markerEnd.index);
@@ -80,23 +78,149 @@ export function consumeShellIntegrationChunk(
         : null;
     if (event) {
       events.push(event);
-    } else {
-      if (!suppressPrompt && marker === null) {
-        visibleOutput += source.slice(markerIndex, markerEnd.index + markerEnd.length);
-      }
+    } else if (!suppressPrompt && marker === null) {
+      rawVisibleOutput += source.slice(markerIndex, markerEnd.index + markerEnd.length);
     }
 
     cursor = markerEnd.index + markerEnd.length;
   }
 
+  return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+    pending: "",
+    suppressPrompt,
+    events,
+  });
+}
+
+function finalizeVisibleOutput(
+  pendingControl: string,
+  rawVisibleOutput: string,
+  result: {
+    pending: string;
+    suppressPrompt: boolean;
+    events: ShellLifecycleEvent[];
+  },
+): ShellIntegrationChunkResult {
+  const sanitized = sanitizeVisibleTerminalOutput(pendingControl, rawVisibleOutput);
+
   return {
     state: {
-      pending: "",
-      suppressPrompt,
+      pending: result.pending,
+      pendingControl: sanitized.pendingControl,
+      suppressPrompt: result.suppressPrompt,
     },
-    visibleOutput,
-    events,
+    visibleOutput: sanitized.visibleOutput,
+    events: result.events,
   };
+}
+
+function sanitizeVisibleTerminalOutput(
+  pendingControl: string,
+  chunk: string,
+): { visibleOutput: string; pendingControl: string } {
+  const source = `${pendingControl}${chunk}`;
+  let cursor = 0;
+  let visibleOutput = "";
+
+  while (cursor < source.length) {
+    const escapeIndex = source.indexOf(ESC, cursor);
+    if (escapeIndex === -1) {
+      visibleOutput += source.slice(cursor);
+      return {
+        visibleOutput,
+        pendingControl: "",
+      };
+    }
+
+    visibleOutput += source.slice(cursor, escapeIndex);
+    const sequence = consumeEscapeSequence(source, escapeIndex);
+    if (!sequence) {
+      return {
+        visibleOutput,
+        pendingControl: source.slice(escapeIndex),
+      };
+    }
+
+    if (sequence.preserve) {
+      visibleOutput += source.slice(escapeIndex, sequence.end);
+    }
+
+    cursor = sequence.end;
+  }
+
+  return {
+    visibleOutput,
+    pendingControl: "",
+  };
+}
+
+function consumeEscapeSequence(
+  source: string,
+  fromIndex: number,
+): { end: number; preserve: boolean } | null {
+  const introducer = source[fromIndex + 1];
+  if (!introducer) {
+    return null;
+  }
+
+  if (introducer === "[") {
+    return consumeCsiSequence(source, fromIndex);
+  }
+
+  if (introducer === "]") {
+    return consumeOscSequence(source, fromIndex);
+  }
+
+  if (/@|[A-Z]|\\|\]|\^|_|`|[a-z]/.test(introducer)) {
+    return {
+      end: fromIndex + 2,
+      preserve: false,
+    };
+  }
+
+  return {
+    end: fromIndex + 1,
+    preserve: false,
+  };
+}
+
+function consumeCsiSequence(source: string, fromIndex: number): { end: number; preserve: boolean } | null {
+  for (let index = fromIndex + 2; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    if (code >= 0x40 && code <= 0x7e) {
+      return {
+        end: index + 1,
+        preserve: source[index] === "m",
+      };
+    }
+  }
+
+  return null;
+}
+
+function consumeOscSequence(source: string, fromIndex: number): { end: number; preserve: boolean } | null {
+  for (let index = fromIndex + 2; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === BEL) {
+      return {
+        end: index + 1,
+        preserve: false,
+      };
+    }
+
+    if (char === ESC) {
+      if (source[index + 1] === "\\") {
+        return {
+          end: index + 2,
+          preserve: false,
+        };
+      }
+
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function findMarkerEnd(source: string, fromIndex: number): { index: number; length: number } | null {
@@ -142,6 +266,13 @@ function parseShellMarkerPayload(payload: string):
 
   if (payload === "C") {
     return { type: "command-start" };
+  }
+
+  if (payload.startsWith("C;entry=")) {
+    return {
+      type: "command-start",
+      entry: payload.slice("C;entry=".length),
+    };
   }
 
   if (payload.startsWith("D;")) {

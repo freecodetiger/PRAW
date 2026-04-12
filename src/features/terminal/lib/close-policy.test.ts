@@ -19,6 +19,7 @@ function createTab(overrides: Partial<TabModel> = {}): TabModel {
 
 function createDialogState(overrides: Partial<DialogState> = {}): DialogState {
   return {
+    preferredMode: "dialog",
     mode: "dialog",
     modeSource: "default",
     presentation: "default",

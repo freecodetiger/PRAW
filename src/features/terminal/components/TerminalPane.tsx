@@ -341,6 +341,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           fontSize={fontSize}
           backgroundColor={terminalBackgroundColor}
           isActive={Boolean(isActive)}
+          presentation={tabState?.presentation ?? "default"}
           write={write}
           resize={resize}
         />

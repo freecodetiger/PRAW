@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyPreferredMode,
   applyShellLifecycleEvent,
   appendDialogOutput,
   createDialogState,
@@ -8,15 +9,25 @@ import {
 } from "./dialog";
 
 describe("dialog terminal state", () => {
-  it("starts bash panes in dialog mode and unsupported shells in classic mode", () => {
+  it("starts bash panes in the preferred mode and unsupported shells in classic mode", () => {
     expect(createDialogState("/bin/bash", "/home/zpc")).toMatchObject({
+      preferredMode: "dialog",
       mode: "dialog",
       modeSource: "default",
       shellIntegration: "supported",
       cwd: "/home/zpc",
     });
 
-    expect(createDialogState("/usr/bin/zsh", "/home/zpc")).toMatchObject({
+    expect(createDialogState("/bin/bash", "/home/zpc", "classic")).toMatchObject({
+      preferredMode: "classic",
+      mode: "classic",
+      modeSource: "default",
+      shellIntegration: "supported",
+      cwd: "/home/zpc",
+    });
+
+    expect(createDialogState("/usr/bin/zsh", "/home/zpc", "dialog")).toMatchObject({
+      preferredMode: "dialog",
       mode: "classic",
       modeSource: "shell-unsupported",
       shellIntegration: "unsupported",
@@ -124,27 +135,52 @@ describe("dialog terminal state", () => {
     ]);
   });
 
-  it("returns auto-interactive panes back to dialog mode after the command completes", () => {
-    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "top", () => "cmd:1");
+  it("returns auto-interactive panes back to the preferred mode after the command completes", () => {
+    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "top", () => "cmd:1");
     const finished = applyShellLifecycleEvent(state, {
       type: "command-end",
       exitCode: 0,
     });
 
-    expect(finished.mode).toBe("dialog");
+    expect(finished.mode).toBe("classic");
     expect(finished.modeSource).toBe("default");
+    expect(finished.preferredMode).toBe("classic");
   });
 
-  it("restores the default presentation after an agent workflow command exits", () => {
-    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "codex", () => "cmd:1");
+  it("restores the preferred presentation after an agent workflow command exits", () => {
+    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "codex", () => "cmd:1");
     const finished = applyShellLifecycleEvent(state, {
       type: "command-end",
       exitCode: 0,
     });
 
-    expect(finished.mode).toBe("dialog");
+    expect(finished.mode).toBe("classic");
     expect(finished.modeSource).toBe("default");
     expect(finished.presentation).toBe("default");
+  });
+
+  it("activates agent workflow presentation from shell lifecycle markers in classic mode", () => {
+    const started = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
+      type: "command-start",
+      entry: "codex",
+    });
+    const finished = applyShellLifecycleEvent(started, {
+      type: "command-end",
+      exitCode: 0,
+    });
+
+    expect(started).toMatchObject({
+      preferredMode: "classic",
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "agent-workflow",
+    });
+    expect(finished).toMatchObject({
+      preferredMode: "classic",
+      mode: "classic",
+      modeSource: "default",
+      presentation: "default",
+    });
   });
 
   it("captures non-command output in a session output block", () => {
@@ -171,5 +207,15 @@ describe("dialog terminal state", () => {
         cwd: "/workspace/subdir",
       }),
     );
+  });
+
+  it("applies the preferred mode immediately when the pane is idle", () => {
+    const next = applyPreferredMode(createDialogState("/bin/bash", "/workspace"), "classic");
+
+    expect(next).toMatchObject({
+      preferredMode: "classic",
+      mode: "classic",
+      modeSource: "default",
+    });
   });
 });

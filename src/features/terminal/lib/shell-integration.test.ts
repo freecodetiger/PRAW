@@ -18,6 +18,16 @@ describe("shell integration parser", () => {
     expect(result.state.pending).toBe("");
   });
 
+  it("parses command entry markers when present", () => {
+    const result = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      `\x1b]133;C;entry=codex\x07output`,
+    );
+
+    expect(result.visibleOutput).toBe("output");
+    expect(result.events).toEqual([{ type: "command-start", entry: "codex" }]);
+  });
+
   it("holds partial marker data until the sequence is complete", () => {
     const first = consumeShellIntegrationChunk(createShellIntegrationParserState(), "a\x1b]133;P;cwd=/wo");
     expect(first.visibleOutput).toBe("a");
@@ -43,13 +53,29 @@ describe("shell integration parser", () => {
   it("parses shell markers that use the ST terminator", () => {
     const result = consumeShellIntegrationChunk(
       createShellIntegrationParserState(),
-      `\u001b]133;C\u001b\\done\u001b]133;D;0\u001b\\`,
+      `\u001b]133;C;entry=claude\u001b\\done\u001b]133;D;0\u001b\\`,
     );
 
     expect(result.visibleOutput).toBe("done");
     expect(result.events).toEqual([
-      { type: "command-start" },
+      { type: "command-start", entry: "claude" },
       { type: "command-end", exitCode: 0 },
     ]);
   });
+
+  it("buffers split OSC color reports so they never surface as visible output", () => {
+    const first = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "\u001b]10;rgb:0000/0000/0001",
+    );
+
+    expect(first.visibleOutput).toBe("");
+    expect(first.events).toEqual([]);
+
+    const second = consumeShellIntegrationChunk(first.state, ";rgb:ffff/ffff/fff1\u001b\\ready\n");
+    expect(second.visibleOutput).toBe("ready\n");
+    expect(second.events).toEqual([]);
+    expect(second.state.pending).toBe("");
+  });
+
 });

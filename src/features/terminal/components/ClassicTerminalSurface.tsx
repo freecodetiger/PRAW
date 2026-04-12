@@ -5,7 +5,12 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
+import type { TerminalPresentation } from "../../../domain/terminal/dialog";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
+import {
+  buildClassicTerminalWorkflowResetSequence,
+  installClassicTerminalProtocolGuards,
+} from "../lib/classic-terminal-guards";
 import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
 import { getTerminalReplayPlan } from "../lib/output-replay";
 import { applyTerminalAppearance } from "../lib/terminal-appearance";
@@ -17,6 +22,7 @@ interface ClassicTerminalSurfaceProps {
   fontSize: number;
   backgroundColor: string;
   isActive: boolean;
+  presentation: TerminalPresentation;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
 }
@@ -28,6 +34,7 @@ export function ClassicTerminalSurface({
   fontSize,
   backgroundColor,
   isActive,
+  presentation,
   write,
   resize,
 }: ClassicTerminalSurfaceProps) {
@@ -35,6 +42,7 @@ export function ClassicTerminalSurface({
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const appliedBufferContentRef = useRef("");
+  const previousPresentationRef = useRef<TerminalPresentation>(presentation);
   const { handleShortcutKeyDown } = useTerminalClipboard(xtermRef);
 
   useEffect(() => {
@@ -72,6 +80,7 @@ export function ClassicTerminalSurface({
       },
     });
 
+    const removeProtocolGuards = installClassicTerminalProtocolGuards(terminal);
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
@@ -81,6 +90,7 @@ export function ClassicTerminalSurface({
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
     appliedBufferContentRef.current = "";
+    previousPresentationRef.current = presentation;
 
     const dataDisposable = terminal.onData((data) => {
       void write(data);
@@ -110,6 +120,7 @@ export function ClassicTerminalSurface({
       observer.disconnect();
       dataDisposable.dispose();
       resizeDisposable.dispose();
+      removeProtocolGuards();
       imeGuard?.dispose();
       textarea?.removeEventListener("keydown", handleShortcutKeyDown, { capture: true });
       terminal.dispose();
@@ -137,6 +148,19 @@ export function ClassicTerminalSurface({
       }
     });
   }, [backgroundColor, fontFamily, fontSize, resize]);
+
+  useEffect(() => {
+    const previousPresentation = previousPresentationRef.current;
+    previousPresentationRef.current = presentation;
+
+    if (!xtermRef.current) {
+      return;
+    }
+
+    if (previousPresentation === "agent-workflow" && presentation === "default") {
+      xtermRef.current.write(buildClassicTerminalWorkflowResetSequence());
+    }
+  }, [presentation]);
 
   useEffect(() => {
     if (!isActive || !xtermRef.current) {
@@ -196,12 +220,7 @@ export function ClassicTerminalSurface({
   }, [bufferedOutput]);
 
   return (
-    <div
-      className="terminal-pane__body"
-      onMouseDown={() => {
-        xtermRef.current?.focus();
-      }}
-    >
+    <div className="terminal-pane__body">
       <div className="terminal-pane__xterm" ref={containerRef} />
     </div>
   );

@@ -36,25 +36,44 @@ describe("terminal-view-store", () => {
     );
   });
 
-  it("initializes bash tabs in dialog mode and unsupported shells in classic mode", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
-    useTerminalViewStore.getState().syncTabState("tab:2", "/usr/bin/zsh", "/workspace");
+  it("initializes bash tabs in the preferred mode and unsupported shells in classic mode", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().syncTabState("tab:2", "/bin/bash", "/workspace", "classic");
+    useTerminalViewStore.getState().syncTabState("tab:3", "/usr/bin/zsh", "/workspace", "dialog");
 
     expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")]).toMatchObject({
       mode: "dialog",
+      preferredMode: "dialog",
       shellIntegration: "supported",
       cwd: "/workspace",
     });
 
     expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:2")]).toMatchObject({
       mode: "classic",
+      preferredMode: "classic",
+      shellIntegration: "supported",
+    });
+
+    expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:3")]).toMatchObject({
+      mode: "classic",
       shellIntegration: "unsupported",
       modeSource: "shell-unsupported",
     });
   });
 
+  it("applies the preferred mode immediately to idle panes", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "classic");
+
+    expect(useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")]).toMatchObject({
+      mode: "classic",
+      preferredMode: "classic",
+      modeSource: "default",
+    });
+  });
+
   it("submits commands, routes output, and closes the block on shell end markers", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "ls");
     useTerminalViewStore.getState().consumeOutput("tab:1", "file-a\n");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
@@ -73,24 +92,24 @@ describe("terminal-view-store", () => {
   });
 
   it("preserves ANSI color sequences for dialog transcript rendering", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "ls --color=always");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "[01;34msrc[0m\n");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "]133;D;0");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b[01;34msrc\u001b[0m\n");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
     expect(tabState.blocks).toEqual([
       expect.objectContaining({
         command: "ls --color=always",
-        output: "[01;34msrc[0m\n",
+        output: "\u001b[01;34msrc\u001b[0m\n",
         status: "completed",
       }),
     ]);
   });
 
   it("keeps transcript and shell state isolated per tab", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace/app");
-    useTerminalViewStore.getState().syncTabState("tab:2", "/bin/bash", "/workspace/api");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace/app", "dialog");
+    useTerminalViewStore.getState().syncTabState("tab:2", "/bin/bash", "/workspace/api", "dialog");
 
     useTerminalViewStore.getState().submitCommand("tab:1", "pwd");
     useTerminalViewStore.getState().consumeOutput("tab:1", "/workspace/app\n");
@@ -101,7 +120,7 @@ describe("terminal-view-store", () => {
   });
 
   it("suppresses transcript streaming while an agent workflow command owns the tab", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "codex");
     useTerminalViewStore.getState().consumeOutput("tab:1", "thinking...\n");
 
@@ -117,7 +136,7 @@ describe("terminal-view-store", () => {
   });
 
   it("clears the classic terminal buffer before entering agent workflow mode", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().appendOutput("tab:1", "previous output\n");
 
     useTerminalViewStore.getState().submitCommand("tab:1", "codex");
@@ -128,14 +147,53 @@ describe("terminal-view-store", () => {
     });
   });
 
-  it("returns to dialog presentation after an agent workflow command exits", () => {
-    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace");
-    useTerminalViewStore.getState().submitCommand("tab:1", "claude");
+  it("returns to the preferred mode after an agent workflow command exits", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "classic");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=claude\u0007");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
-    expect(tabState.mode).toBe("dialog");
+    expect(tabState.mode).toBe("classic");
     expect(tabState.modeSource).toBe("default");
     expect(tabState.presentation).toBe("default");
+    expect(tabState.preferredMode).toBe("classic");
   });
+
+  it("drops split OSC color reports after agent workflow exit instead of appending a session block", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "codex");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]10;rgb:0000/0000/0001");
+    useTerminalViewStore.getState().consumeOutput("tab:1", ";rgb:ffff/ffff/fff1\u001b\\");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.mode).toBe("dialog");
+    expect(tabState.presentation).toBe("default");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "codex",
+        output: "",
+        status: "completed",
+        exitCode: 0,
+      }),
+    ]);
+  });
+
+
+  it("clears the classic terminal buffer when shell markers enter agent workflow mode", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "classic");
+    useTerminalViewStore.getState().appendOutput("tab:1", "old prompt\n");
+
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=codex\u0007");
+
+    expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
+      content: "",
+      revision: 2,
+    });
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.presentation).toBe("agent-workflow");
+    expect(tabState.mode).toBe("classic");
+  });
+
 });
