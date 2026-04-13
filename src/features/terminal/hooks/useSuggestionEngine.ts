@@ -76,6 +76,7 @@ export function useSuggestionEngine({
     () => ({
       aiEnabled: aiConfig.enabled,
       apiKey: aiConfig.apiKey,
+      baseUrl: aiConfig.baseUrl,
       provider: aiConfig.provider as SuggestionEngineContext["provider"],
       model: aiConfig.model,
       shell: paneState.shell,
@@ -95,6 +96,7 @@ export function useSuggestionEngine({
     }),
     [
       aiConfig.apiKey,
+      aiConfig.baseUrl,
       aiConfig.enabled,
       aiConfig.model,
       aiConfig.provider,

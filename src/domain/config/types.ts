@@ -19,6 +19,7 @@ export interface TerminalConfig {
 export interface AiConfig {
   provider: string;
   model: string;
+  baseUrl: string;
   enabled: boolean;
   smartSuggestionBubble: boolean;
   apiKey: string;

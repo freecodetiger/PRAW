@@ -1,3 +1,4 @@
+import { hasAiProviderCapability } from "../../../domain/ai/catalog";
 import type { CompletionRequest, CompletionContextSnapshot } from "../../../domain/ai/types";
 import type { LocalCompletionRequest } from "../../../domain/completion/types";
 import type { PaneRenderMode } from "../../../domain/terminal/dialog";
@@ -10,6 +11,7 @@ const DANGEROUS_PREFIXES = ["rm -rf /", "mkfs", "dd if=", "shutdown", "reboot"];
 export interface GhostCompletionContext {
   aiEnabled: boolean;
   apiKey: string;
+  baseUrl: string;
   provider: CompletionRequest["provider"];
   model: string;
   shell: string;
@@ -53,7 +55,11 @@ export function shouldRequestGhostCompletion(context: GhostCompletionContext): b
     return false;
   }
 
-  if (context.provider !== "glm" || context.model.trim().length === 0) {
+  if (context.model.trim().length === 0) {
+    return false;
+  }
+
+  if (!hasAiProviderCapability(context.provider, "completion")) {
     return false;
   }
 
@@ -86,6 +92,7 @@ export function buildGhostCompletionRequest(context: GhostCompletionContext): Co
     provider: context.provider,
     model: context.model,
     apiKey: context.apiKey,
+    baseUrl: context.baseUrl,
     prefix: context.draft,
     pwd: context.localContext.pwd,
     gitBranch: context.localContext.gitBranch,

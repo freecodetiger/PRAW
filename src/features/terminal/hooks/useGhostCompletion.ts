@@ -58,6 +58,7 @@ export function useGhostCompletion({
     const baseContext = {
       aiEnabled: aiConfig.enabled,
       apiKey: aiConfig.apiKey,
+      baseUrl: aiConfig.baseUrl,
       provider: aiConfig.provider as CompletionRequest["provider"],
       model: aiConfig.model,
       shell: paneState.shell,
@@ -131,6 +132,7 @@ export function useGhostCompletion({
     };
   }, [
     aiConfig.apiKey,
+    aiConfig.baseUrl,
     aiConfig.enabled,
     aiConfig.model,
     aiConfig.provider,

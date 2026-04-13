@@ -30,6 +30,7 @@ const completionContext: CompletionContextSnapshot = {
 const baseContext: GhostCompletionContext = {
   aiEnabled: true,
   apiKey: "secret-key",
+  baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   provider: "glm",
   model: "glm-4.7-flash",
   shell: "/bin/bash",
@@ -62,6 +63,7 @@ describe("ghost-completion", () => {
       provider: "glm",
       model: "glm-4.7-flash",
       apiKey: "secret-key",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
       prefix: "git ch",
       pwd: "/USER/project",
       gitBranch: "main",
@@ -94,6 +96,17 @@ describe("ghost-completion", () => {
   it("allows local completion without ai and still suppresses ai when disabled", () => {
     expect(shouldRequestLocalCompletion({ ...baseContext, aiEnabled: false, apiKey: "" })).toBe(true);
     expect(shouldRequestGhostCompletion({ ...baseContext, aiEnabled: false, apiKey: "" })).toBe(false);
+  });
+
+  it("allows OpenAI ghost completion when provider config is complete", () => {
+    expect(
+      shouldRequestGhostCompletion({
+        ...baseContext,
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        apiKey: "secret-key",
+      }),
+    ).toBe(true);
   });
 
   it("suppresses ai requests when provider or model is missing", () => {

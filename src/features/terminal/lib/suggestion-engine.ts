@@ -1,3 +1,4 @@
+import { hasAiProviderCapability } from "../../../domain/ai/catalog";
 import type { CompletionCandidate, CompletionRequest } from "../../../domain/ai/types";
 import type { LocalCompletionRequest } from "../../../domain/completion/types";
 import type { SuggestionItem, AiInlineSuggestionRequest, AiRecoverySuggestionRequest } from "../../../domain/suggestion/types";
@@ -12,6 +13,7 @@ const DANGEROUS_PREFIXES = ["rm -rf /", "mkfs", "dd if=", "shutdown", "reboot"];
 export interface SuggestionEngineContext {
   aiEnabled: boolean;
   apiKey: string;
+  baseUrl: string;
   provider: CompletionRequest["provider"];
   model: string;
   shell: string;
@@ -63,7 +65,11 @@ export function shouldRequestAiInlineSuggestions(context: SuggestionEngineContex
     return false;
   }
 
-  if (context.provider !== "glm" || context.model.trim().length === 0) {
+  if (context.model.trim().length === 0) {
+    return false;
+  }
+
+  if (!hasAiProviderCapability(context.provider, "inlineSuggestion")) {
     return false;
   }
 
@@ -82,7 +88,11 @@ export function shouldRequestRecoverySuggestions(
     return false;
   }
 
-  if (context.provider !== "glm" || context.model.trim().length === 0) {
+  if (context.model.trim().length === 0) {
+    return false;
+  }
+
+  if (!hasAiProviderCapability(context.provider, "recoverySuggestion")) {
     return false;
   }
 
@@ -123,6 +133,7 @@ export function buildAiInlineSuggestionRequest(context: SuggestionEngineContext)
     provider: context.provider,
     model: context.model,
     apiKey: context.apiKey,
+    baseUrl: context.baseUrl,
     draft: context.draft,
     pwd: context.localContext.pwd,
     gitBranch: context.localContext.gitBranch,
@@ -143,8 +154,8 @@ export function buildRecoverySuggestionRequest(
   if (
     !context.aiEnabled ||
     context.apiKey.length === 0 ||
-    context.provider !== "glm" ||
     context.model.trim().length === 0 ||
+    !hasAiProviderCapability(context.provider, "recoverySuggestion") ||
     !failedBlock?.command ||
     failedBlock.exitCode === null ||
     failedBlock.exitCode === 0
@@ -156,6 +167,7 @@ export function buildRecoverySuggestionRequest(
     provider: context.provider,
     model: context.model,
     apiKey: context.apiKey,
+    baseUrl: context.baseUrl,
     command: failedBlock.command,
     output: failedBlock.output.slice(-MAX_RECOVERY_OUTPUT_CHARS),
     exitCode: failedBlock.exitCode,

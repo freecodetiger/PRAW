@@ -74,6 +74,7 @@ interface SettingsPanelCopy {
     modelPlaceholder: string;
     modelPlaceholderDisabled: string;
     apiKey: string;
+    baseUrl: string;
     testConnection: string;
     testingConnection: string;
     localKeySummary: string;
@@ -158,6 +159,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       modelPlaceholder: "Enter official model name",
       modelPlaceholderDisabled: "Select provider first",
       apiKey: "API key",
+      baseUrl: "Base URL",
       testConnection: "Test AI Connection",
       testingConnection: "Testing...",
       localKeySummary: "This key is currently stored in the local app config file.",
@@ -240,6 +242,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       modelPlaceholder: "输入官方 model 名称",
       modelPlaceholderDisabled: "请先选择 provider",
       apiKey: "API key",
+      baseUrl: "Base URL",
       testConnection: "测试 AI Connection",
       testingConnection: "测试中...",
       localKeySummary: "这个 key 当前保存在本地 app config 文件中。",

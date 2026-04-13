@@ -15,6 +15,7 @@ PRAW explores a different model:
 - A dialog-style command experience for readability and flow
 - A classic terminal path when full terminal semantics matter
 - AI-aware interactions layered on top of the terminal instead of replacing it
+- Multi-provider AI support through one shared abstraction layer
 
 ## What It Can Do Today
 
@@ -24,6 +25,7 @@ PRAW explores a different model:
 - Warp-inspired live command console flow for running commands in dialog mode
 - AI workflow presentation states for agent-style CLI sessions
 - Workflow-aware ghost completion and suggestion ranking in dialog mode
+- AI provider profiles for `OpenAI`, `Anthropic`, `Gemini`, `xAI`, `GLM`, `DeepSeek`, `Qwen`, and `Doubao`
 - Phrase completion for repeated command snippets
 - Theme and appearance controls through the settings panel
 - Stable bundled default mono font: `CaskaydiaCove Nerd Font Mono`

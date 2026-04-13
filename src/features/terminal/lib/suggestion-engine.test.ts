@@ -32,6 +32,7 @@ const completionContext: CompletionContextSnapshot = {
 const baseContext: SuggestionEngineContext = {
   aiEnabled: true,
   apiKey: "secret-key",
+  baseUrl: "https://open.bigmodel.cn/api/paas/v4",
   provider: "glm",
   model: "glm-4.7-flash",
   shell: "/bin/bash",
@@ -68,6 +69,7 @@ describe("suggestion-engine", () => {
       provider: "glm",
       model: "glm-4.7-flash",
       apiKey: "secret-key",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
       draft: "git ch",
       pwd: "/USER/project",
       gitBranch: "main",
@@ -128,6 +130,7 @@ describe("suggestion-engine", () => {
       provider: "glm",
       model: "glm-4.7-flash",
       apiKey: "secret-key",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
       command: "gti sttaus",
       output: "git: 'sttaus' is not a git command\n",
       exitCode: 1,
@@ -143,5 +146,20 @@ describe("suggestion-engine", () => {
     expect(shouldRequestRecoverySuggestions(baseContext, failedBlock())).toBe(false);
     expect(shouldRequestRecoverySuggestions({ ...baseContext, draft: "" }, failedBlock())).toBe(true);
     expect(shouldRequestRecoverySuggestions({ ...baseContext, draft: "" }, failedBlock({ exitCode: 0 }))).toBe(false);
+  });
+
+  it("allows Qwen recovery suggestions through generic capability checks", () => {
+    expect(
+      shouldRequestRecoverySuggestions(
+        {
+          ...baseContext,
+          provider: "qwen",
+          model: "qwen-plus",
+          apiKey: "secret-key",
+          draft: "",
+        },
+        failedBlock(),
+      ),
+    ).toBe(true);
   });
 });

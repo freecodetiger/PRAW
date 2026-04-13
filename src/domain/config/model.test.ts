@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { AI_PROVIDER_OPTIONS, getAiProviderOption } from "../ai/catalog";
+import type { AiCapability, CompletionProvider } from "../ai/types";
 import { DEFAULT_APP_CONFIG, resolveAppConfig } from "./model";
 
 describe("resolveAppConfig", () => {
@@ -14,6 +16,26 @@ describe("resolveAppConfig", () => {
     expect(DEFAULT_APP_CONFIG.ai.provider).toBe("");
     expect(DEFAULT_APP_CONFIG.ai.model).toBe("");
     expect(DEFAULT_APP_CONFIG.ai.smartSuggestionBubble).toBe(true);
+  });
+
+  it("exposes all first-wave providers in the catalog", () => {
+    expect(AI_PROVIDER_OPTIONS.map((option) => option.id)).toEqual([
+      "openai",
+      "anthropic",
+      "gemini",
+      "xai",
+      "glm",
+      "deepseek",
+      "qwen",
+      "doubao",
+    ] satisfies CompletionProvider[]);
+  });
+
+  it("marks completion and connection-test capabilities explicitly", () => {
+    const glm = getAiProviderOption("glm");
+
+    expect(glm?.capabilities).toContain("completion" satisfies AiCapability);
+    expect(glm?.capabilities).toContain("connectionTest" satisfies AiCapability);
   });
 
   it("fills missing terminal and ai settings from defaults", () => {
@@ -54,6 +76,22 @@ describe("resolveAppConfig", () => {
       },
       ui: DEFAULT_APP_CONFIG.ui,
     });
+  });
+
+  it("preserves an explicitly configured ai base url", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          baseUrl: " https://proxy.example.com/v1 ",
+        } as never,
+      }).ai.baseUrl,
+    ).toBe("https://proxy.example.com/v1");
+  });
+
+  it("keeps baseUrl empty when not configured", () => {
+    expect(resolveAppConfig({ ai: { provider: "glm" } }).ai.baseUrl).toBe("");
   });
 
   it("normalizes ai provider and model identifiers to lowercase", () => {

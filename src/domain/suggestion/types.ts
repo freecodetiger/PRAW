@@ -38,6 +38,7 @@ export interface AiInlineSuggestionRequest extends CompletionContextSnapshot {
   provider: CompletionProvider;
   model: string;
   apiKey: string;
+  baseUrl: string;
   draft: string;
   sessionId: string;
   userId: string;
@@ -47,6 +48,7 @@ export interface AiRecoverySuggestionRequest {
   provider: CompletionProvider;
   model: string;
   apiKey: string;
+  baseUrl: string;
   command: string;
   output: string;
   exitCode: number;

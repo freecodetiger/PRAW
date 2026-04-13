@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-import { AI_PROVIDER_OPTIONS, type AiProviderOption } from "../../../domain/ai/catalog";
+import { AI_PROVIDER_OPTIONS, getAiProviderOption } from "../../../domain/ai/catalog";
 import {
   DEFAULT_TERMINAL_SHORTCUTS,
   findShortcutConflict,
@@ -55,8 +55,9 @@ export function SettingsPanel() {
     config.terminal.preferredMode === "classic" ? copy.header.classicMode : copy.header.dialogMode;
   const themePresetLabel =
     THEME_PRESET_OPTIONS.find((option) => option.value === config.terminal.themePreset)?.label ?? "Light";
+  const selectedProvider = getAiProviderOption(config.ai.provider);
   const canTestConnection =
-    config.ai.provider === "glm" && config.ai.model.trim().length > 0 && config.ai.apiKey.trim().length > 0;
+    config.ai.provider.length > 0 && config.ai.model.trim().length > 0 && config.ai.apiKey.trim().length > 0;
   const runtimeSummary = formatRuntimeSummary(copy.header.runtimeSummary, {
     shell: config.terminal.defaultShell,
     mode: terminalModeLabel,
@@ -158,6 +159,7 @@ export function SettingsPanel() {
         provider: config.ai.provider as CompletionProvider,
         model: config.ai.model,
         apiKey: config.ai.apiKey,
+        baseUrl: config.ai.baseUrl,
       });
       setConnectionResult(result);
     } finally {
@@ -396,13 +398,17 @@ export function SettingsPanel() {
                 <select
                   value={config.ai.provider}
                   onChange={(event) => {
-                    const nextProvider = event.target.value as AiProviderOption["value"] | "";
-                    patchAi({ provider: nextProvider });
+                    const nextProvider = event.target.value as CompletionProvider | "";
+                    const nextProviderOption = getAiProviderOption(nextProvider);
+                    patchAi({
+                      provider: nextProvider,
+                      model: nextProviderOption?.defaultModelHints[0] ?? "",
+                      baseUrl: nextProviderOption?.defaultBaseUrl ?? "",
+                    });
                   }}
                 >
-                  <option value="">{copy.ai.providerPlaceholder}</option>
                   {AI_PROVIDER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option key={option.id} value={option.id}>
                       {option.label}
                     </option>
                   ))}
@@ -427,6 +433,15 @@ export function SettingsPanel() {
                 autoComplete="off"
                 value={config.ai.apiKey}
                 onChange={(event) => patchAi({ apiKey: event.target.value })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>{copy.ai.baseUrl}</span>
+              <input
+                value={config.ai.baseUrl}
+                placeholder={selectedProvider?.defaultBaseUrl ?? ""}
+                onChange={(event) => patchAi({ baseUrl: event.target.value })}
               />
             </label>
 

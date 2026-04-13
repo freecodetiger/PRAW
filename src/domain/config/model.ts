@@ -19,6 +19,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   ai: {
     provider: "",
     model: "",
+    baseUrl: "",
     enabled: false,
     smartSuggestionBubble: true,
     apiKey: "",
@@ -74,6 +75,7 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
     ai: {
       provider: normalizeAiIdentifier(ai?.provider),
       model: normalizeAiIdentifier(ai?.model),
+      baseUrl: normalizeOptionalString(ai?.baseUrl),
       enabled: typeof ai?.enabled === "boolean" ? ai.enabled : DEFAULT_APP_CONFIG.ai.enabled,
       smartSuggestionBubble:
         typeof ai?.smartSuggestionBubble === "boolean"
