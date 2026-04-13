@@ -66,6 +66,8 @@ interface SettingsPanelCopy {
     sectionTitle: string;
     sectionDescription: string;
     enableProvider: string;
+    smartSuggestionBubble: string;
+    smartSuggestionBubbleDescription: string;
     provider: string;
     model: string;
     providerPlaceholder: string;
@@ -148,6 +150,8 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       sectionTitle: "AI",
       sectionDescription: "Ghost completion uses the current tab input, cwd, shell, recent commands, and local directory summary.",
       enableProvider: "Enable assistant provider",
+      smartSuggestionBubble: "Smart suggestion bubble",
+      smartSuggestionBubbleDescription: "Auto-open the candidate bubble only when at least 3 suggestions are available. Tab can always open it manually.",
       provider: "Provider",
       model: "Model",
       providerPlaceholder: "Select provider",
@@ -228,6 +232,8 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       sectionTitle: "AI",
       sectionDescription: "Ghost completion 会使用当前 tab 的输入、cwd、shell、最近命令和本地目录摘要。",
       enableProvider: "启用 assistant provider",
+      smartSuggestionBubble: "智能弹出气泡",
+      smartSuggestionBubbleDescription: "只有在候选数量至少为 3 时才自动展开候选气泡。任何时候都可以按 Tab 手动查看。",
       provider: "Provider",
       model: "Model",
       providerPlaceholder: "选择 provider",

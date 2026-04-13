@@ -379,6 +379,17 @@ export function SettingsPanel() {
               <span>{copy.ai.enableProvider}</span>
             </label>
 
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={config.ai.smartSuggestionBubble}
+                onChange={(event) => patchAi({ smartSuggestionBubble: event.target.checked })}
+              />
+              <span>{copy.ai.smartSuggestionBubble}</span>
+            </label>
+
+            <p className="settings-panel__summary">{copy.ai.smartSuggestionBubbleDescription}</p>
+
             <div className="settings-grid">
               <label className="settings-field">
                 <span>{copy.ai.provider}</span>

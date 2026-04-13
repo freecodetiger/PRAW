@@ -88,4 +88,25 @@ describe("SettingsPanel", () => {
     expect(useAppConfigStore.getState().config.ui.settingsPanelLanguage).toBe("zh-CN");
     expect(host.textContent).toContain("运行配置");
   });
+
+  it("renders and updates the smart suggestion bubble toggle", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const toggleLabel = findLabel(host, "Smart suggestion bubble");
+    const toggleInput = toggleLabel?.querySelector('input[type="checkbox"]') ?? null;
+    expect(toggleInput).not.toBeNull();
+    expect((toggleInput as HTMLInputElement).checked).toBe(true);
+
+    act(() => {
+      toggleInput?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.ai.smartSuggestionBubble).toBe(false);
+  });
 });

@@ -44,6 +44,7 @@ describe("app-config-store", () => {
   it("patches ai settings without disturbing terminal config", () => {
     useAppConfigStore.getState().patchAiConfig({
       enabled: true,
+      smartSuggestionBubble: false,
       provider: "glm",
       model: "glm-4.5",
       apiKey: "secret-key",
@@ -53,6 +54,7 @@ describe("app-config-store", () => {
 
     expect(useAppConfigStore.getState().config.ai).toEqual({
       enabled: true,
+      smartSuggestionBubble: false,
       provider: "glm",
       model: "glm-4.5",
       apiKey: "secret-key",

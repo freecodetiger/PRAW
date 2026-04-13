@@ -20,6 +20,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     provider: "",
     model: "",
     enabled: false,
+    smartSuggestionBubble: true,
     apiKey: "",
     themeColor: "#1f5eff",
     backgroundColor: "#eef4ff",
@@ -74,6 +75,10 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       provider: normalizeAiIdentifier(ai?.provider),
       model: normalizeAiIdentifier(ai?.model),
       enabled: typeof ai?.enabled === "boolean" ? ai.enabled : DEFAULT_APP_CONFIG.ai.enabled,
+      smartSuggestionBubble:
+        typeof ai?.smartSuggestionBubble === "boolean"
+          ? ai.smartSuggestionBubble
+          : DEFAULT_APP_CONFIG.ai.smartSuggestionBubble,
       apiKey: normalizeOptionalString(ai?.apiKey),
       themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
       backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),

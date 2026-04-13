@@ -20,6 +20,7 @@ export interface AiConfig {
   provider: string;
   model: string;
   enabled: boolean;
+  smartSuggestionBubble: boolean;
   apiKey: string;
   themeColor: string;
   backgroundColor: string;

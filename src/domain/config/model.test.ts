@@ -13,6 +13,7 @@ describe("resolveAppConfig", () => {
   it("does not preconfigure a default ai provider or model", () => {
     expect(DEFAULT_APP_CONFIG.ai.provider).toBe("");
     expect(DEFAULT_APP_CONFIG.ai.model).toBe("");
+    expect(DEFAULT_APP_CONFIG.ai.smartSuggestionBubble).toBe(true);
   });
 
   it("fills missing terminal and ai settings from defaults", () => {
@@ -163,6 +164,23 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         themeColor: "#2b6fff",
         backgroundColor: DEFAULT_APP_CONFIG.ai.backgroundColor,
+      },
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("defaults smart suggestion bubble and preserves explicit overrides", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          smartSuggestionBubble: false,
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: {
+        ...DEFAULT_APP_CONFIG.ai,
+        smartSuggestionBubble: false,
       },
       ui: DEFAULT_APP_CONFIG.ui,
     });

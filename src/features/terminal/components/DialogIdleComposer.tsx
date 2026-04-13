@@ -21,6 +21,7 @@ export function DialogIdleComposer({
   onSubmitCommand,
 }: DialogIdleComposerProps) {
   const terminalConfig = useAppConfigStore((state) => state.config.terminal);
+  const aiConfig = useAppConfigStore((state) => state.config.ai);
   const patchTerminalConfig = useAppConfigStore((state) => state.patchTerminalConfig);
   const [draft, setDraft] = useState("");
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -68,8 +69,16 @@ export function DialogIdleComposer({
     activePhrase?.suffix ??
     (ghostSuggestion?.replacement.type === "append" ? ghostSuggestion.replacement.suffix : "");
   const showGhostOverlay = suggestion.length > 0 && isFocused && cursorAtEnd && !isComposing && historyIndex === null;
+  const autoSuggestionBarEnabled =
+    aiConfig.smartSuggestionBubble &&
+    phraseMatches.length === 0 &&
+    visibleSuggestions.length >= 3 &&
+    isFocused &&
+    cursorAtEnd &&
+    !isComposing &&
+    historyIndex === null;
   const showSuggestionBar =
-    suggestionBarVisible &&
+    (suggestionBarVisible || autoSuggestionBarEnabled) &&
     phraseMatches.length === 0 &&
     visibleSuggestions.length > 0 &&
     isFocused &&
