@@ -15,7 +15,7 @@ import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } fr
 import { useWorkspaceStore } from "../state/workspace-store";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
-import { PaneActionMenu } from "./PaneActionMenu";
+import { PaneHeaderActionCluster } from "./PaneHeaderActionCluster";
 
 interface TerminalPaneProps {
   tabId: string;
@@ -176,20 +176,14 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     setIsCloseConfirmOpen(false);
   };
 
+  const noteEditorTabId = useWorkspaceStore((state) => state.noteEditorTabId);
+  const clearNoteEditorRequest = useWorkspaceStore((state) => state.clearNoteEditorRequest);
   const paneActions = resolvePaneActions({
     canClose,
-    canSplitHorizontal,
-    canSplitVertical,
   });
 
   const runPaneAction = (actionId: PaneActionId) => {
     switch (actionId) {
-      case "split-right":
-        runSplitAction("horizontal");
-        return;
-      case "split-down":
-        runSplitAction("vertical");
-        return;
       case "edit-note":
         startEditingNote();
         return;
@@ -201,6 +195,16 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         return;
     }
   };
+
+  useEffect(() => {
+    if (!tab || noteEditorTabId !== tabId) {
+      return;
+    }
+
+    setNoteDraft(tab.note ?? "");
+    setIsEditingNote(true);
+    clearNoteEditorRequest(tabId);
+  }, [clearNoteEditorRequest, noteEditorTabId, tab, tabId]);
 
   return (
     <section
@@ -270,20 +274,18 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           </span>
         ) : null}
 
-        <PaneActionMenu actions={paneActions} onSelect={runPaneAction} />
-
-        <button
-          className="terminal-pane__close"
-          type="button"
-          aria-label={`Close ${label}`}
-          disabled={!canClose}
-          onClick={(event) => {
-            event.stopPropagation();
+        <PaneHeaderActionCluster
+          canSplitRight={canSplitHorizontal}
+          canSplitDown={canSplitVertical}
+          canClose={canClose}
+          menuActions={paneActions}
+          onSplitRight={() => runSplitAction("horizontal")}
+          onSplitDown={() => runSplitAction("vertical")}
+          onMenuSelect={runPaneAction}
+          onClose={() => {
             void requestClose();
           }}
-        >
-          ×
-        </button>
+        />
       </div>
 
       {renderMode === "dialog" && tabState ? (

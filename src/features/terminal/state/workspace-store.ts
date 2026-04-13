@@ -32,11 +32,13 @@ interface WorkspaceStore {
   window: WindowModel | null;
   dragState: { sourceTabId: string } | null;
   dragPreview: PaneDragPreview | null;
+  noteEditorTabId: string | null;
   bootstrapWindow: (options: BootstrapWindowOptions) => void;
   hydrateWindow: (snapshot: WindowSnapshot) => void;
   setActiveTab: (tabId: string) => void;
   setTabNote: (tabId: string, note: string) => void;
   splitTab: (tabId: string, axis: SplitAxis) => void;
+  splitActiveTab: (axis: SplitAxis) => void;
   resizeSplit: (containerId: string, dividerIndex: number, deltaPx: number, frame: LayoutFrame) => void;
   focusAdjacentTab: (direction: FocusDirection) => void;
   closeTab: (tabId: string) => void;
@@ -44,6 +46,8 @@ interface WorkspaceStore {
   setDragPreview: (targetTabId: string, edge: PaneDropEdge) => void;
   applyDragPreview: () => void;
   clearPaneDrag: () => void;
+  requestEditNoteForActiveTab: () => void;
+  clearNoteEditorRequest: (tabId: string) => void;
   attachSession: (tabId: string, sessionId: string, shell: string, cwd: string) => void;
   markTabExited: (
     tabId: string,
@@ -59,12 +63,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   window: null,
   dragState: null,
   dragPreview: null,
+  noteEditorTabId: null,
 
   bootstrapWindow: ({ shell, cwd }) =>
     set(() => ({
       window: createBootstrapWindowModel(shell, cwd),
       dragState: null,
       dragPreview: null,
+      noteEditorTabId: null,
     })),
 
   hydrateWindow: (snapshot) =>
@@ -72,6 +78,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       window: fromWindowSnapshot(snapshot),
       dragState: null,
       dragPreview: null,
+      noteEditorTabId: null,
     })),
 
   setActiveTab: (tabId) =>
@@ -111,24 +118,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
         return state;
       }
 
-      const nextTabNumber = state.window.nextTabNumber;
-      const newTabId = `tab:${nextTabNumber}`;
-      const sourceTab = state.window.tabs[tabId];
+      return splitWindowTab(state, tabId, axis);
+    }),
 
-      return {
-        window: {
-          ...state.window,
-          layout: splitLeaf(state.window.layout, tabId, newTabId, axis),
-          tabs: {
-            ...state.window.tabs,
-            [newTabId]: createTabModel(newTabId, `Tab ${nextTabNumber}`, sourceTab.shell, sourceTab.cwd),
-          },
-          activeTabId: newTabId,
-          nextTabNumber: nextTabNumber + 1,
-        },
-        dragState: null,
-        dragPreview: null,
-      };
+  splitActiveTab: (axis) =>
+    set((state) => {
+      if (!state.window) {
+        return state;
+      }
+
+      return splitWindowTab(state, state.window.activeTabId, axis);
     }),
 
   resizeSplit: (containerId, dividerIndex, deltaPx, frame) =>
@@ -255,6 +254,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       dragPreview: null,
     })),
 
+  requestEditNoteForActiveTab: () =>
+    set((state) => {
+      if (!state.window) {
+        return state;
+      }
+
+      return {
+        noteEditorTabId: state.window.activeTabId,
+      };
+    }),
+
+  clearNoteEditorRequest: (tabId) =>
+    set((state) => ({
+      noteEditorTabId: state.noteEditorTabId === tabId ? null : state.noteEditorTabId,
+    })),
+
   attachSession: (tabId, sessionId, shell, cwd) =>
     set((state) =>
       updateTabState(state, tabId, (tab) => ({
@@ -310,6 +325,32 @@ export function selectActiveTab(state: Pick<WorkspaceStore, "window">): TabModel
   }
 
   return state.window.tabs[state.window.activeTabId] ?? null;
+}
+
+function splitWindowTab(state: WorkspaceStore, tabId: string, axis: SplitAxis): Partial<WorkspaceStore> | WorkspaceStore {
+  if (!state.window?.tabs[tabId]) {
+    return state;
+  }
+
+  const nextTabNumber = state.window.nextTabNumber;
+  const newTabId = `tab:${nextTabNumber}`;
+  const sourceTab = state.window.tabs[tabId];
+
+  return {
+    window: {
+      ...state.window,
+      layout: splitLeaf(state.window.layout, tabId, newTabId, axis),
+      tabs: {
+        ...state.window.tabs,
+        [newTabId]: createTabModel(newTabId, `Tab ${nextTabNumber}`, sourceTab.shell, sourceTab.cwd),
+      },
+      activeTabId: newTabId,
+      nextTabNumber: nextTabNumber + 1,
+    },
+    dragState: null,
+    dragPreview: null,
+    noteEditorTabId: null,
+  };
 }
 
 function createBootstrapWindowModel(shell: string, cwd: string): WindowModel {

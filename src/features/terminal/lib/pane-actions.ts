@@ -1,4 +1,4 @@
-export type PaneActionId = "split-right" | "split-down" | "edit-note" | "close-tab" | "restart-shell";
+export type PaneActionId = "edit-note" | "close-tab" | "restart-shell";
 
 export interface PaneAction {
   id: PaneActionId;
@@ -8,26 +8,12 @@ export interface PaneAction {
 
 interface ResolvePaneActionsInput {
   canClose: boolean;
-  canSplitHorizontal: boolean;
-  canSplitVertical: boolean;
 }
 
 export function resolvePaneActions({
   canClose,
-  canSplitHorizontal,
-  canSplitVertical,
 }: ResolvePaneActionsInput): PaneAction[] {
   return [
-    {
-      id: "split-right",
-      label: "Split Right",
-      disabled: !canSplitHorizontal,
-    },
-    {
-      id: "split-down",
-      label: "Split Down",
-      disabled: !canSplitVertical,
-    },
     {
       id: "edit-note",
       label: "Edit Note",

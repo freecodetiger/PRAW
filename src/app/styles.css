@@ -262,6 +262,45 @@ button {
   margin-top: 10px;
 }
 
+.settings-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-shortcuts__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-shortcuts__label strong {
+  display: block;
+  font-size: 12px;
+}
+
+.shortcut-recorder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-recorder__capture {
+  min-width: 180px;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.shortcut-recorder__capture--recording {
+  text-decoration: underline;
+}
+
+.shortcut-recorder__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .settings-field span,
 .settings-toggle span {
   font-size: 12px;
@@ -455,14 +494,15 @@ button {
 
 .pane-action-menu {
   position: relative;
+  display: inline-flex;
   flex: 0 0 auto;
 }
 
 .pane-action-menu__trigger {
-  min-width: 32px;
-  height: 22px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  min-width: 28px;
+  height: 24px;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
   padding: 0 6px;
 }
@@ -502,14 +542,38 @@ button {
   cursor: not-allowed;
 }
 
-.terminal-pane__close {
+.pane-header-actions {
+  display: inline-flex;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
   border: 1px solid var(--border);
   background: var(--surface);
+}
+
+.pane-header-actions__button {
+  min-width: 28px;
+  height: 24px;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
-  padding: 0;
+  padding: 0 6px;
+}
+
+.pane-header-actions__button:hover:not(:disabled),
+.pane-action-menu__trigger:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.pane-header-actions__button:disabled,
+.pane-action-menu__trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pane-header-actions__button--close:hover:not(:disabled) {
+  background: var(--surface-muted);
 }
 
 .terminal-pane__body {
@@ -678,6 +742,90 @@ button {
   border: 1px solid var(--border);
   background: var(--border);
   z-index: 2;
+}
+
+.dialog-terminal__suggestion-bar {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.dialog-terminal__suggestion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dialog-terminal__suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog-terminal__suggestion {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+}
+
+.dialog-terminal__suggestion--active {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.dialog-terminal__suggestion-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dialog-terminal__suggestion-kind--completion {
+  color: var(--history-success);
+}
+
+.dialog-terminal__suggestion-kind--correction,
+.dialog-terminal__suggestion-kind--recovery {
+  color: var(--history-warning);
+}
+
+.dialog-terminal__suggestion-kind--intent {
+  color: var(--history-command);
+}
+
+.dialog-terminal__suggestion-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dialog-live-console {
@@ -1044,6 +1192,10 @@ button {
   }
 
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-shortcuts__row {
     grid-template-columns: 1fr;
   }
 

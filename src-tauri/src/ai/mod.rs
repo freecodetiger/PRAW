@@ -95,6 +95,90 @@ pub struct CompletionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AiInlineSuggestionRequest {
+    pub provider: String,
+    pub model: String,
+    pub api_key: String,
+    pub draft: String,
+    pub pwd: String,
+    pub git_branch: Option<String>,
+    pub git_status_summary: Vec<String>,
+    pub recent_history: Vec<String>,
+    pub cwd_summary: CwdSummary,
+    pub system_summary: SystemSummary,
+    pub tool_availability: Vec<String>,
+    pub session_id: String,
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiRecoverySuggestionRequest {
+    pub provider: String,
+    pub model: String,
+    pub api_key: String,
+    pub command: String,
+    pub output: String,
+    pub exit_code: i32,
+    pub cwd: String,
+    pub shell: String,
+    pub recent_history: Vec<String>,
+    pub session_id: String,
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SuggestionGroup {
+    Inline,
+    Recovery,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SuggestionKind {
+    Completion,
+    Correction,
+    Intent,
+    Recovery,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SuggestionApplyMode {
+    Append,
+    Replace,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum SuggestionReplacement {
+    Append { suffix: String },
+    ReplaceAll { value: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionItem {
+    pub id: String,
+    pub text: String,
+    pub kind: SuggestionKind,
+    pub source: CompletionCandidateSource,
+    pub score: u16,
+    pub group: SuggestionGroup,
+    pub apply_mode: SuggestionApplyMode,
+    pub replacement: SuggestionReplacement,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestionResponse {
+    pub suggestions: Vec<SuggestionItem>,
+    pub latency_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionTestRequest {
     pub provider: String,
     pub model: String,
@@ -118,6 +202,24 @@ pub trait AiProvider: Send + Sync {
 pub async fn complete(request: CompletionRequest) -> Result<Option<CompletionResponse>> {
     match normalize_identifier(&request.provider).as_str() {
         "glm" => GlmProvider::default().complete(request).await,
+        _ => Ok(None),
+    }
+}
+
+pub async fn inline_suggestions(
+    request: AiInlineSuggestionRequest,
+) -> Result<Option<SuggestionResponse>> {
+    match normalize_identifier(&request.provider).as_str() {
+        "glm" => GlmProvider::default().suggest_inline(request).await,
+        _ => Ok(None),
+    }
+}
+
+pub async fn recovery_suggestions(
+    request: AiRecoverySuggestionRequest,
+) -> Result<Option<SuggestionResponse>> {
+    match normalize_identifier(&request.provider).as_str() {
+        "glm" => GlmProvider::default().suggest_recovery(request).await,
         _ => Ok(None),
     }
 }
@@ -157,6 +259,85 @@ impl GlmProvider {
 
     fn connection_test_timeout_ms(&self) -> u64 {
         CONNECTION_TEST_TIMEOUT_MS
+    }
+
+    async fn suggest_inline(
+        &self,
+        request: AiInlineSuggestionRequest,
+    ) -> Result<Option<SuggestionResponse>> {
+        if request.api_key.trim().is_empty()
+            || request.model.trim().is_empty()
+            || request.draft.trim().is_empty()
+        {
+            return Ok(None);
+        }
+
+        let started_at = Instant::now();
+        let payload = send_openai_request(
+            &self.completion_client,
+            request.api_key.trim(),
+            &build_inline_suggestion_request_payload(&request),
+        )
+        .await?;
+
+        let Some(content) = payload
+            .choices
+            .into_iter()
+            .next()
+            .map(|choice| choice.message.content)
+        else {
+            return Ok(None);
+        };
+
+        let suggestions = parse_inline_suggestion_items(&request, &content);
+        if suggestions.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(SuggestionResponse {
+            suggestions,
+            latency_ms: started_at.elapsed().as_millis() as u64,
+        }))
+    }
+
+    async fn suggest_recovery(
+        &self,
+        request: AiRecoverySuggestionRequest,
+    ) -> Result<Option<SuggestionResponse>> {
+        if request.api_key.trim().is_empty()
+            || request.model.trim().is_empty()
+            || request.command.trim().is_empty()
+            || request.exit_code == 0
+        {
+            return Ok(None);
+        }
+
+        let started_at = Instant::now();
+        let payload = send_openai_request(
+            &self.completion_client,
+            request.api_key.trim(),
+            &build_recovery_suggestion_request_payload(&request),
+        )
+        .await?;
+
+        let Some(content) = payload
+            .choices
+            .into_iter()
+            .next()
+            .map(|choice| choice.message.content)
+        else {
+            return Ok(None);
+        };
+
+        let suggestions = parse_recovery_suggestion_items(&request, &content);
+        if suggestions.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(SuggestionResponse {
+            suggestions,
+            latency_ms: started_at.elapsed().as_millis() as u64,
+        }))
     }
 }
 
@@ -262,6 +443,20 @@ struct CompletionEnvelope {
     suggestions: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SuggestionEnvelope {
+    suggestions: Vec<RawSuggestionEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawSuggestionEntry {
+    text: String,
+    kind: Option<String>,
+    apply_mode: Option<String>,
+}
+
 fn build_client(timeout_ms: u64) -> Client {
     Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
@@ -361,6 +556,127 @@ fn build_completion_request_payload(request: &CompletionRequest) -> OpenAiChatCo
     }
 }
 
+fn build_inline_suggestion_request_payload(
+    request: &AiInlineSuggestionRequest,
+) -> OpenAiChatCompletionRequest {
+    let git_branch = request
+        .git_branch
+        .clone()
+        .unwrap_or_else(|| "(none)".to_string());
+    let git_status = join_limited(&request.git_status_summary, MAX_STATUS_LINES);
+    let recent_history = join_limited(&request.recent_history, MAX_RECENT_COMMANDS);
+    let cwd_dirs = join_limited(&request.cwd_summary.dirs, MAX_SUMMARY_ITEMS);
+    let cwd_files = join_limited(&request.cwd_summary.files, MAX_SUMMARY_ITEMS);
+    let tool_availability = join_limited(&request.tool_availability, MAX_SUMMARY_ITEMS);
+
+    OpenAiChatCompletionRequest {
+        model: normalize_identifier(&request.model),
+        temperature: COMPLETION_TEMPERATURE,
+        max_tokens: COMPLETION_MAX_TOKENS,
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system",
+                content: [
+                    "You are a Linux terminal suggestion assistant.",
+                    "Return JSON object only with a suggestions array.",
+                    "Each suggestion must contain text, kind, and applyMode.",
+                    "Allowed kind values: completion, correction, intent.",
+                    "Allowed applyMode values: append, replace.",
+                    "Return up to 5 safe executable commands with no explanations.",
+                    "Never suggest destructive commands or commands that require secret values.",
+                    "Prefer completion when the current draft is already correct.",
+                ]
+                .join(" "),
+            },
+            OpenAiChatMessage {
+                role: "user",
+                content: format!(
+                    concat!(
+                        "Return JSON object only.\n",
+                        "draft: {}\n",
+                        "pwd: {}\n",
+                        "git_branch: {}\n",
+                        "git_status: {}\n",
+                        "recent_history: {}\n",
+                        "cwd_dirs: {}\n",
+                        "cwd_files: {}\n",
+                        "os: {}\n",
+                        "shell: {}\n",
+                        "package_manager: {}\n",
+                        "tool_availability: {}\n",
+                        "session_id: {}\n",
+                        "user_id: {}"
+                    ),
+                    request.draft,
+                    request.pwd,
+                    git_branch,
+                    git_status,
+                    recent_history,
+                    cwd_dirs,
+                    cwd_files,
+                    request.system_summary.os,
+                    request.system_summary.shell,
+                    request.system_summary.package_manager,
+                    tool_availability,
+                    request.session_id,
+                    request.user_id,
+                ),
+            },
+        ],
+    }
+}
+
+fn build_recovery_suggestion_request_payload(
+    request: &AiRecoverySuggestionRequest,
+) -> OpenAiChatCompletionRequest {
+    let recent_history = join_limited(&request.recent_history, MAX_RECENT_COMMANDS);
+
+    OpenAiChatCompletionRequest {
+        model: normalize_identifier(&request.model),
+        temperature: COMPLETION_TEMPERATURE,
+        max_tokens: COMPLETION_MAX_TOKENS,
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system",
+                content: [
+                    "You are a Linux terminal recovery assistant.",
+                    "Return JSON object only with a suggestions array.",
+                    "Each suggestion must contain text, kind, and applyMode.",
+                    "Use kind=recovery and applyMode=replace for every suggestion.",
+                    "Return up to 5 safe recovery commands with no explanations.",
+                    "Do not repeat the failed command unless it is clearly corrected.",
+                    "Never suggest destructive commands or commands that require secret values.",
+                ]
+                .join(" "),
+            },
+            OpenAiChatMessage {
+                role: "user",
+                content: format!(
+                    concat!(
+                        "Return JSON object only.\n",
+                        "failed_command: {}\n",
+                        "exit_code: {}\n",
+                        "output: {}\n",
+                        "cwd: {}\n",
+                        "shell: {}\n",
+                        "recent_history: {}\n",
+                        "session_id: {}\n",
+                        "user_id: {}"
+                    ),
+                    request.command,
+                    request.exit_code,
+                    request.output,
+                    request.cwd,
+                    request.shell,
+                    recent_history,
+                    request.session_id,
+                    request.user_id,
+                ),
+            },
+        ],
+    }
+}
+
 fn build_connection_test_payload(model: &str) -> OpenAiChatCompletionRequest {
     OpenAiChatCompletionRequest {
         model: normalize_identifier(model),
@@ -418,6 +734,60 @@ fn parse_completion_candidates(request: &CompletionRequest, raw: &str) -> Vec<Co
     suggestions
 }
 
+fn parse_inline_suggestion_items(
+    request: &AiInlineSuggestionRequest,
+    raw: &str,
+) -> Vec<SuggestionItem> {
+    let Some(entries) = parse_structured_suggestions(raw) else {
+        return Vec::new();
+    };
+
+    let mut seen = HashSet::new();
+    let mut suggestions = Vec::new();
+    for (index, entry) in entries.into_iter().enumerate() {
+        let Some(suggestion) = sanitize_inline_suggestion(&request.draft, &entry, index) else {
+            continue;
+        };
+        if !seen.insert(format!("{:?}:{}", suggestion.group, suggestion.text)) {
+            continue;
+        }
+
+        suggestions.push(suggestion);
+        if suggestions.len() >= MAX_COMPLETION_CANDIDATES {
+            break;
+        }
+    }
+
+    suggestions
+}
+
+fn parse_recovery_suggestion_items(
+    _request: &AiRecoverySuggestionRequest,
+    raw: &str,
+) -> Vec<SuggestionItem> {
+    let Some(entries) = parse_structured_suggestions(raw) else {
+        return Vec::new();
+    };
+
+    let mut seen = HashSet::new();
+    let mut suggestions = Vec::new();
+    for (index, entry) in entries.into_iter().enumerate() {
+        let Some(suggestion) = sanitize_recovery_suggestion(&entry, index) else {
+            continue;
+        };
+        if !seen.insert(suggestion.text.clone()) {
+            continue;
+        }
+
+        suggestions.push(suggestion);
+        if suggestions.len() >= MAX_COMPLETION_CANDIDATES {
+            break;
+        }
+    }
+
+    suggestions
+}
+
 fn sanitize_candidate(prefix: &str, candidate: &str) -> Option<String> {
     let trimmed = candidate.trim();
     if trimmed.is_empty() || trimmed.chars().count() > MAX_SUGGESTION_CHARS {
@@ -427,6 +797,105 @@ fn sanitize_candidate(prefix: &str, candidate: &str) -> Option<String> {
         return None;
     }
     if !trimmed.starts_with(prefix) || trimmed == prefix {
+        return None;
+    }
+
+    let lowered = trimmed.to_ascii_lowercase();
+    if DANGEROUS_PATTERNS
+        .iter()
+        .any(|pattern| lowered.contains(pattern))
+    {
+        return None;
+    }
+
+    Some(trimmed.to_string())
+}
+
+fn parse_structured_suggestions(raw: &str) -> Option<Vec<RawSuggestionEntry>> {
+    let payload = extract_json_payload(raw)?;
+    serde_json::from_str::<SuggestionEnvelope>(payload)
+        .ok()
+        .map(|envelope| envelope.suggestions)
+        .or_else(|| serde_json::from_str::<Vec<RawSuggestionEntry>>(payload).ok())
+}
+
+fn sanitize_inline_suggestion(
+    draft: &str,
+    entry: &RawSuggestionEntry,
+    index: usize,
+) -> Option<SuggestionItem> {
+    let text = sanitize_command_text(&entry.text)?;
+    if text == draft {
+        return None;
+    }
+
+    let kind = match normalize_identifier(entry.kind.as_deref().unwrap_or_default()).as_str() {
+        "completion" => SuggestionKind::Completion,
+        "correction" => SuggestionKind::Correction,
+        "intent" => SuggestionKind::Intent,
+        _ if text.starts_with(draft) => SuggestionKind::Completion,
+        _ => SuggestionKind::Intent,
+    };
+    let apply_mode = match normalize_identifier(entry.apply_mode.as_deref().unwrap_or_default()).as_str() {
+        "append" => SuggestionApplyMode::Append,
+        "replace" => SuggestionApplyMode::Replace,
+        _ if matches!(kind, SuggestionKind::Completion) && text.starts_with(draft) => {
+            SuggestionApplyMode::Append
+        }
+        _ => SuggestionApplyMode::Replace,
+    };
+
+    let replacement = match apply_mode {
+        SuggestionApplyMode::Append => {
+            if !text.starts_with(draft) {
+                return None;
+            }
+
+            let suffix = text[draft.len()..].to_string();
+            if suffix.is_empty() {
+                return None;
+            }
+
+            SuggestionReplacement::Append { suffix }
+        }
+        SuggestionApplyMode::Replace => SuggestionReplacement::ReplaceAll {
+            value: text.clone(),
+        },
+    };
+
+    Some(SuggestionItem {
+        id: format!("ai:inline:{}", index),
+        text,
+        kind,
+        source: CompletionCandidateSource::Ai,
+        score: 900u16.saturating_sub((index as u16) * 10),
+        group: SuggestionGroup::Inline,
+        apply_mode,
+        replacement,
+    })
+}
+
+fn sanitize_recovery_suggestion(entry: &RawSuggestionEntry, index: usize) -> Option<SuggestionItem> {
+    let text = sanitize_command_text(&entry.text)?;
+
+    Some(SuggestionItem {
+        id: format!("ai:recovery:{}", index),
+        text: text.clone(),
+        kind: SuggestionKind::Recovery,
+        source: CompletionCandidateSource::Ai,
+        score: 900u16.saturating_sub((index as u16) * 10),
+        group: SuggestionGroup::Recovery,
+        apply_mode: SuggestionApplyMode::Replace,
+        replacement: SuggestionReplacement::ReplaceAll { value: text },
+    })
+}
+
+fn sanitize_command_text(candidate: &str) -> Option<String> {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > MAX_SUGGESTION_CHARS {
+        return None;
+    }
+    if trimmed.contains('\n') || trimmed.contains('\r') {
         return None;
     }
 
@@ -718,5 +1187,66 @@ mod tests {
                 latency_ms: None,
             })
         );
+    }
+
+    #[test]
+    fn parses_structured_inline_suggestions() {
+        let suggestions = super::parse_inline_suggestion_items(
+            &super::AiInlineSuggestionRequest {
+                provider: "glm".to_string(),
+                model: "glm-4.7-flash".to_string(),
+                api_key: "secret-key".to_string(),
+                draft: "git ch".to_string(),
+                pwd: "/USER/project".to_string(),
+                git_branch: Some("main".to_string()),
+                git_status_summary: vec!["M src/main.tsx".to_string()],
+                recent_history: vec!["git status".to_string()],
+                cwd_summary: CwdSummary {
+                    dirs: vec!["src".to_string()],
+                    files: vec!["package.json".to_string()],
+                },
+                system_summary: SystemSummary {
+                    os: "ubuntu".to_string(),
+                    shell: "/bin/bash".to_string(),
+                    package_manager: "apt".to_string(),
+                },
+                tool_availability: vec!["git".to_string()],
+                session_id: "sess-1".to_string(),
+                user_id: "user-1".to_string(),
+            },
+            r#"{"suggestions":[{"text":"git checkout main","kind":"completion","applyMode":"append"},{"text":"git status","kind":"intent","applyMode":"replace"}]}"#,
+        );
+
+        assert_eq!(suggestions.len(), 2);
+        assert_eq!(suggestions[0].text, "git checkout main");
+        assert_eq!(suggestions[0].group, super::SuggestionGroup::Inline);
+        assert_eq!(suggestions[1].kind, super::SuggestionKind::Intent);
+    }
+
+    #[test]
+    fn builds_recovery_prompt_with_failed_command_context() {
+        let payload = super::build_recovery_suggestion_request_payload(&super::AiRecoverySuggestionRequest {
+            provider: "glm".to_string(),
+            model: "glm-4.7-flash".to_string(),
+            api_key: "secret-key".to_string(),
+            command: "gti sttaus".to_string(),
+            output: "git: 'sttaus' is not a git command".to_string(),
+            exit_code: 1,
+            cwd: "/workspace".to_string(),
+            shell: "/bin/bash".to_string(),
+            recent_history: vec!["git status".to_string()],
+            session_id: "sess-1".to_string(),
+            user_id: "user-1".to_string(),
+        });
+
+        let user_message = payload
+            .messages
+            .iter()
+            .find(|message| message.role == "user")
+            .expect("user message should exist");
+
+        assert!(user_message.content.contains("failed_command: gti sttaus"));
+        assert!(user_message.content.contains("exit_code: 1"));
+        assert!(user_message.content.contains("git: 'sttaus' is not a git command"));
     }
 }

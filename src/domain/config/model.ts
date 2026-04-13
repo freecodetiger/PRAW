@@ -1,6 +1,8 @@
 import { DEFAULT_BUNDLED_MONO_FONT_FAMILY, DEFAULT_DIALOG_FONT_SIZE } from "./font-defaults";
+import { DEFAULT_SETTINGS_PANEL_LANGUAGE, normalizeSettingsPanelLanguage } from "./settings-panel-language";
 import { isThemePresetId } from "../theme/presets";
-import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode } from "./types";
+import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode, UiConfig } from "./types";
+import { DEFAULT_TERMINAL_SHORTCUTS, normalizeTerminalShortcutConfig, type TerminalShortcutConfig } from "./terminal-shortcuts";
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   terminal: {
@@ -10,6 +12,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     dialogFontSize: DEFAULT_DIALOG_FONT_SIZE,
     preferredMode: "dialog",
     themePreset: "light",
+    shortcuts: DEFAULT_TERMINAL_SHORTCUTS,
     phrases: [],
     phraseUsage: {},
   },
@@ -20,6 +23,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     apiKey: "",
     themeColor: "#1f5eff",
     backgroundColor: "#eef4ff",
+  },
+  ui: {
+    settingsPanelLanguage: DEFAULT_SETTINGS_PANEL_LANGUAGE,
   },
 };
 
@@ -32,6 +38,7 @@ export interface TerminalConfigInput {
   fontSize?: number;
   preferredMode?: string;
   themePreset?: string;
+  shortcuts?: Partial<TerminalShortcutConfig>;
   phrases?: string[];
   phraseUsage?: Record<string, number>;
 }
@@ -39,6 +46,7 @@ export interface TerminalConfigInput {
 export interface AppConfigInput {
   terminal?: TerminalConfigInput;
   ai?: Partial<AiConfig>;
+  ui?: Partial<UiConfig>;
 }
 
 const MIN_FONT_SIZE = 10;
@@ -47,6 +55,7 @@ const MAX_FONT_SIZE = 32;
 export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
   const terminal = input?.terminal;
   const ai = input?.ai;
+  const ui = input?.ui;
   const phrases = normalizePhraseList(terminal?.phrases);
 
   return {
@@ -57,6 +66,7 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       dialogFontSize: normalizeDialogFontSize(terminal),
       preferredMode: normalizePreferredMode(terminal?.preferredMode),
       themePreset: normalizeThemePreset(terminal?.themePreset),
+      shortcuts: normalizeTerminalShortcutConfig(terminal?.shortcuts),
       phrases,
       phraseUsage: normalizePhraseUsage(terminal?.phraseUsage, phrases),
     },
@@ -67,6 +77,9 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       apiKey: normalizeOptionalString(ai?.apiKey),
       themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
       backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
+    },
+    ui: {
+      settingsPanelLanguage: normalizeSettingsPanelLanguage(ui?.settingsPanelLanguage),
     },
   };
 }

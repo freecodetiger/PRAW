@@ -1,24 +1,34 @@
 import { useEffect } from "react";
 
+import type { TerminalShortcutConfig } from "../../../domain/config/terminal-shortcuts";
 import { resolveWorkspaceShortcut } from "../../../domain/terminal/shortcuts";
 
 interface UseWorkspaceShortcutsOptions {
   focusAdjacentTab: (direction: "left" | "right" | "up" | "down") => void;
+  splitActiveTab: (axis: "horizontal" | "vertical") => void;
+  requestEditNoteForActiveTab: () => void;
+  shortcuts: TerminalShortcutConfig;
 }
 
-export function useWorkspaceShortcuts({ focusAdjacentTab }: UseWorkspaceShortcutsOptions) {
+export function useWorkspaceShortcuts({
+  focusAdjacentTab,
+  splitActiveTab,
+  requestEditNoteForActiveTab,
+  shortcuts,
+}: UseWorkspaceShortcutsOptions) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
-      ) {
+      const action = resolveWorkspaceShortcut(event, shortcuts);
+      if (!action) {
         return;
       }
 
-      const action = resolveWorkspaceShortcut(event);
-      if (!action) {
+      if (
+        action.type === "focus-pane" &&
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
         return;
       }
 
@@ -27,6 +37,16 @@ export function useWorkspaceShortcuts({ focusAdjacentTab }: UseWorkspaceShortcut
       switch (action.type) {
         case "focus-pane":
           focusAdjacentTab(action.direction);
+          return;
+        case "split-right":
+          splitActiveTab("horizontal");
+          return;
+        case "split-down":
+          splitActiveTab("vertical");
+          return;
+        case "edit-note":
+          requestEditNoteForActiveTab();
+          return;
       }
     };
 
@@ -34,5 +54,5 @@ export function useWorkspaceShortcuts({ focusAdjacentTab }: UseWorkspaceShortcut
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [focusAdjacentTab]);
+  }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab]);
 }

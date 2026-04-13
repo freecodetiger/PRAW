@@ -10,6 +10,7 @@ describe("app-config-store", () => {
       hydrateConfig: useAppConfigStore.getState().hydrateConfig,
       patchTerminalConfig: useAppConfigStore.getState().patchTerminalConfig,
       patchAiConfig: useAppConfigStore.getState().patchAiConfig,
+      patchUiConfig: useAppConfigStore.getState().patchUiConfig,
     });
   });
 
@@ -80,5 +81,31 @@ describe("app-config-store", () => {
     });
 
     expect(useAppConfigStore.getState().config.terminal.themePreset).toBe("sepia");
+  });
+
+  it("patches terminal pane shortcuts through the app config store", () => {
+    useAppConfigStore.getState().patchTerminalConfig({
+      shortcuts: {
+        splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
+        splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
+        editNote: null,
+      } as never,
+    });
+
+    expect(useAppConfigStore.getState().config.terminal.shortcuts).toEqual({
+      splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
+      splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
+      editNote: null,
+    });
+  });
+
+  it("patches ui settings without disturbing terminal and ai config", () => {
+    useAppConfigStore.getState().patchUiConfig({
+      settingsPanelLanguage: "zh-CN",
+    });
+
+    expect(useAppConfigStore.getState().config.ui.settingsPanelLanguage).toBe("zh-CN");
+    expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
+    expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
   });
 });

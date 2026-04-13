@@ -1,4 +1,5 @@
 import type { FocusDirection } from "../layout/types";
+import type { TerminalShortcutConfig } from "../config/terminal-shortcuts";
 
 export interface TerminalShortcutEvent {
   key: string;
@@ -10,11 +11,22 @@ export interface TerminalShortcutEvent {
 }
 
 export type WorkspaceShortcutAction =
-  | { type: "focus-pane"; direction: FocusDirection };
+  | { type: "focus-pane"; direction: FocusDirection }
+  | { type: "split-right" }
+  | { type: "split-down" }
+  | { type: "edit-note" };
 
 export type TerminalShortcutAction = { type: "copy-selection" } | { type: "paste" };
 
-export function resolveWorkspaceShortcut(event: TerminalShortcutEvent): WorkspaceShortcutAction | null {
+export function resolveWorkspaceShortcut(
+  event: TerminalShortcutEvent,
+  shortcuts: TerminalShortcutConfig,
+): WorkspaceShortcutAction | null {
+  const paneAction = resolvePaneActionShortcut(event, shortcuts);
+  if (paneAction) {
+    return paneAction;
+  }
+
   const key = normalizeKey(event.key);
 
   if (event.ctrlKey && event.altKey && !event.shiftKey && !event.metaKey) {
@@ -59,4 +71,40 @@ export function resolveTerminalShortcut(event: TerminalShortcutEvent): TerminalS
 
 function normalizeKey(key: string): string {
   return key.trim().toLowerCase();
+}
+
+function resolvePaneActionShortcut(
+  event: TerminalShortcutEvent,
+  shortcuts: TerminalShortcutConfig,
+): WorkspaceShortcutAction | null {
+  if (matchesShortcutBinding(event, shortcuts.splitRight)) {
+    return { type: "split-right" };
+  }
+
+  if (matchesShortcutBinding(event, shortcuts.splitDown)) {
+    return { type: "split-down" };
+  }
+
+  if (matchesShortcutBinding(event, shortcuts.editNote)) {
+    return { type: "edit-note" };
+  }
+
+  return null;
+}
+
+function matchesShortcutBinding(
+  event: TerminalShortcutEvent,
+  binding: TerminalShortcutConfig[keyof TerminalShortcutConfig],
+): boolean {
+  if (!binding) {
+    return false;
+  }
+
+  return (
+    normalizeKey(event.key) === normalizeKey(binding.key) &&
+    event.ctrlKey === binding.ctrl &&
+    event.altKey === binding.alt &&
+    event.shiftKey === binding.shift &&
+    event.metaKey === binding.meta
+  );
 }

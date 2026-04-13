@@ -1,41 +1,125 @@
 import { useMemo, useRef, useState } from "react";
 
 import { AI_PROVIDER_OPTIONS, type AiProviderOption } from "../../../domain/ai/catalog";
+import {
+  DEFAULT_TERMINAL_SHORTCUTS,
+  findShortcutConflict,
+  type ShortcutBinding,
+  type TerminalShortcutConfig,
+  type TerminalShortcutConfigKey,
+} from "../../../domain/config/terminal-shortcuts";
 import type { CompletionProvider, AiConnectionTestResult } from "../../../domain/ai/types";
 import type { AiConfig } from "../../../domain/config/types";
 import { THEME_PRESET_OPTIONS, type ThemePresetId } from "../../../domain/theme/presets";
 import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
 import { testAiConnection } from "../../../lib/tauri/ai";
 import { describeAiConnectionResult } from "../lib/ai-connection";
+import { getSettingsPanelCopy } from "../lib/settings-panel-copy";
 import { useAppConfigStore } from "../state/app-config-store";
+import { ShortcutRecorder } from "./ShortcutRecorder";
+
+const CLASSIC_FONT_FAMILY = "CaskaydiaCove Nerd Font Mono";
+const SHORTCUT_KEYS: TerminalShortcutConfigKey[] = ["splitRight", "splitDown", "editNote"];
+
+function formatRuntimeSummary(template: string, values: Record<string, number | string>) {
+  return Object.entries(values).reduce(
+    (summary, [key, value]) => summary.replace(`{${key}}`, String(value)),
+    template,
+  );
+}
 
 export function SettingsPanel() {
   const config = useAppConfigStore((state) => state.config);
   const patchTerminalConfig = useAppConfigStore((state) => state.patchTerminalConfig);
   const patchAiConfig = useAppConfigStore((state) => state.patchAiConfig);
+  const patchUiConfig = useAppConfigStore((state) => state.patchUiConfig);
   const [isOpen, setIsOpen] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<AiConnectionTestResult | null>(null);
-  const [phraseImportError, setPhraseImportError] = useState<string | null>(null);
+  const [phraseImportError, setPhraseImportError] = useState<"empty" | "failed" | null>(null);
+  const [shortcutErrors, setShortcutErrors] = useState<
+    Partial<Record<TerminalShortcutConfigKey, TerminalShortcutConfigKey>>
+  >({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const copy = getSettingsPanelCopy(config.ui.settingsPanelLanguage);
 
   const aiStatus = useMemo(() => {
     if (!config.ai.provider || !config.ai.model) {
-      return "not configured";
+      return copy.header.notConfigured;
     }
 
     const summary = `${config.ai.provider} / ${config.ai.model}`;
-    return config.ai.enabled ? summary : `${summary} · disabled`;
-  }, [config.ai.enabled, config.ai.model, config.ai.provider]);
-  const terminalModeLabel = config.terminal.preferredMode === "classic" ? "Classic" : "Dialog";
+    return config.ai.enabled ? summary : `${summary} · ${copy.header.disabled}`;
+  }, [config.ai.enabled, config.ai.model, config.ai.provider, copy.header.disabled, copy.header.notConfigured]);
+  const terminalModeLabel =
+    config.terminal.preferredMode === "classic" ? copy.header.classicMode : copy.header.dialogMode;
   const themePresetLabel =
     THEME_PRESET_OPTIONS.find((option) => option.value === config.terminal.themePreset)?.label ?? "Light";
   const canTestConnection =
     config.ai.provider === "glm" && config.ai.model.trim().length > 0 && config.ai.apiKey.trim().length > 0;
+  const runtimeSummary = formatRuntimeSummary(copy.header.runtimeSummary, {
+    shell: config.terminal.defaultShell,
+    mode: terminalModeLabel,
+    theme: themePresetLabel,
+    classicFont: CLASSIC_FONT_FAMILY,
+    dialogFont: config.terminal.dialogFontFamily,
+    dialogFontSize: config.terminal.dialogFontSize,
+    aiStatus,
+  });
 
   const patchAi = (partial: Partial<AiConfig>) => {
     patchAiConfig(partial);
     setConnectionResult(null);
+  };
+
+  const shortcutLabels = copy.terminal.shortcutLabels;
+
+  const updateShortcut = (key: TerminalShortcutConfigKey, binding: ShortcutBinding) => {
+    const conflict = findShortcutConflict(config.terminal.shortcuts, binding, key);
+    if (conflict) {
+      setShortcutErrors((current) => ({
+        ...current,
+        [key]: conflict,
+      }));
+      return;
+    }
+
+    setShortcutErrors((current) => ({
+      ...current,
+      [key]: undefined,
+    }));
+    patchTerminalConfig({
+      shortcuts: {
+        ...config.terminal.shortcuts,
+        [key]: binding,
+      } as Partial<TerminalShortcutConfig>,
+    } as never);
+  };
+
+  const clearShortcut = (key: TerminalShortcutConfigKey) => {
+    setShortcutErrors((current) => ({
+      ...current,
+      [key]: undefined,
+    }));
+    patchTerminalConfig({
+      shortcuts: {
+        ...config.terminal.shortcuts,
+        [key]: null,
+      } as Partial<TerminalShortcutConfig>,
+    } as never);
+  };
+
+  const resetShortcut = (key: TerminalShortcutConfigKey) => {
+    setShortcutErrors((current) => ({
+      ...current,
+      [key]: undefined,
+    }));
+    patchTerminalConfig({
+      shortcuts: {
+        ...config.terminal.shortcuts,
+        [key]: DEFAULT_TERMINAL_SHORTCUTS[key],
+      } as Partial<TerminalShortcutConfig>,
+    } as never);
   };
 
   const importPhraseFile = async (file: File | null) => {
@@ -47,7 +131,7 @@ export function SettingsPanel() {
       const text = await file.text();
       const phrases = normalizeImportedPhraseText(text);
       if (phrases.length === 0) {
-        setPhraseImportError("No valid phrases were found in the selected file.");
+        setPhraseImportError("empty");
         return;
       }
 
@@ -57,7 +141,7 @@ export function SettingsPanel() {
       });
       setPhraseImportError(null);
     } catch {
-      setPhraseImportError("Failed to read the selected phrase file.");
+      setPhraseImportError("failed");
     }
   };
 
@@ -96,27 +180,47 @@ export function SettingsPanel() {
       <aside className={`settings-panel${isOpen ? " settings-panel--open" : ""}`} aria-label="Settings">
         <div className="settings-panel__header">
           <div>
-            <p className="eyebrow">Workspace Settings</p>
-            <strong>Runtime profile</strong>
-            <p className="settings-panel__summary">
-              Shell {config.terminal.defaultShell} · Mode {terminalModeLabel} · Theme {themePresetLabel} · Classic Font CaskaydiaCove Nerd Font Mono · Dialog Font {config.terminal.dialogFontFamily} {config.terminal.dialogFontSize}px · AI {aiStatus}
-            </p>
+            <p className="eyebrow">{copy.header.eyebrow}</p>
+            <strong>{copy.header.title}</strong>
+            <p className="settings-panel__summary">{runtimeSummary}</p>
           </div>
 
           <button className="button button--ghost" type="button" onClick={() => setIsOpen(false)}>
-            Close
+            {copy.header.close}
           </button>
         </div>
 
         <div className="settings-panel__content">
           <section className="settings-section">
             <div className="settings-section__title">
-              <strong>Terminal</strong>
-              <p>Classic keeps a bundled fixed-width font for stability. Dialog mode remains configurable.</p>
+              <strong>{copy.panelLanguage.label}</strong>
+              <p>{copy.panelLanguage.description}</p>
             </div>
 
             <label className="settings-field">
-              <span>Default shell</span>
+              <span>{copy.panelLanguage.label}</span>
+              <select
+                value={config.ui.settingsPanelLanguage}
+                onChange={(event) =>
+                  patchUiConfig({
+                    settingsPanelLanguage: event.target.value as "en" | "zh-CN",
+                  })
+                }
+              >
+                <option value="en">{copy.panelLanguage.options.en}</option>
+                <option value="zh-CN">{copy.panelLanguage.options["zh-CN"]}</option>
+              </select>
+            </label>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section__title">
+              <strong>{copy.terminal.sectionTitle}</strong>
+              <p>{copy.terminal.sectionDescription}</p>
+            </div>
+
+            <label className="settings-field">
+              <span>{copy.terminal.defaultShell}</span>
               <input
                 value={config.terminal.defaultShell}
                 onChange={(event) => patchTerminalConfig({ defaultShell: event.target.value })}
@@ -124,7 +228,7 @@ export function SettingsPanel() {
             </label>
 
             <label className="settings-field">
-              <span>Default cwd</span>
+              <span>{copy.terminal.defaultCwd}</span>
               <input
                 value={config.terminal.defaultCwd}
                 onChange={(event) => patchTerminalConfig({ defaultCwd: event.target.value })}
@@ -139,12 +243,12 @@ export function SettingsPanel() {
                   patchTerminalConfig({ preferredMode: event.target.checked ? "classic" : "dialog" })
                 }
               />
-              <span>Prefer classic terminal mode</span>
+              <span>{copy.terminal.preferClassic}</span>
             </label>
 
             <div className="settings-grid">
               <label className="settings-field">
-                <span>Theme preset</span>
+                <span>{copy.terminal.themePreset}</span>
                 <select
                   value={config.terminal.themePreset}
                   onChange={(event) => patchTerminalConfig({ themePreset: event.target.value as ThemePresetId })}
@@ -159,18 +263,18 @@ export function SettingsPanel() {
             </div>
 
             <div className="settings-section__title">
-              <strong>Classic Terminal Font</strong>
-              <p>CaskaydiaCove Nerd Font Mono is bundled and fixed in classic mode for stable xterm rendering.</p>
+              <strong>{copy.terminal.classicFontTitle}</strong>
+              <p>{copy.terminal.classicFontDescription}</p>
             </div>
 
             <div className="settings-section__title">
-              <strong>Dialog Terminal Font</strong>
-              <p>These controls apply only to dialog mode.</p>
+              <strong>{copy.terminal.dialogFontTitle}</strong>
+              <p>{copy.terminal.dialogFontDescription}</p>
             </div>
 
             <div className="settings-grid">
               <label className="settings-field">
-                <span>Dialog font size</span>
+                <span>{copy.terminal.dialogFontSize}</span>
                 <input
                   type="number"
                   min={10}
@@ -187,7 +291,7 @@ export function SettingsPanel() {
             </div>
 
             <label className="settings-field">
-              <span>Dialog font family</span>
+              <span>{copy.terminal.dialogFontFamily}</span>
               <input
                 value={config.terminal.dialogFontFamily}
                 onChange={(event) => patchTerminalConfig({ dialogFontFamily: event.target.value })}
@@ -195,8 +299,33 @@ export function SettingsPanel() {
             </label>
 
             <div className="settings-section__title">
-              <strong>Common Phrases</strong>
-              <p>Import a text file with one phrase per line. Import replaces the current phrase list.</p>
+              <strong>{copy.terminal.shortcutsTitle}</strong>
+              <p>{copy.terminal.shortcutsDescription}</p>
+            </div>
+
+            <div className="settings-shortcuts">
+              {SHORTCUT_KEYS.map((key) => (
+                <div className="settings-shortcuts__row" key={key}>
+                  <div className="settings-shortcuts__label">
+                    <strong>{shortcutLabels[key]}</strong>
+                  </div>
+                  <ShortcutRecorder
+                    value={config.terminal.shortcuts[key]}
+                    error={
+                      shortcutErrors[key] ? copy.terminal.shortcutConflictWith(shortcutLabels[shortcutErrors[key]]) : null
+                    }
+                    labels={copy.terminal.recorder}
+                    onCapture={(binding) => updateShortcut(key, binding)}
+                    onClear={() => clearShortcut(key)}
+                    onReset={() => resetShortcut(key)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="settings-section__title">
+              <strong>{copy.phrases.title}</strong>
+              <p>{copy.phrases.description}</p>
             </div>
 
             <input
@@ -212,7 +341,7 @@ export function SettingsPanel() {
 
             <div className="settings-actions">
               <button className="button" type="button" onClick={() => fileInputRef.current?.click()}>
-                Import Phrase File
+                {copy.phrases.import}
               </button>
               <button
                 className="button button--ghost"
@@ -223,20 +352,22 @@ export function SettingsPanel() {
                   setPhraseImportError(null);
                 }}
               >
-                Clear Phrases
+                {copy.phrases.clear}
               </button>
             </div>
 
-            <p className="settings-panel__summary">{config.terminal.phrases.length} phrases imported</p>
+            <p className="settings-panel__summary">{copy.phrases.importedCount(config.terminal.phrases.length)}</p>
             {phraseImportError ? (
-              <p className="settings-status settings-status--error">{phraseImportError}</p>
+              <p className="settings-status settings-status--error">
+                {phraseImportError === "empty" ? copy.phrases.importEmpty : copy.phrases.importFailed}
+              </p>
             ) : null}
           </section>
 
           <section className="settings-section">
             <div className="settings-section__title">
-              <strong>AI</strong>
-              <p>Ghost completion uses the current tab input, cwd, shell, recent commands, and local directory summary.</p>
+              <strong>{copy.ai.sectionTitle}</strong>
+              <p>{copy.ai.sectionDescription}</p>
             </div>
 
             <label className="settings-toggle">
@@ -245,12 +376,12 @@ export function SettingsPanel() {
                 checked={config.ai.enabled}
                 onChange={(event) => patchAi({ enabled: event.target.checked })}
               />
-              <span>Enable assistant provider</span>
+              <span>{copy.ai.enableProvider}</span>
             </label>
 
             <div className="settings-grid">
               <label className="settings-field">
-                <span>Provider</span>
+                <span>{copy.ai.provider}</span>
                 <select
                   value={config.ai.provider}
                   onChange={(event) => {
@@ -258,7 +389,7 @@ export function SettingsPanel() {
                     patchAi({ provider: nextProvider });
                   }}
                 >
-                  <option value="">Select provider</option>
+                  <option value="">{copy.ai.providerPlaceholder}</option>
                   {AI_PROVIDER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -268,18 +399,18 @@ export function SettingsPanel() {
               </label>
 
               <label className="settings-field">
-                <span>Model</span>
+                <span>{copy.ai.model}</span>
                 <input
                   value={config.ai.model}
                   disabled={!config.ai.provider}
-                  placeholder={config.ai.provider ? "Enter official model name" : "Select provider first"}
+                  placeholder={config.ai.provider ? copy.ai.modelPlaceholder : copy.ai.modelPlaceholderDisabled}
                   onChange={(event) => patchAi({ model: event.target.value })}
                 />
               </label>
             </div>
 
             <label className="settings-field">
-              <span>API key</span>
+              <span>{copy.ai.apiKey}</span>
               <input
                 type="password"
                 autoComplete="off"
@@ -295,7 +426,7 @@ export function SettingsPanel() {
                 disabled={isTestingConnection || !canTestConnection}
                 onClick={() => void runConnectionTest()}
               >
-                {isTestingConnection ? "Testing..." : "Test AI Connection"}
+                {isTestingConnection ? copy.ai.testingConnection : copy.ai.testConnection}
               </button>
               {connectionResult ? (
                 <p
@@ -306,15 +437,15 @@ export function SettingsPanel() {
               ) : null}
             </div>
 
-            <p className="settings-panel__summary">This key is currently stored in the local app config file.</p>
+            <p className="settings-panel__summary">{copy.ai.localKeySummary}</p>
 
             <div className="settings-section__title">
-              <strong>AI Appearance</strong>
-              <p>AI workflow panes follow the active theme. Accent color remains configurable.</p>
+              <strong>{copy.ai.appearanceTitle}</strong>
+              <p>{copy.ai.appearanceDescription}</p>
             </div>
 
             <label className="settings-field">
-              <span>Theme color</span>
+              <span>{copy.ai.themeColor}</span>
               <input
                 type="color"
                 value={config.ai.themeColor}

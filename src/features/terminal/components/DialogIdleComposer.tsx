@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { buildCandidateSuffix } from "../../../domain/completion/candidates";
 import { getNextPhraseSelection, getPhraseMatches } from "../../../domain/terminal/phrase-completion";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { useAppConfigStore } from "../../config/state/app-config-store";
-import { useGhostCompletion } from "../hooks/useGhostCompletion";
+import { useSuggestionEngine } from "../hooks/useSuggestionEngine";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
+import { SuggestionBar } from "./SuggestionBar";
 
 interface DialogIdleComposerProps {
   paneState: TerminalTabViewState;
@@ -29,7 +29,8 @@ export function DialogIdleComposer({
   const [isFocused, setIsFocused] = useState(false);
   const [cursorAtEnd, setCursorAtEnd] = useState(true);
   const [phraseIndex, setPhraseIndex] = useState(0);
-  const [completionIndex, setCompletionIndex] = useState(0);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [suggestionBarVisible, setSuggestionBarVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const history = paneState.composerHistory;
 
@@ -46,11 +47,13 @@ export function DialogIdleComposer({
   const activePhrase = phraseMatches[phraseIndex] ?? null;
 
   const {
-    suggestion: fallbackSuggestion,
-    candidates,
+    ghostSuggestion,
+    visibleSuggestions,
+    activeGroup,
+    acceptGhostSuggestion,
     acceptSuggestion,
-    clearSuggestion,
-  } = useGhostCompletion({
+    dismissSuggestions,
+  } = useSuggestionEngine({
     paneState,
     status,
     draft,
@@ -61,11 +64,18 @@ export function DialogIdleComposer({
     disabled: phraseMatches.length > 0,
   });
 
-  const activeCandidate = candidates[completionIndex] ?? null;
-  const asyncSuggestion = buildCandidateSuffix(draft, activeCandidate) || fallbackSuggestion;
-  const suggestion = activePhrase?.suffix ?? asyncSuggestion;
-  const showCandidateMenu =
-    phraseMatches.length === 0 && candidates.length > 0 && isFocused && cursorAtEnd && !isComposing && historyIndex === null;
+  const suggestion =
+    activePhrase?.suffix ??
+    (ghostSuggestion?.replacement.type === "append" ? ghostSuggestion.replacement.suffix : "");
+  const showGhostOverlay = suggestion.length > 0 && isFocused && cursorAtEnd && !isComposing && historyIndex === null;
+  const showSuggestionBar =
+    suggestionBarVisible &&
+    phraseMatches.length === 0 &&
+    visibleSuggestions.length > 0 &&
+    isFocused &&
+    cursorAtEnd &&
+    !isComposing &&
+    historyIndex === null;
   const isDisabled = status !== "running";
 
   useEffect(() => {
@@ -81,15 +91,19 @@ export function DialogIdleComposer({
   }, [draft, terminalConfig.phrases, terminalConfig.phraseUsage]);
 
   useEffect(() => {
-    setCompletionIndex(0);
-  }, [draft, candidates]);
+    setSuggestionIndex(0);
+  }, [draft, visibleSuggestions]);
+
+  useEffect(() => {
+    setSuggestionBarVisible(false);
+  }, [draft]);
 
   const syncCursorState = (input: HTMLInputElement) => {
     const end = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
     setCursorAtEnd(end);
   };
 
-  const acceptAsyncCandidate = (index = completionIndex) => {
+  const acceptVisibleSuggestion = (index = suggestionIndex) => {
     const nextDraft = acceptSuggestion(index);
     if (!nextDraft) {
       return;
@@ -98,7 +112,32 @@ export function DialogIdleComposer({
     setDraft(nextDraft);
     setHistoryIndex(null);
     setCursorAtEnd(true);
-    setCompletionIndex(0);
+    setSuggestionIndex(0);
+    setSuggestionBarVisible(false);
+  };
+
+  const acceptGhostOverlay = () => {
+    const nextDraft = activePhrase ? draft + activePhrase.suffix : acceptGhostSuggestion();
+    if (!nextDraft) {
+      return;
+    }
+
+    if (activePhrase) {
+      const nextUsageScore = Math.max(0, ...Object.values(terminalConfig.phraseUsage)) + 1;
+      patchTerminalConfig({
+        phraseUsage: {
+          ...terminalConfig.phraseUsage,
+          [activePhrase.phrase]: nextUsageScore,
+        },
+      });
+    }
+
+    setDraft(nextDraft);
+    setHistoryIndex(null);
+    setCursorAtEnd(true);
+    setPhraseIndex(0);
+    setSuggestionIndex(0);
+    setSuggestionBarVisible(false);
   };
 
   const submit = () => {
@@ -107,22 +146,31 @@ export function DialogIdleComposer({
       return;
     }
 
-    clearSuggestion();
+    dismissSuggestions();
     onSubmitCommand(command);
     setDraft("");
     setHistoryIndex(null);
     setHistoryDraft("");
     setCursorAtEnd(true);
     setPhraseIndex(0);
-    setCompletionIndex(0);
+    setSuggestionIndex(0);
+    setSuggestionBarVisible(false);
   };
 
   return (
     <div className="dialog-terminal__composer" onMouseDown={() => inputRef.current?.focus()}>
       <span className="dialog-terminal__prompt">{paneState.cwd} $</span>
       <div className="dialog-terminal__input-column">
+        {showSuggestionBar && activeGroup ? (
+          <SuggestionBar
+            suggestions={visibleSuggestions}
+            activeIndex={suggestionIndex}
+            activeGroup={activeGroup}
+            onAccept={acceptVisibleSuggestion}
+          />
+        ) : null}
         <div className="dialog-terminal__input-shell">
-          {suggestion ? (
+          {showGhostOverlay ? (
             <div className="dialog-terminal__ghost" aria-hidden="true">
               <span className="dialog-terminal__ghost-prefix">{draft}</span>
               <span className="dialog-terminal__ghost-suffix">{suggestion}</span>
@@ -143,6 +191,7 @@ export function DialogIdleComposer({
               if (historyIndex !== null) {
                 setHistoryIndex(null);
               }
+              setSuggestionBarVisible(false);
             }}
             onFocus={(event) => {
               setIsFocused(true);
@@ -150,14 +199,14 @@ export function DialogIdleComposer({
             }}
             onBlur={() => {
               setIsFocused(false);
-              clearSuggestion();
+              setSuggestionBarVisible(false);
             }}
             onClick={(event) => syncCursorState(event.currentTarget)}
             onKeyUp={(event) => syncCursorState(event.currentTarget)}
             onSelect={(event) => syncCursorState(event.currentTarget)}
             onCompositionStart={() => {
               setIsComposing(true);
-              clearSuggestion();
+              setSuggestionBarVisible(false);
             }}
             onCompositionEnd={(event) => {
               setIsComposing(false);
@@ -166,52 +215,49 @@ export function DialogIdleComposer({
             onKeyDown={(event) => {
               if (event.ctrlKey && event.key === "ArrowUp" && phraseMatches.length > 1) {
                 event.preventDefault();
-                clearSuggestion();
+                setSuggestionBarVisible(false);
                 setPhraseIndex((index) => getNextPhraseSelection(index, phraseMatches.length, "previous"));
                 return;
               }
 
               if (event.ctrlKey && event.key === "ArrowDown" && phraseMatches.length > 1) {
                 event.preventDefault();
-                clearSuggestion();
+                setSuggestionBarVisible(false);
                 setPhraseIndex((index) => getNextPhraseSelection(index, phraseMatches.length, "next"));
                 return;
               }
 
-              if (event.ctrlKey && event.key === "ArrowUp" && candidates.length > 1) {
+              if (event.ctrlKey && event.key === "ArrowUp" && visibleSuggestions.length > 1) {
                 event.preventDefault();
-                setCompletionIndex((index) => getNextPhraseSelection(index, candidates.length, "previous"));
+                setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "previous"));
                 return;
               }
 
-              if (event.ctrlKey && event.key === "ArrowDown" && candidates.length > 1) {
+              if (event.ctrlKey && event.key === "ArrowDown" && visibleSuggestions.length > 1) {
                 event.preventDefault();
-                setCompletionIndex((index) => getNextPhraseSelection(index, candidates.length, "next"));
+                setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "next"));
                 return;
               }
 
-              if (event.key === "Tab" && activePhrase && !isComposing) {
+              if (
+                event.key === "Tab" &&
+                !isComposing &&
+                ((phraseMatches.length > 0 && suggestion.length > 0) || visibleSuggestions.length > 0)
+              ) {
                 event.preventDefault();
-                const nextDraft = draft + activePhrase.suffix;
-                const nextUsageScore = Math.max(0, ...Object.values(terminalConfig.phraseUsage)) + 1;
-
-                patchTerminalConfig({
-                  phraseUsage: {
-                    ...terminalConfig.phraseUsage,
-                    [activePhrase.phrase]: nextUsageScore,
-                  },
-                });
-
-                setDraft(nextDraft);
-                setHistoryIndex(null);
-                setCursorAtEnd(true);
-                setPhraseIndex(0);
+                setSuggestionBarVisible(true);
                 return;
               }
 
-              if (event.key === "Tab" && suggestion && !isComposing) {
+              if (event.key === "ArrowRight" && suggestion.length > 0 && !isComposing && cursorAtEnd) {
                 event.preventDefault();
-                acceptAsyncCandidate();
+                acceptGhostOverlay();
+                return;
+              }
+
+              if (event.key === "Escape" && (suggestionBarVisible || visibleSuggestions.length > 0 || suggestion)) {
+                event.preventDefault();
+                setSuggestionBarVisible(false);
                 return;
               }
 
@@ -227,7 +273,7 @@ export function DialogIdleComposer({
                 }
 
                 event.preventDefault();
-                clearSuggestion();
+                setSuggestionBarVisible(false);
                 if (historyIndex === null) {
                   setHistoryDraft(draft);
                   setHistoryIndex(history.length - 1);
@@ -245,7 +291,7 @@ export function DialogIdleComposer({
 
               if (event.key === "ArrowDown" && historyIndex !== null) {
                 event.preventDefault();
-                clearSuggestion();
+                setSuggestionBarVisible(false);
                 if (historyIndex >= history.length - 1) {
                   setHistoryIndex(null);
                   setDraft(historyDraft);
@@ -262,26 +308,6 @@ export function DialogIdleComposer({
           />
         </div>
 
-        {showCandidateMenu ? (
-          <div className="dialog-terminal__candidate-menu" role="listbox" aria-label="Completion candidates">
-            {candidates.map((candidate, index) => (
-              <button
-                key={`${candidate.source}:${candidate.kind}:${candidate.text}`}
-                className={`dialog-terminal__candidate${index === completionIndex ? " dialog-terminal__candidate--active" : ""}`}
-                type="button"
-                role="option"
-                aria-selected={index === completionIndex}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => acceptAsyncCandidate(index)}
-              >
-                <span className="dialog-terminal__candidate-text">{candidate.text}</span>
-                <span className="dialog-terminal__candidate-meta">
-                  {candidate.source} · {candidate.kind}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
     </div>
   );

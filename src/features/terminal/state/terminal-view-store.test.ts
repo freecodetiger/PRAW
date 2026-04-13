@@ -116,6 +116,40 @@ describe("terminal-view-store", () => {
     ]);
   });
 
+  it("enters agent workflow presentation for qwen code shell markers", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "qwen code");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=qwen code\u0007");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.presentation).toBe("agent-workflow");
+    expect(tabState.mode).toBe("classic");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "qwen code",
+        output: "",
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("enters agent workflow presentation for bare qwen shell markers", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "qwen");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=qwen\u0007");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.presentation).toBe("agent-workflow");
+    expect(tabState.mode).toBe("classic");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "qwen",
+        output: "",
+        status: "running",
+      }),
+    ]);
+  });
+
   it("clears the classic terminal buffer after shell markers confirm agent workflow mode", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().appendOutput("tab:1", "previous output\n");

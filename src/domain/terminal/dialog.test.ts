@@ -191,6 +191,8 @@ describe("dialog terminal state", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const codex = submitDialogCommand(state, "codex", () => "cmd:codex");
     const claude = submitDialogCommand(state, "claude", () => "cmd:claude");
+    const qwen = submitDialogCommand(state, "qwen", () => "cmd:qwen");
+    const qwenCode = submitDialogCommand(state, "qwen code", () => "cmd:qwen-code");
 
     expect(codex).toMatchObject({
       mode: "classic",
@@ -199,6 +201,18 @@ describe("dialog terminal state", () => {
     });
 
     expect(claude).toMatchObject({
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "default",
+    });
+
+    expect(qwen).toMatchObject({
+      mode: "classic",
+      modeSource: "auto-interactive",
+      presentation: "default",
+    });
+
+    expect(qwenCode).toMatchObject({
       mode: "classic",
       modeSource: "auto-interactive",
       presentation: "default",
@@ -240,13 +254,33 @@ describe("dialog terminal state", () => {
       type: "command-start",
       entry: "env ANTHROPIC_BASE_URL=https://example.com claude",
     });
+    const qwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "qwen",
+    });
+    const qwenCodeStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "qwen code",
+    });
+    const envBareQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "env OPENAI_API_KEY=secret qwen --model qwen3-coder-plus",
+    });
+    const envQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "env OPENAI_API_KEY=secret qwen code --model qwen3-coder-plus",
+    });
 
     expect(npxStarted.presentation).toBe("agent-workflow");
     expect(uvxStarted.presentation).toBe("agent-workflow");
     expect(envStarted.presentation).toBe("agent-workflow");
+    expect(qwenStarted.presentation).toBe("agent-workflow");
+    expect(qwenCodeStarted.presentation).toBe("agent-workflow");
+    expect(envBareQwenStarted.presentation).toBe("agent-workflow");
+    expect(envQwenStarted.presentation).toBe("agent-workflow");
   });
 
-  it("does not enter agent workflow mode for ordinary commands that merely mention claude or codex", () => {
+  it("does not enter agent workflow mode for ordinary commands that merely mention claude, codex, or qwen", () => {
     const grepStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
       type: "command-start",
       entry: "grep claude README.md",
@@ -255,9 +289,14 @@ describe("dialog terminal state", () => {
       type: "command-start",
       entry: "echo codex",
     });
+    const plainQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
+      type: "command-start",
+      entry: "qwen chat",
+    });
 
     expect(grepStarted.presentation).toBe("default");
     expect(echoStarted.presentation).toBe("default");
+    expect(plainQwenStarted.presentation).toBe("default");
   });
 
   it("captures running output in the live console and finalizes it into the command block on command end", () => {

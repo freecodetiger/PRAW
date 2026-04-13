@@ -10,6 +10,7 @@ describe("workspace-store", () => {
       window: null,
       dragState: null,
       dragPreview: null,
+      noteEditorTabId: null,
     }));
   });
 
@@ -103,6 +104,31 @@ describe("workspace-store", () => {
       title: "Tab 2",
       note: "Build Logs",
     });
+  });
+
+  it("splits the active tab through the dedicated active-pane action", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitActiveTab("vertical");
+
+    expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:1", "tab:2"]);
+    expect(useWorkspaceStore.getState().window?.activeTabId).toBe("tab:2");
+  });
+
+  it("requests note editing for the active pane and clears that request after consumption", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().requestEditNoteForActiveTab();
+    expect(useWorkspaceStore.getState().noteEditorTabId).toBe("tab:1");
+
+    useWorkspaceStore.getState().clearNoteEditorRequest("tab:1");
+    expect(useWorkspaceStore.getState().noteEditorTabId).toBeNull();
   });
 
   it("applies the drag preview by reordering the window layout", () => {

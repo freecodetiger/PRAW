@@ -424,7 +424,8 @@ function restorePreferredPresentation(state: DialogState): DialogState {
 type CommandKind = "dialog-stream" | "dialog-interactive" | "classic-required" | "agent-workflow";
 
 function classifyCommand(command: string): CommandKind {
-  const entry = resolvePrimaryCommand(command);
+  const words = resolveCommandWords(command);
+  const entry = words[0] ?? null;
   if (!entry) {
     return "dialog-stream";
   }
@@ -432,7 +433,7 @@ function classifyCommand(command: string): CommandKind {
   if (entry === "sudo" || SHELL_CONTINUATION_COMMANDS.has(entry)) {
     return "dialog-interactive";
   }
-  if (isAgentWorkflowEntry(entry)) {
+  if (isAgentWorkflowEntry(words)) {
     return "agent-workflow";
   }
   if (entry === "git" && isGitPagerCommand(command)) {
@@ -483,11 +484,6 @@ function isGitPagerCommand(command: string): boolean {
   return false;
 }
 
-function resolvePrimaryCommand(command: string): string | null {
-  const words = resolveCommandWords(command);
-  return words[0] ?? null;
-}
-
 function resolveCommandWords(command: string): string[] {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
 
@@ -508,8 +504,22 @@ function resolveCommandWords(command: string): string[] {
   return [];
 }
 
-function isAgentWorkflowEntry(entry: string): boolean {
-  return entry === "claude" || entry === "claude-code" || entry === "codex";
+function isAgentWorkflowEntry(words: string[]): boolean {
+  const entry = words[0];
+  if (!entry) {
+    return false;
+  }
+
+  if (entry === "claude" || entry === "claude-code" || entry === "codex" || entry === "qwen-code") {
+    return true;
+  }
+
+  if (entry !== "qwen") {
+    return false;
+  }
+
+  const second = words[1];
+  return words.length === 1 || second === "code" || (typeof second === "string" && second.startsWith("-"));
 }
 
 function isEnvironmentAssignmentToken(token: string): boolean {

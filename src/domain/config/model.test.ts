@@ -34,6 +34,7 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         enabled: true,
       },
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -50,6 +51,7 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         apiKey: "secret-key",
       },
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -68,6 +70,7 @@ describe("resolveAppConfig", () => {
         provider: "glm",
         model: "glm-4.7-flash",
       },
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -86,6 +89,7 @@ describe("resolveAppConfig", () => {
         provider: "",
         model: "",
       },
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -124,6 +128,7 @@ describe("resolveAppConfig", () => {
         dialogFontSize: 16,
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -140,6 +145,7 @@ describe("resolveAppConfig", () => {
         preferredMode: "classic",
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -158,6 +164,7 @@ describe("resolveAppConfig", () => {
         themeColor: "#2b6fff",
         backgroundColor: DEFAULT_APP_CONFIG.ai.backgroundColor,
       },
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -183,6 +190,7 @@ describe("resolveAppConfig", () => {
         },
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
     });
   });
 
@@ -199,6 +207,93 @@ describe("resolveAppConfig", () => {
         themePreset: "light",
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
     });
+  });
+
+  it("fills missing pane shortcuts from defaults", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          defaultShell: "/usr/bin/zsh",
+        },
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        defaultShell: "/usr/bin/zsh",
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("falls back to default shortcuts for malformed shortcut config", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          shortcuts: {
+            splitRight: { key: "", ctrl: true, alt: true, shift: false, meta: false },
+          } as never,
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("preserves explicitly cleared pane shortcuts", () => {
+    expect(
+      resolveAppConfig({
+        terminal: {
+          shortcuts: {
+            editNote: null,
+          } as never,
+        },
+      }),
+    ).toEqual({
+      terminal: {
+        ...DEFAULT_APP_CONFIG.terminal,
+        shortcuts: {
+          ...DEFAULT_APP_CONFIG.terminal.shortcuts,
+          editNote: null,
+        },
+      },
+      ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("defaults settings panel language to english", () => {
+    expect(resolveAppConfig()).toEqual(DEFAULT_APP_CONFIG);
+    expect(DEFAULT_APP_CONFIG.ui.settingsPanelLanguage).toBe("en");
+  });
+
+  it("accepts zh-CN for settings panel language", () => {
+    expect(
+      resolveAppConfig({
+        ui: {
+          settingsPanelLanguage: "zh-CN",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      ui: {
+        settingsPanelLanguage: "zh-CN",
+      },
+    });
+  });
+
+  it("falls back to english for invalid settings panel language values", () => {
+    expect(
+      resolveAppConfig({
+        ui: {
+          settingsPanelLanguage: "fr" as never,
+        },
+      }),
+    ).toEqual(DEFAULT_APP_CONFIG);
   });
 });

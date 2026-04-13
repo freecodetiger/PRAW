@@ -5,9 +5,10 @@ import type { PaneAction, PaneActionId } from "../lib/pane-actions";
 interface PaneActionMenuProps {
   actions: PaneAction[];
   onSelect: (actionId: PaneActionId) => void;
+  triggerClassName?: string;
 }
 
-export function PaneActionMenu({ actions, onSelect }: PaneActionMenuProps) {
+export function PaneActionMenu({ actions, onSelect, triggerClassName }: PaneActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -43,7 +44,7 @@ export function PaneActionMenu({ actions, onSelect }: PaneActionMenuProps) {
       onPointerDown={(event) => event.stopPropagation()}
     >
       <button
-        className="pane-action-menu__trigger"
+        className={triggerClassName ? `pane-action-menu__trigger ${triggerClassName}` : "pane-action-menu__trigger"}
         type="button"
         aria-label="Pane actions"
         aria-haspopup="menu"

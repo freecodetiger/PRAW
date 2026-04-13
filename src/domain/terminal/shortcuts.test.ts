@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_TERMINAL_SHORTCUTS } from "../config/terminal-shortcuts";
 import { resolveTerminalShortcut, resolveWorkspaceShortcut } from "./shortcuts";
 
 describe("workspace shortcuts", () => {
@@ -11,11 +12,52 @@ describe("workspace shortcuts", () => {
         altKey: true,
         shiftKey: false,
         metaKey: false,
-      }),
+      }, DEFAULT_TERMINAL_SHORTCUTS),
     ).toEqual({
       type: "focus-pane",
       direction: "left",
     });
+  });
+
+  it("resolves configured pane-action shortcuts", () => {
+    expect(
+      resolveWorkspaceShortcut(
+        {
+          key: "[",
+          ctrlKey: true,
+          altKey: true,
+          shiftKey: false,
+          metaKey: false,
+        },
+        DEFAULT_TERMINAL_SHORTCUTS,
+      ),
+    ).toEqual({ type: "split-right" });
+
+    expect(
+      resolveWorkspaceShortcut(
+        {
+          key: "]",
+          ctrlKey: true,
+          altKey: true,
+          shiftKey: false,
+          metaKey: false,
+        },
+        DEFAULT_TERMINAL_SHORTCUTS,
+      ),
+    ).toEqual({ type: "split-down" });
+
+    expect(
+      resolveWorkspaceShortcut(
+        {
+          key: "\\",
+          ctrlKey: true,
+          altKey: true,
+          shiftKey: false,
+          metaKey: false,
+        },
+        DEFAULT_TERMINAL_SHORTCUTS,
+      ),
+    ).toEqual({ type: "edit-note" });
   });
 
   it("ignores legacy tab-management shortcuts in the single-workspace shell", () => {
@@ -26,7 +68,7 @@ describe("workspace shortcuts", () => {
         altKey: false,
         shiftKey: true,
         metaKey: false,
-      }),
+      }, DEFAULT_TERMINAL_SHORTCUTS),
     ).toBeNull();
 
     expect(
@@ -36,7 +78,7 @@ describe("workspace shortcuts", () => {
         altKey: false,
         shiftKey: false,
         metaKey: false,
-      }),
+      }, DEFAULT_TERMINAL_SHORTCUTS),
     ).toBeNull();
   });
 });
