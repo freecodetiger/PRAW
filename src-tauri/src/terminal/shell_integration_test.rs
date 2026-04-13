@@ -36,5 +36,6 @@ mod tests {
         assert!(script.contains("__praw_prompt_ready"));
         assert!(script.contains("__praw_emit_command_start"));
         assert!(script.contains("entry="));
+        assert!(script.contains("printf '\\033]133;C;entry=%s\\a' \"$command\""));
     }
 }

@@ -41,6 +41,7 @@ export function DialogTerminalSurface({
 }: DialogTerminalSurfaceProps) {
   const [isPinnedBottom, setIsPinnedBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   const manualJumpPendingRef = useRef(false);
   const surfaceModel = resolveDialogSurfaceModel({
     paneHeight,
@@ -60,40 +61,86 @@ export function DialogTerminalSurface({
     node.scrollTop = node.scrollHeight;
   }, [isPinnedBottom, paneState.blocks, surfaceModel.phase]);
 
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const root = scrollRef.current;
+    const target = bottomRef.current;
+    if (!root || !target) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) {
+          return;
+        }
+
+        if (entry.isIntersecting) {
+          manualJumpPendingRef.current = false;
+          setIsPinnedBottom(true);
+          return;
+        }
+
+        if (!manualJumpPendingRef.current) {
+          setIsPinnedBottom(false);
+        }
+      },
+      {
+        root,
+        rootMargin: "0px 0px 48px 0px",
+        threshold: 0,
+      },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="dialog-terminal">
-      <DialogTranscript
-        blocks={paneState.blocks}
-        scrollRef={scrollRef}
-        onScroll={(event) => {
-          const node = event.currentTarget;
-          const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-          const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
-          manualJumpPendingRef.current = false;
-          setIsPinnedBottom(nextPinned);
-        }}
-      />
+      <div className="dialog-terminal__history-shell">
+        <DialogTranscript
+          blocks={paneState.blocks}
+          scrollRef={scrollRef}
+          bottomRef={bottomRef}
+          onScroll={(event) => {
+            if (typeof IntersectionObserver !== "undefined") {
+              return;
+            }
 
-      {!isPinnedBottom ? (
-        <div className="dialog-terminal__jump">
-          <button
-            className="button button--ghost"
-            type="button"
-            onClick={() => {
-              const node = scrollRef.current;
-              if (!node) {
-                return;
-              }
+            const node = event.currentTarget;
+            const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+            const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
+            manualJumpPendingRef.current = false;
+            setIsPinnedBottom(nextPinned);
+          }}
+        />
 
-              manualJumpPendingRef.current = true;
-              node.scrollTop = node.scrollHeight;
-              setIsPinnedBottom(true);
-            }}
-          >
-            Jump to latest
-          </button>
-        </div>
-      ) : null}
+        {!isPinnedBottom ? (
+          <div className="dialog-terminal__jump">
+            <button
+              className="button button--ghost"
+              type="button"
+              onClick={() => {
+                const node = scrollRef.current;
+                if (!node) {
+                  return;
+                }
+
+                manualJumpPendingRef.current = true;
+                bottomRef.current?.scrollIntoView({ block: "end" });
+                node.scrollTop = node.scrollHeight;
+                setIsPinnedBottom(true);
+              }}
+            >
+              Jump to latest
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {surfaceModel.liveConsole && activeCommand?.command ? (
         <LiveCommandConsole

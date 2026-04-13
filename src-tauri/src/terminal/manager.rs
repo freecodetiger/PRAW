@@ -10,11 +10,11 @@ use tauri::{AppHandle, Emitter};
 
 use crate::commands::terminal::CreateTerminalSessionRequest;
 use crate::events::{
-    CreateTerminalSessionResponse, TerminalExitEvent, TerminalOutputEvent, TERMINAL_EXIT_EVENT,
-    TERMINAL_OUTPUT_EVENT,
+    CreateTerminalSessionResponse, TerminalExitEvent, TerminalOutputEvent,
+    TERMINAL_SEMANTIC_EVENT, TERMINAL_EXIT_EVENT, TERMINAL_OUTPUT_EVENT,
 };
 
-use super::{session::TerminalSession, shell_integration};
+use super::{session::TerminalSession, shell_integration, TerminalSemanticDetector};
 
 #[derive(Default)]
 pub struct TerminalManager {
@@ -158,6 +158,7 @@ impl TerminalManager {
     ) {
         thread::spawn(move || {
             let mut buffer = [0_u8; 8192];
+            let mut semantic_detector = TerminalSemanticDetector::default();
 
             loop {
                 match reader.read(&mut buffer) {
@@ -174,6 +175,10 @@ impl TerminalManager {
                             read,
                             data.chars().take(80).collect::<String>()
                         );
+
+                        for semantic_event in semantic_detector.consume(&session_id, &data) {
+                            let _ = app.emit(TERMINAL_SEMANTIC_EVENT, semantic_event);
+                        }
 
                         let _ = app.emit(
                             TERMINAL_OUTPUT_EVENT,

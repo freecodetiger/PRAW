@@ -6,8 +6,13 @@ import type {
   CreateTerminalSessionResponse,
   TerminalExitEvent,
   TerminalOutputEvent,
+  TerminalSemanticEvent,
 } from "../../domain/terminal/types";
-import { TERMINAL_EXIT_EVENT, TERMINAL_OUTPUT_EVENT } from "../../domain/terminal/types";
+import {
+  TERMINAL_EXIT_EVENT,
+  TERMINAL_OUTPUT_EVENT,
+  TERMINAL_SEMANTIC_EVENT,
+} from "../../domain/terminal/types";
 
 export async function createTerminalSession(
   request: CreateTerminalSessionRequest,
@@ -39,4 +44,10 @@ export function onTerminalOutput(
 
 export function onTerminalExit(handler: (event: TerminalExitEvent) => void): Promise<UnlistenFn> {
   return listen<TerminalExitEvent>(TERMINAL_EXIT_EVENT, (event) => handler(event.payload));
+}
+
+export function onTerminalSemantic(
+  handler: (event: TerminalSemanticEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<TerminalSemanticEvent>(TERMINAL_SEMANTIC_EVENT, (event) => handler(event.payload));
 }

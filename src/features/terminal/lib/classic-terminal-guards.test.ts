@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildClassicTerminalWorkflowResetSequence,
   installClassicTerminalProtocolGuards,
+  resolveClassicCsiQueryResponse,
+  resolveClassicOscColorQueryResponse,
   shouldSwallowCsiQuery,
   shouldSwallowOscColorQuery,
 } from "./classic-terminal-guards";
@@ -13,6 +15,18 @@ describe("classic terminal guards", () => {
     expect(shouldSwallowOscColorQuery("?;?")).toBe(true);
     expect(shouldSwallowOscColorQuery("rgb:ffff/ffff/ffff")).toBe(false);
     expect(shouldSwallowOscColorQuery("#ffffff")).toBe(false);
+  });
+
+  it("builds terminal query responses for the startup probes used by codex", () => {
+    expect(resolveClassicCsiQueryResponse("c", [])).toBe("\u001b[?62;4;c");
+    expect(resolveClassicCsiQueryResponse(">c", [0])).toBe("\u001b[>0;10;1c");
+    expect(resolveClassicCsiQueryResponse("n", [5])).toBe("\u001b[0n");
+    expect(resolveClassicCsiQueryResponse("n", [6])).toBe("\u001b[1;1R");
+    expect(resolveClassicCsiQueryResponse("?n", [6])).toBe("\u001b[?1;1R");
+    expect(resolveClassicOscColorQueryResponse(10, "?")).toBe("\u001b]10;rgb:ffff/ffff/ffff\u001b\\");
+    expect(resolveClassicOscColorQueryResponse(11, "?")).toBe("\u001b]11;rgb:0000/0000/0000\u001b\\");
+    expect(resolveClassicOscColorQueryResponse(12, "?")).toBe("\u001b]12;rgb:ffff/ffff/ffff\u001b\\");
+    expect(resolveClassicCsiQueryResponse("n", [2])).toBeNull();
   });
 
   it("suppresses device and cursor query CSI sequences that leak back into the shell line", () => {
@@ -32,7 +46,11 @@ describe("classic terminal guards", () => {
   it("registers query guards for OSC and CSI responses used by agent CLIs", () => {
     const oscHandlers = new Map<number, (data: string) => boolean | Promise<boolean>>();
     const csiHandlers = new Map<string, (params: (number | number[])[]) => boolean | Promise<boolean>>();
+    const writes: string[] = [];
     const terminal = {
+      sendResponse: (data: string) => {
+        writes.push(data);
+      },
       parser: {
         registerOscHandler: (ident: number, callback: (data: string) => boolean | Promise<boolean>) => {
           oscHandlers.set(ident, callback);
@@ -60,10 +78,15 @@ describe("classic terminal guards", () => {
     const dispose = installClassicTerminalProtocolGuards(terminal);
 
     expect(oscHandlers.get(10)?.("?")).toBe(true);
+    expect(writes).toContain("\u001b]10;rgb:ffff/ffff/ffff\u001b\\");
     expect(csiHandlers.get("c")?.([])).toBe(true);
+    expect(writes).toContain("\u001b[?62;4;c");
     expect(csiHandlers.get(">c")?.([0])).toBe(true);
+    expect(writes).toContain("\u001b[>0;10;1c");
     expect(csiHandlers.get("n")?.([6])).toBe(true);
+    expect(writes).toContain("\u001b[1;1R");
     expect(csiHandlers.get("?n")?.([6])).toBe(true);
+    expect(writes).toContain("\u001b[?1;1R");
     expect(csiHandlers.get("?h")?.([1004])).toBe(true);
     expect(csiHandlers.get("?l")?.([1004])).toBe(true);
     expect(csiHandlers.get("n")?.([2])).toBe(false);

@@ -42,13 +42,17 @@ describe("dialog surface model", () => {
     });
   });
 
-  it("hides dialog-owned input surfaces once the pane has handed off to classic", () => {
+  it("keeps semantic-pending commands in live console until the backend escalates them", () => {
     const paneState = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "vim notes.txt", () => "cmd:vim");
 
     expect(resolveDialogSurfaceModel({ paneHeight: 720, paneState })).toEqual({
-      phase: "classic-handoff",
+      phase: "live-console",
       idleComposerVisible: false,
-      liveConsole: null,
+      liveConsole: {
+        blockId: "cmd:vim",
+        compact: false,
+        heightPx: 248,
+      },
     });
   });
 });

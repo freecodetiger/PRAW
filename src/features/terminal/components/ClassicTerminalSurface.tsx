@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Terminal } from "@xterm/xterm";
 
@@ -36,6 +36,24 @@ export function ClassicTerminalSurface({
 }: ClassicTerminalSurfaceProps) {
   const xtermRef = useRef<Terminal | null>(null);
   const previousPresentationRef = useRef<TerminalPresentation>(presentation);
+  const queryColorResponses = useMemo(
+    () =>
+      ({
+        10: toOscRgb(theme.foreground),
+        11: toOscRgb(theme.background),
+        12: toOscRgb(theme.cursor),
+      }) as const,
+    [theme.background, theme.cursor, theme.foreground],
+  );
+  const installTerminalGuards = useCallback(
+    (terminal: Terminal) =>
+      installClassicTerminalProtocolGuards({
+        parser: terminal.parser,
+        sendResponse: write,
+        queryColorResponses,
+      }),
+    [queryColorResponses, write],
+  );
 
   useEffect(() => {
     const previousPresentation = previousPresentationRef.current;
@@ -61,7 +79,20 @@ export function ClassicTerminalSurface({
       write={write}
       resize={resize}
       terminalRef={xtermRef}
-      installTerminalGuards={installClassicTerminalProtocolGuards}
+      installTerminalGuards={installTerminalGuards}
     />
   );
+}
+
+function toOscRgb(color: string): string {
+  const normalized = color.trim();
+  const hex = normalized.startsWith("#") ? normalized.slice(1) : normalized;
+  if (hex.length !== 6 || /[^0-9a-f]/iu.test(hex)) {
+    return "rgb:ffff/ffff/ffff";
+  }
+
+  const red = hex.slice(0, 2);
+  const green = hex.slice(2, 4);
+  const blue = hex.slice(4, 6);
+  return `rgb:${red}${red}/${green}${green}/${blue}${blue}`;
 }

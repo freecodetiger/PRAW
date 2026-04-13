@@ -68,12 +68,11 @@ __praw_emit_prompt_markers() {{
 }}
 
 __praw_emit_command_start() {{
-  local history_line command entry
+  local history_line command
   history_line="$(HISTTIMEFORMAT= history 1 2>/dev/null || true)"
   command="$(printf '%s' "$history_line" | sed 's/^[[:space:]]*[0-9]\+[[:space:]]*//')"
-  entry="${{command%%[[:space:]]*}}"
-  if [[ -n "$entry" ]]; then
-    printf '\033]133;C;entry=%s\a' "$entry"
+  if [[ -n "$command" ]]; then
+    printf '\033]133;C;entry=%s\a' "$command"
   else
     printf '\033]133;C\a'
   fi

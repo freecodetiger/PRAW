@@ -8,18 +8,18 @@ import {
 } from "../../../domain/terminal/buffer";
 import {
   appendLiveConsoleOutput,
+  applyTerminalSemanticEvent,
   appendDialogOutput,
   applyPreferredMode,
   applyShellLifecycleEvent,
   createDialogState,
   isDialogShellSupported,
-  isAgentWorkflowCommand,
-  requireClassicTerminal,
   submitDialogCommand,
   type DialogState,
   type PaneRenderMode,
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
+import type { TerminalSemanticEvent } from "../../../domain/terminal/types";
 import { normalizeDialogOutput } from "../lib/dialog-output";
 import {
   consumeShellIntegrationChunk,
@@ -36,6 +36,7 @@ interface TerminalViewStore {
   syncTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   submitCommand: (tabId: string, command: string) => void;
   consumeOutput: (tabId: string, data: string) => void;
+  consumeSemantic: (tabId: string, event: TerminalSemanticEvent) => void;
   setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
   resetTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   removeTabState: (tabId: string) => void;
@@ -126,29 +127,16 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         parserState: parsed.state,
       };
 
-      if (parsed.requiresClassic) {
-        nextState = {
-          ...nextState,
-          ...requireClassicTerminal(nextState),
-        };
-      }
-
       const normalizedOutput = normalizeDialogOutput(parsed.visibleOutput);
-      const entersAgentWorkflow = parsed.events.some(
-        (event) => event.type === "command-start" && typeof event.entry === "string" && isAgentWorkflowCommand(event.entry),
-      );
       const shouldCaptureVisibleOutput =
-        !entersAgentWorkflow &&
-        !parsed.requiresClassic &&
         nextState.dialogPhase !== "live-console" &&
         nextState.captureActiveOutputInTranscript &&
-        tabState.presentation !== "agent-workflow" &&
-        !(tabState.mode === "classic" && tabState.activeCommandBlockId === null);
+        nextState.presentation !== "agent-workflow" &&
+        !(nextState.mode === "classic" && nextState.activeCommandBlockId === null);
 
       const shouldCaptureLiveConsoleOutput =
-        !entersAgentWorkflow &&
-        !parsed.requiresClassic &&
         nextState.dialogPhase === "live-console" &&
+        nextState.presentation !== "agent-workflow" &&
         normalizedOutput.length > 0;
 
       if (shouldCaptureLiveConsoleOutput) {
@@ -172,12 +160,35 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         };
       }
 
-      const nextBuffers = entersAgentWorkflow
-        ? {
-            ...state.buffers,
-            [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
-          }
-        : state.buffers;
+      return {
+        tabStates: {
+          ...state.tabStates,
+          [key]: nextState,
+        },
+        buffers: state.buffers,
+      };
+    }),
+
+  consumeSemantic: (tabId, event) =>
+    set((state) => {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (!tabState) {
+        return state;
+      }
+
+      const nextState: TerminalTabViewState = {
+        ...tabState,
+        ...applyTerminalSemanticEvent(tabState, event),
+      };
+
+      const nextBuffers =
+        event.kind === "agent-workflow"
+          ? {
+              ...state.buffers,
+              [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
+            }
+          : state.buffers;
 
       return {
         tabStates: {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendLiveConsoleOutput,
   applyPreferredMode,
+  applyTerminalSemanticEvent,
   applyShellLifecycleEvent,
   appendDialogOutput,
   createDialogState,
@@ -36,13 +37,13 @@ describe("dialog terminal state", () => {
     });
   });
 
-  it("creates a running command block and switches interactive commands to classic mode", () => {
+  it("starts commands in the live console until backend semantic detection escalates them", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const next = submitDialogCommand(state, "vim notes.txt", () => "cmd:1");
 
-    expect(next.mode).toBe("classic");
-    expect(next.modeSource).toBe("auto-interactive");
-    expect(next.dialogPhase).toBe("classic-handoff");
+    expect(next.mode).toBe("dialog");
+    expect(next.modeSource).toBe("default");
+    expect(next.dialogPhase).toBe("live-console");
     expect(next.liveConsole).toEqual(
       expect.objectContaining({
         blockId: "cmd:1",
@@ -58,7 +59,7 @@ describe("dialog terminal state", () => {
         kind: "command",
         command: "vim notes.txt",
         cwd: "/workspace",
-        interactive: true,
+        interactive: false,
         status: "running",
         output: "",
       }),
@@ -74,11 +75,11 @@ describe("dialog terminal state", () => {
     expect(next.dialogPhase).toBe("live-console");
     expect(next.transcriptPolicy).toBe("defer-until-exit");
     expect(next.composerMode).toBe("pty");
-    expect(next.blocks).toEqual([
+      expect(next.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:sudo",
         command: "sudo du -sh /var/log",
-        interactive: true,
+        interactive: false,
         status: "running",
       }),
     ]);
@@ -95,7 +96,7 @@ describe("dialog terminal state", () => {
       expect.objectContaining({
         id: "cmd:if",
         command: "if",
-        interactive: true,
+        interactive: false,
         status: "running",
       }),
     ]);
@@ -112,23 +113,24 @@ describe("dialog terminal state", () => {
       expect.objectContaining({
         id: "cmd:python",
         command: "python",
-        interactive: true,
+        interactive: false,
         status: "running",
       }),
     ]);
   });
 
-  it("routes pager-heavy git commands to classic mode", () => {
+  it("keeps pager-prone git commands in live console until backend semantics prove classic is required", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const next = submitDialogCommand(state, "git log --stat", () => "cmd:git-log");
 
-    expect(next.mode).toBe("classic");
-    expect(next.modeSource).toBe("auto-interactive");
+    expect(next.mode).toBe("dialog");
+    expect(next.modeSource).toBe("default");
+    expect(next.dialogPhase).toBe("live-console");
     expect(next.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:git-log",
         command: "git log --stat",
-        interactive: true,
+        interactive: false,
         status: "running",
       }),
     ]);
@@ -187,7 +189,7 @@ describe("dialog terminal state", () => {
     expect(finished.composerMode).toBe("command");
   });
 
-  it("keeps codex and claude submissions in default presentation until shell markers confirm agent workflow", () => {
+  it("keeps codex and claude submissions in live console until backend semantic detection confirms agent workflow", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const codex = submitDialogCommand(state, "codex", () => "cmd:codex");
     const claude = submitDialogCommand(state, "claude", () => "cmd:claude");
@@ -195,31 +197,35 @@ describe("dialog terminal state", () => {
     const qwenCode = submitDialogCommand(state, "qwen code", () => "cmd:qwen-code");
 
     expect(codex).toMatchObject({
-      mode: "classic",
-      modeSource: "auto-interactive",
+      mode: "dialog",
+      modeSource: "default",
+      dialogPhase: "live-console",
       presentation: "default",
     });
 
     expect(claude).toMatchObject({
-      mode: "classic",
-      modeSource: "auto-interactive",
+      mode: "dialog",
+      modeSource: "default",
+      dialogPhase: "live-console",
       presentation: "default",
     });
 
     expect(qwen).toMatchObject({
-      mode: "classic",
-      modeSource: "auto-interactive",
+      mode: "dialog",
+      modeSource: "default",
+      dialogPhase: "live-console",
       presentation: "default",
     });
 
     expect(qwenCode).toMatchObject({
-      mode: "classic",
-      modeSource: "auto-interactive",
+      mode: "dialog",
+      modeSource: "default",
+      dialogPhase: "live-console",
       presentation: "default",
     });
   });
 
-  it("keeps environment-prefixed claude submissions in default presentation until shell markers confirm agent workflow", () => {
+  it("keeps environment-prefixed claude submissions in default presentation until backend semantic detection confirms agent workflow", () => {
     const state = createDialogState("/bin/bash", "/workspace");
     const next = submitDialogCommand(
       state,
@@ -228,75 +234,49 @@ describe("dialog terminal state", () => {
     );
 
     expect(next).toMatchObject({
-      mode: "classic",
-      modeSource: "auto-interactive",
+      mode: "dialog",
+      modeSource: "default",
+      dialogPhase: "live-console",
       presentation: "default",
     });
     expect(next.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:claude-env",
-        interactive: true,
+        interactive: false,
         status: "running",
       }),
     ]);
   });
 
-  it("recognizes launcher and wrapper forms only when shell markers confirm the AI CLI", () => {
-    const npxStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "npx @anthropic-ai/claude-code --model glm-5",
-    });
-    const uvxStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "uvx codex --model glm-5",
-    });
-    const envStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "env ANTHROPIC_BASE_URL=https://example.com claude",
-    });
-    const qwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "qwen",
-    });
-    const qwenCodeStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "qwen code",
-    });
-    const envBareQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "env OPENAI_API_KEY=secret qwen --model qwen3-coder-plus",
-    });
-    const envQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "env OPENAI_API_KEY=secret qwen code --model qwen3-coder-plus",
+  it("enters agent workflow mode only when backend semantic detection confirms the AI CLI", () => {
+    const active = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "qwen code", () => "cmd:qwen");
+
+    const started = applyTerminalSemanticEvent(active, {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "qwen code",
     });
 
-    expect(npxStarted.presentation).toBe("agent-workflow");
-    expect(uvxStarted.presentation).toBe("agent-workflow");
-    expect(envStarted.presentation).toBe("agent-workflow");
-    expect(qwenStarted.presentation).toBe("agent-workflow");
-    expect(qwenCodeStarted.presentation).toBe("agent-workflow");
-    expect(envBareQwenStarted.presentation).toBe("agent-workflow");
-    expect(envQwenStarted.presentation).toBe("agent-workflow");
+    expect(started.presentation).toBe("agent-workflow");
+    expect(started.mode).toBe("classic");
+    expect(started.modeSource).toBe("auto-interactive");
   });
 
-  it("does not enter agent workflow mode for ordinary commands that merely mention claude, codex, or qwen", () => {
-    const grepStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "grep claude README.md",
-    });
-    const echoStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "echo codex",
-    });
-    const plainQwenStarted = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
-      type: "command-start",
-      entry: "qwen chat",
+  it("escalates to classic only when backend semantic detection reports classic-required semantics", () => {
+    const active = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "git log --stat", () => "cmd:git-log");
+    const started = applyTerminalSemanticEvent(active, {
+      sessionId: "session-1",
+      kind: "classic-required",
+      reason: "alternate-screen",
+      confidence: "strong",
+      commandEntry: "git log --stat",
     });
 
-    expect(grepStarted.presentation).toBe("default");
-    expect(echoStarted.presentation).toBe("default");
-    expect(plainQwenStarted.presentation).toBe("default");
+    expect(started.mode).toBe("classic");
+    expect(started.modeSource).toBe("auto-interactive");
+    expect(started.dialogPhase).toBe("classic-handoff");
   });
 
   it("captures running output in the live console and finalizes it into the command block on command end", () => {
@@ -318,8 +298,17 @@ describe("dialog terminal state", () => {
     ]);
   });
 
-  it("returns auto-interactive panes back to the preferred mode after the command completes", () => {
-    const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "top", () => "cmd:1");
+  it("returns backend-escalated panes back to the preferred mode after the command completes", () => {
+    const state = applyTerminalSemanticEvent(
+      submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "top", () => "cmd:1"),
+      {
+        sessionId: "session-1",
+        kind: "classic-required",
+        reason: "alternate-screen",
+        confidence: "strong",
+        commandEntry: "top",
+      },
+    );
     const finished = applyShellLifecycleEvent(state, {
       type: "command-end",
       exitCode: 0,
@@ -331,9 +320,12 @@ describe("dialog terminal state", () => {
   });
 
   it("restores the preferred presentation after an agent workflow command exits", () => {
-    const started = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
-      type: "command-start",
-      entry: "codex",
+    const started = applyTerminalSemanticEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
     });
     const finished = applyShellLifecycleEvent(started, {
       type: "command-end",
@@ -345,10 +337,13 @@ describe("dialog terminal state", () => {
     expect(finished.presentation).toBe("default");
   });
 
-  it("activates agent workflow presentation from shell lifecycle markers in classic mode", () => {
-    const started = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
-      type: "command-start",
-      entry: "codex",
+  it("activates agent workflow presentation from backend semantic events in classic mode", () => {
+    const started = applyTerminalSemanticEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
     });
     const finished = applyShellLifecycleEvent(started, {
       type: "command-end",

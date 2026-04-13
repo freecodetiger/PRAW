@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { useAppConfigStore } from "../../config/state/app-config-store";
-import { closeTerminalSession, createTerminalSession, onTerminalExit, onTerminalOutput } from "../../../lib/tauri/terminal";
+import {
+  closeTerminalSession,
+  createTerminalSession,
+  onTerminalExit,
+  onTerminalOutput,
+  onTerminalSemantic,
+} from "../../../lib/tauri/terminal";
 import { getTerminalBufferKey, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
@@ -22,6 +28,7 @@ export function useTerminalRuntime() {
   const markTabError = useWorkspaceStore((state) => state.markTabError);
   const appendOutput = useTerminalViewStore((state) => state.appendOutput);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
+  const consumeSemantic = useTerminalViewStore((state) => state.consumeSemantic);
   const resetTabBuffer = useTerminalViewStore((state) => state.resetTabBuffer);
   const removeTabBuffer = useTerminalViewStore((state) => state.removeTabBuffer);
   const syncTabState = useTerminalViewStore((state) => state.syncTabState);
@@ -160,6 +167,32 @@ export function useTerminalRuntime() {
       unlistenOutput?.();
     };
   }, [appendOutput, consumeOutput]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlistenSemantic: (() => void) | undefined;
+
+    void onTerminalSemantic((event) => {
+      const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
+      if (!tabRef) {
+        return;
+      }
+
+      consumeSemantic(tabRef.tabId, event);
+    }).then((cleanup) => {
+      if (disposed) {
+        cleanup();
+        return;
+      }
+
+      unlistenSemantic = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unlistenSemantic?.();
+    };
+  }, [consumeSemantic]);
 
   useEffect(() => {
     const currentSessionIds = new Set<string>();

@@ -14,6 +14,7 @@ describe("terminal-view-store", () => {
       syncTabState: useTerminalViewStore.getState().syncTabState,
       submitCommand: useTerminalViewStore.getState().submitCommand,
       consumeOutput: useTerminalViewStore.getState().consumeOutput,
+      consumeSemantic: useTerminalViewStore.getState().consumeSemantic,
       setTabMode: useTerminalViewStore.getState().setTabMode,
       resetTabState: useTerminalViewStore.getState().resetTabState,
       removeTabState: useTerminalViewStore.getState().removeTabState,
@@ -102,7 +103,13 @@ describe("terminal-view-store", () => {
   it("suppresses transcript streaming while an agent workflow command owns the tab", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "codex");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=codex\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
     useTerminalViewStore.getState().consumeOutput("tab:1", "thinking...\n");
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
@@ -119,7 +126,13 @@ describe("terminal-view-store", () => {
   it("enters agent workflow presentation for qwen code shell markers", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "qwen code");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=qwen code\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "qwen code",
+    });
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
     expect(tabState.presentation).toBe("agent-workflow");
@@ -136,7 +149,13 @@ describe("terminal-view-store", () => {
   it("enters agent workflow presentation for bare qwen shell markers", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "qwen");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=qwen\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "qwen",
+    });
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
     expect(tabState.presentation).toBe("agent-workflow");
@@ -155,7 +174,13 @@ describe("terminal-view-store", () => {
     useTerminalViewStore.getState().appendOutput("tab:1", "previous output\n");
 
     useTerminalViewStore.getState().submitCommand("tab:1", "codex");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=codex\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
 
     expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
       content: "",
@@ -173,12 +198,14 @@ describe("terminal-view-store", () => {
         "tab:1",
         "ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic claude --dangerously-skip-permissions --model glm-5",
       );
-    useTerminalViewStore
-      .getState()
-      .consumeOutput(
-        "tab:1",
-        "\u001b]133;C;entry=ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic claude --dangerously-skip-permissions --model glm-5\u0007",
-      );
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry:
+        "ANTHROPIC_AUTH_TOKEN=secret ANTHROPIC_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic claude --dangerously-skip-permissions --model glm-5",
+    });
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
     expect(tabState.presentation).toBe("agent-workflow");
@@ -190,7 +217,13 @@ describe("terminal-view-store", () => {
 
   it("returns to the preferred mode after an agent workflow command exits", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "classic");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=claude\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "claude",
+    });
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
@@ -203,7 +236,13 @@ describe("terminal-view-store", () => {
   it("drops split OSC color reports after agent workflow exit instead of appending a session block", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "codex");
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=codex\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]10;rgb:0000/0000/0001");
     useTerminalViewStore.getState().consumeOutput("tab:1", ";rgb:ffff/ffff/fff1\u001b\\");
@@ -221,9 +260,16 @@ describe("terminal-view-store", () => {
     ]);
   });
 
-  it("upgrades an active dialog command to classic mode when output requires full terminal semantics", () => {
+  it("upgrades an active dialog command to classic mode when backend semantics require full terminal ownership", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "custom-dashboard");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "classic-required",
+      reason: "alternate-screen",
+      confidence: "strong",
+      commandEntry: "custom-dashboard",
+    });
     useTerminalViewStore.getState().appendOutput("tab:1", "\u001b[?1049h\u001b[2J");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b[?1049h\u001b[2J");
 
@@ -244,11 +290,17 @@ describe("terminal-view-store", () => {
     });
   });
 
-  it("clears the classic terminal buffer when shell markers enter agent workflow mode", () => {
+  it("clears the classic terminal buffer when backend semantic events enter agent workflow mode", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "classic");
     useTerminalViewStore.getState().appendOutput("tab:1", "old prompt\n");
 
-    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;C;entry=codex\u0007");
+    useTerminalViewStore.getState().consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
 
     expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
       content: "",

@@ -639,10 +639,18 @@ button {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
   flex-direction: column;
   font-family: var(--dialog-terminal-font-family);
   font-size: var(--dialog-terminal-font-size);
   background: var(--surface);
+}
+
+.dialog-terminal__history-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .dialog-terminal__history {
@@ -657,10 +665,28 @@ button {
 }
 
 .dialog-terminal__jump {
-  display: flex;
-  justify-content: center;
-  padding: 0 12px 8px;
-  background: var(--surface);
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 2;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.dialog-terminal__jump .button {
+  pointer-events: auto;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(10px);
+  opacity: 0.92;
+}
+
+.dialog-terminal__bottom-sentinel {
+  width: 100%;
+  min-height: 1px;
+  flex: 0 0 1px;
 }
 
 .dialog-terminal__composer {

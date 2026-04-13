@@ -7,10 +7,11 @@ import { highlightCommandText, type HistoryHighlightToken } from "../lib/history
 interface DialogTranscriptProps {
   blocks: CommandBlock[];
   scrollRef: RefObject<HTMLDivElement | null>;
+  bottomRef?: RefObject<HTMLDivElement | null>;
   onScroll: UIEventHandler<HTMLDivElement>;
 }
 
-export function DialogTranscript({ blocks, scrollRef, onScroll }: DialogTranscriptProps) {
+export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: DialogTranscriptProps) {
   return (
     <div className="dialog-terminal__history" ref={scrollRef} onScroll={onScroll}>
       {blocks.map((block, index) => (
@@ -18,11 +19,9 @@ export function DialogTranscript({ blocks, scrollRef, onScroll }: DialogTranscri
           {index > 0 ? <hr className="command-block__divider" /> : null}
           {block.kind === "command" ? <CommandTranscriptHeader block={block} /> : <p className="command-block__session-label">session output</p>}
           <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
-          {block.kind === "command" && block.status === "completed" ? (
-            <p className="command-block__status">exit {block.exitCode ?? "unknown"}</p>
-          ) : null}
         </article>
       ))}
+      <div ref={bottomRef} className="dialog-terminal__bottom-sentinel" aria-hidden="true" />
     </div>
   );
 }
