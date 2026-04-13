@@ -7,6 +7,7 @@ import {
   type TerminalBufferSnapshot,
 } from "../../../domain/terminal/buffer";
 import {
+  appendLiveConsoleOutput,
   appendDialogOutput,
   applyPreferredMode,
   applyShellLifecycleEvent,
@@ -94,7 +95,13 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
       };
-      const nextBuffers = state.buffers;
+      const nextBuffers =
+        nextTabState.activeCommandBlockId === null
+          ? state.buffers
+          : {
+              ...state.buffers,
+              [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
+            };
 
       return {
         tabStates: {
@@ -133,9 +140,23 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       const shouldCaptureVisibleOutput =
         !entersAgentWorkflow &&
         !parsed.requiresClassic &&
+        nextState.dialogPhase !== "live-console" &&
         nextState.captureActiveOutputInTranscript &&
         tabState.presentation !== "agent-workflow" &&
         !(tabState.mode === "classic" && tabState.activeCommandBlockId === null);
+
+      const shouldCaptureLiveConsoleOutput =
+        !entersAgentWorkflow &&
+        !parsed.requiresClassic &&
+        nextState.dialogPhase === "live-console" &&
+        normalizedOutput.length > 0;
+
+      if (shouldCaptureLiveConsoleOutput) {
+        nextState = {
+          ...nextState,
+          ...appendLiveConsoleOutput(nextState, normalizedOutput),
+        };
+      }
 
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
         nextState = {

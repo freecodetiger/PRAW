@@ -453,6 +453,55 @@ button {
   letter-spacing: 0.14em;
 }
 
+.pane-action-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.pane-action-menu__trigger {
+  min-width: 32px;
+  height: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 0 6px;
+}
+
+.pane-action-menu__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  min-width: 160px;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+}
+
+.pane-action-menu__item {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px 10px;
+}
+
+.pane-action-menu__item:last-child {
+  border-bottom: 0;
+}
+
+.pane-action-menu__item:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.pane-action-menu__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .terminal-pane__close {
   flex: 0 0 auto;
   width: 22px;
@@ -547,6 +596,7 @@ button {
   display: flex;
   justify-content: center;
   padding: 0 12px 8px;
+  background: var(--surface);
 }
 
 .dialog-terminal__composer {
@@ -628,6 +678,66 @@ button {
   border: 1px solid var(--border);
   background: var(--border);
   z-index: 2;
+}
+
+.dialog-live-console {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 0;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.dialog-live-console__header {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-muted);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.dialog-live-console__label,
+.dialog-live-console__meta {
+  color: var(--text-muted);
+}
+
+.dialog-live-console__label {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.dialog-live-console__command {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  color: var(--text-primary);
+}
+
+.dialog-live-console__body {
+  flex: 1;
+  min-height: 0;
+}
+
+.dialog-live-console__terminal {
+  width: 100%;
+  height: 100%;
+  padding: 8px 12px 12px;
+  background: var(--surface-muted);
+}
+
+.dialog-live-console--compact .dialog-live-console__header {
+  grid-template-columns: auto 1fr;
+}
+
+.dialog-live-console--compact .dialog-live-console__meta {
+  display: none;
 }
 
 .dialog-terminal__candidate {
@@ -922,38 +1032,6 @@ button {
   bottom: 10px;
 }
 
-.pane-context-menu {
-  position: fixed;
-  z-index: 30;
-  display: flex;
-  min-width: 160px;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.pane-context-menu__item {
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-primary);
-  text-align: left;
-  padding: 8px 10px;
-}
-
-.pane-context-menu__item:last-child {
-  border-bottom: 0;
-}
-
-.pane-context-menu__item:hover:not(:disabled) {
-  text-decoration: underline;
-}
-
-.pane-context-menu__item:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 @container (max-width: 320px) {
   .terminal-pane__mode-indicator {
     display: none;
@@ -972,6 +1050,14 @@ button {
   .dialog-terminal__composer {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .dialog-live-console__header {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-live-console__meta {
+    display: none;
   }
 }
 

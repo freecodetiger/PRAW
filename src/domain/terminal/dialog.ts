@@ -6,6 +6,8 @@ export type ShellIntegrationStatus = "supported" | "unsupported";
 
 export type TerminalPresentation = "default" | "agent-workflow";
 export type DialogComposerMode = "command" | "pty";
+export type DialogPhase = "idle" | "live-console" | "classic-handoff";
+export type TranscriptPolicy = "append-live" | "defer-until-exit";
 
 export type CommandBlockKind = "command" | "session";
 
@@ -22,11 +24,20 @@ export interface CommandBlock {
   exitCode: number | null;
 }
 
+export interface LiveConsoleState {
+  blockId: string;
+  compact: boolean;
+  transcriptCapture: string;
+}
+
 export interface DialogState {
   preferredMode: PaneRenderMode;
   mode: PaneRenderMode;
   modeSource: PaneRenderModeSource;
   presentation: TerminalPresentation;
+  dialogPhase: DialogPhase;
+  liveConsole: LiveConsoleState | null;
+  transcriptPolicy: TranscriptPolicy;
   composerMode: DialogComposerMode;
   shellIntegration: ShellIntegrationStatus;
   cwd: string;
@@ -120,6 +131,9 @@ export function createDialogState(shell: string, cwd: string, preferredMode: Pan
     mode: supported ? preferredMode : "classic",
     modeSource: supported ? "default" : "shell-unsupported",
     presentation: "default",
+    dialogPhase: "idle",
+    liveConsole: null,
+    transcriptPolicy: "append-live",
     composerMode: "command",
     shellIntegration: supported ? "supported" : "unsupported",
     cwd,
@@ -142,6 +156,9 @@ export function applyPreferredMode(state: DialogState, preferredMode: PaneRender
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
+      dialogPhase: "idle",
+      liveConsole: null,
+      transcriptPolicy: "append-live",
       composerMode: "command",
     };
   }
@@ -180,9 +197,16 @@ export function submitDialogCommand(
     mode,
     modeSource,
     presentation: state.presentation,
+    dialogPhase: startsInClassic ? "classic-handoff" : "live-console",
+    liveConsole: {
+      blockId: id,
+      compact: false,
+      transcriptCapture: "",
+    },
+    transcriptPolicy: "defer-until-exit",
     composerMode: "pty",
     activeCommandBlockId: id,
-    captureActiveOutputInTranscript: !startsInClassic,
+    captureActiveOutputInTranscript: false,
     composerHistory: [...state.composerHistory, normalizedCommand],
     blocks: [
       ...state.blocks,
@@ -250,6 +274,20 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
   };
 }
 
+export function appendLiveConsoleOutput(state: DialogState, data: string): DialogState {
+  if (data.length === 0 || !state.liveConsole) {
+    return state;
+  }
+
+  return {
+    ...state,
+    liveConsole: {
+      ...state.liveConsole,
+      transcriptCapture: `${state.liveConsole.transcriptCapture}${data}`,
+    },
+  };
+}
+
 export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecycleEvent): DialogState {
   switch (event.type) {
     case "command-start": {
@@ -259,6 +297,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           mode: "classic",
           modeSource: "auto-interactive",
           presentation: "agent-workflow",
+          dialogPhase: "classic-handoff",
           captureActiveOutputInTranscript: false,
         };
       }
@@ -273,6 +312,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           mode: "classic",
           modeSource: "auto-interactive",
           presentation: "agent-workflow",
+          dialogPhase: "classic-handoff",
           captureActiveOutputInTranscript: false,
         };
       }
@@ -290,6 +330,9 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
           ? state
           : {
               ...state,
+              dialogPhase: "idle",
+              liveConsole: null,
+              transcriptPolicy: "append-live",
               composerMode: "command",
               activeCommandBlockId: null,
               captureActiveOutputInTranscript: true,
@@ -297,6 +340,10 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
                 block.id === state.activeCommandBlockId
                   ? ({
                       ...block,
+                      output:
+                        state.transcriptPolicy === "defer-until-exit" && state.liveConsole?.blockId === block.id
+                          ? state.liveConsole.transcriptCapture
+                          : block.output,
                       status: "completed",
                       exitCode: event.exitCode,
                     } satisfies CommandBlock)
@@ -334,6 +381,7 @@ export function requireClassicTerminal(state: DialogState): DialogState {
     ...state,
     mode: "classic",
     modeSource: "auto-interactive",
+    dialogPhase: "classic-handoff",
     captureActiveOutputInTranscript: false,
   };
 }
@@ -345,6 +393,9 @@ function restorePreferredPresentation(state: DialogState): DialogState {
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
+      dialogPhase: "idle",
+      liveConsole: null,
+      transcriptPolicy: "append-live",
       composerMode: "command",
       captureActiveOutputInTranscript: true,
     };
@@ -355,6 +406,16 @@ function restorePreferredPresentation(state: DialogState): DialogState {
     mode: state.preferredMode,
     modeSource: "default",
     presentation: "default",
+    dialogPhase: state.activeCommandBlockId === null ? "idle" : "live-console",
+    liveConsole:
+      state.activeCommandBlockId === null
+        ? null
+        : {
+            blockId: state.activeCommandBlockId,
+            compact: state.liveConsole?.compact ?? false,
+            transcriptCapture: state.liveConsole?.transcriptCapture ?? "",
+          },
+    transcriptPolicy: state.activeCommandBlockId === null ? "append-live" : "defer-until-exit",
     composerMode: state.activeCommandBlockId === null ? "command" : "pty",
     captureActiveOutputInTranscript: true,
   };

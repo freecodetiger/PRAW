@@ -7,25 +7,19 @@ import { getThemePreset } from "../../../domain/theme/presets";
 import { formatTabLabel } from "../../../domain/window/label";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalSession } from "../hooks/useTerminalSession";
-import { calculateContextMenuPosition, shouldCloseContextMenu } from "../lib/context-menu";
 import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
+import { resolvePaneActions, type PaneActionId } from "../lib/pane-actions";
 import { resolveTerminalRenderFont } from "../lib/terminal-fonts";
 import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
+import { PaneActionMenu } from "./PaneActionMenu";
 
 interface TerminalPaneProps {
   tabId: string;
   borderMask?: PaneBorderMask;
-}
-
-interface ContextMenuState {
-  clickX: number;
-  clickY: number;
-  left: number;
-  top: number;
 }
 
 export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
@@ -49,14 +43,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const tabState = useTerminalViewStore((state) => selectTerminalTabState(state.tabStates, tabId));
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
   const { tab, currentStreamSessionId, write, resize, restart, terminate } = useTerminalSession(tabId);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const paneRef = useRef<HTMLElement | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
   const themePreset = getThemePreset(themePresetId);
@@ -69,57 +61,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     dialogFontFamily,
     dialogFontSize,
   });
-
-  useEffect(() => {
-    if (!contextMenu || !contextMenuRef.current) {
-      return;
-    }
-
-    const menu = contextMenuRef.current;
-    const nextPosition = calculateContextMenuPosition({
-      clickX: contextMenu.clickX,
-      clickY: contextMenu.clickY,
-      menuWidth: menu.offsetWidth,
-      menuHeight: menu.offsetHeight,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
-    });
-
-    if (nextPosition.left === contextMenu.left && nextPosition.top === contextMenu.top) {
-      return;
-    }
-
-    setContextMenu((current) =>
-      current && current.clickX === contextMenu.clickX && current.clickY === contextMenu.clickY
-        ? { ...current, ...nextPosition }
-        : current,
-    );
-  }, [contextMenu]);
-
-  useEffect(() => {
-    if (!contextMenu) {
-      return;
-    }
-
-    const close = (event: PointerEvent) => {
-      if (!shouldCloseContextMenu(contextMenuRef.current, event.target)) {
-        return;
-      }
-
-      setContextMenu(null);
-    };
-    const closeOnBlur = () => {
-      setContextMenu(null);
-    };
-
-    window.addEventListener("pointerdown", close, true);
-    window.addEventListener("blur", closeOnBlur);
-
-    return () => {
-      window.removeEventListener("pointerdown", close, true);
-      window.removeEventListener("blur", closeOnBlur);
-    };
-  }, [contextMenu]);
 
   useEffect(() => {
     if (!paneRef.current) {
@@ -181,7 +122,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   });
 
   const startEditingNote = () => {
-    setContextMenu(null);
     setNoteDraft(tab.note ?? "");
     setIsEditingNote(true);
   };
@@ -201,11 +141,9 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const runSplitAction = (axis: SplitAxis) => {
     const allowed = axis === "horizontal" ? canSplitHorizontal : canSplitVertical;
     if (!allowed) {
-      setContextMenu(null);
       return;
     }
 
-    setContextMenu(null);
     splitTab(tabId, axis);
   };
 
@@ -214,7 +152,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
       return;
     }
 
-    setContextMenu(null);
     if (shouldConfirmBeforeClosingTab(tab, tabState)) {
       setIsCloseConfirmOpen(true);
       return;
@@ -239,6 +176,32 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     setIsCloseConfirmOpen(false);
   };
 
+  const paneActions = resolvePaneActions({
+    canClose,
+    canSplitHorizontal,
+    canSplitVertical,
+  });
+
+  const runPaneAction = (actionId: PaneActionId) => {
+    switch (actionId) {
+      case "split-right":
+        runSplitAction("horizontal");
+        return;
+      case "split-down":
+        runSplitAction("vertical");
+        return;
+      case "edit-note":
+        startEditingNote();
+        return;
+      case "close-tab":
+        void requestClose();
+        return;
+      case "restart-shell":
+        void restart();
+        return;
+    }
+  };
+
   return (
     <section
       ref={paneRef}
@@ -246,16 +209,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
       style={paneStyle}
       onMouseDown={() => {
         setActiveTab(tabId);
-      }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        setActiveTab(tabId);
-        setContextMenu({
-          clickX: event.clientX,
-          clickY: event.clientY,
-          left: event.clientX,
-          top: event.clientY,
-        });
       }}
     >
       <div
@@ -317,6 +270,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           </span>
         ) : null}
 
+        <PaneActionMenu actions={paneActions} onSelect={runPaneAction} />
+
         <button
           className="terminal-pane__close"
           type="button"
@@ -335,14 +290,19 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         <DialogTerminalSurface
           paneState={tabState}
           status={tab.status}
+          sessionId={currentStreamSessionId}
+          bufferedOutput={bufferedOutput}
+          paneHeight={paneSize.height}
+          fontFamily={resolvedTerminalFont.fontFamily}
+          fontSize={resolvedTerminalFont.fontSize}
+          theme={themePreset.terminal}
           isActive={Boolean(isActive)}
           onSubmitCommand={(command) => {
             submitCommand(tabId, command);
             void write(`${command}\n`);
           }}
-          onWriteInput={(data) => {
-            void write(data);
-          }}
+          write={write}
+          resize={resize}
         />
       ) : (
         <ClassicTerminalSurface
@@ -382,43 +342,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
       ) : null}
 
       {previewEdge ? <div className={`terminal-pane__drop-preview terminal-pane__drop-preview--${previewEdge}`} /> : null}
-
-      {contextMenu ? (
-        <div
-          ref={contextMenuRef}
-          className="pane-context-menu"
-          style={{
-            left: contextMenu.left,
-            top: contextMenu.top,
-          }}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-        >
-          <button className="pane-context-menu__item" type="button" disabled={!canSplitHorizontal} onClick={() => runSplitAction("horizontal")}>
-            Split Right
-          </button>
-          <button className="pane-context-menu__item" type="button" disabled={!canSplitVertical} onClick={() => runSplitAction("vertical")}>
-            Split Down
-          </button>
-          <button className="pane-context-menu__item" type="button" onClick={() => startEditingNote()}>
-            Edit Note
-          </button>
-          <button className="pane-context-menu__item" type="button" disabled={!canClose} onClick={() => void requestClose()}>
-            Close Tab
-          </button>
-          <button
-            className="pane-context-menu__item"
-            type="button"
-            onClick={() => {
-              setContextMenu(null);
-              void restart();
-            }}
-          >
-            Restart Shell
-          </button>
-        </div>
-      ) : null}
 
       {isCloseConfirmOpen ? (
         <div className="terminal-pane__overlay terminal-pane__overlay--confirm">

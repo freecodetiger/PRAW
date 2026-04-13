@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendLiveConsoleOutput,
   applyPreferredMode,
   applyShellLifecycleEvent,
   appendDialogOutput,
@@ -41,6 +42,14 @@ describe("dialog terminal state", () => {
 
     expect(next.mode).toBe("classic");
     expect(next.modeSource).toBe("auto-interactive");
+    expect(next.dialogPhase).toBe("classic-handoff");
+    expect(next.liveConsole).toEqual(
+      expect.objectContaining({
+        blockId: "cmd:1",
+        compact: false,
+        transcriptCapture: "",
+      }),
+    );
     expect(next.activeCommandBlockId).toBe("cmd:1");
     expect(next.composerHistory).toEqual(["vim notes.txt"]);
     expect(next.blocks).toEqual([
@@ -62,6 +71,8 @@ describe("dialog terminal state", () => {
 
     expect(next.mode).toBe("dialog");
     expect(next.modeSource).toBe("default");
+    expect(next.dialogPhase).toBe("live-console");
+    expect(next.transcriptPolicy).toBe("defer-until-exit");
     expect(next.composerMode).toBe("pty");
     expect(next.blocks).toEqual([
       expect.objectContaining({
@@ -130,6 +141,7 @@ describe("dialog terminal state", () => {
 
     expect(status.mode).toBe("dialog");
     expect(status.modeSource).toBe("default");
+    expect(status.dialogPhase).toBe("live-console");
     expect(status.blocks).toEqual([
       expect.objectContaining({
         id: "cmd:git-status",
@@ -169,6 +181,9 @@ describe("dialog terminal state", () => {
     });
 
     expect(finished.activeCommandBlockId).toBeNull();
+    expect(finished.dialogPhase).toBe("idle");
+    expect(finished.liveConsole).toBeNull();
+    expect(finished.transcriptPolicy).toBe("append-live");
     expect(finished.composerMode).toBe("command");
   });
 
@@ -245,9 +260,9 @@ describe("dialog terminal state", () => {
     expect(echoStarted.presentation).toBe("default");
   });
 
-  it("routes plain output into the active command block and finalizes it on command end", () => {
+  it("captures running output in the live console and finalizes it into the command block on command end", () => {
     const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "ls", () => "cmd:1");
-    const withOutput = appendDialogOutput(state, "file-a\nfile-b\n");
+    const withOutput = appendLiveConsoleOutput(state, "file-a\nfile-b\n");
     const finished = applyShellLifecycleEvent(withOutput, {
       type: "command-end",
       exitCode: 0,

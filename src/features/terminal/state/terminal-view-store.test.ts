@@ -37,13 +37,30 @@ describe("terminal-view-store", () => {
     });
   });
 
-  it("stores transcript output for the active dialog command", () => {
+  it("keeps running output out of transcript until the command exits", () => {
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    useTerminalViewStore.getState().submitCommand("tab:1", "ls --color=always");
+    useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b[01;34msrc\u001b[0m\n");
+
+    const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.liveConsole?.transcriptCapture).toBe("\u001b[01;34msrc\u001b[0m\n");
+    expect(tabState.blocks).toEqual([
+      expect.objectContaining({
+        command: "ls --color=always",
+        output: "",
+        status: "running",
+      }),
+    ]);
+  });
+
+  it("commits captured live console output into the transcript when the command exits", () => {
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     useTerminalViewStore.getState().submitCommand("tab:1", "ls --color=always");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b[01;34msrc\u001b[0m\n");
     useTerminalViewStore.getState().consumeOutput("tab:1", "\u001b]133;D;0\u0007");
 
     const tabState = useTerminalViewStore.getState().tabStates[getTerminalBufferKey("tab:1")];
+    expect(tabState.dialogPhase).toBe("idle");
     expect(tabState.blocks).toEqual([
       expect.objectContaining({
         command: "ls --color=always",
@@ -108,7 +125,7 @@ describe("terminal-view-store", () => {
 
     expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
       content: "",
-      revision: 2,
+      revision: 3,
     });
   });
 
@@ -133,7 +150,7 @@ describe("terminal-view-store", () => {
     expect(tabState.presentation).toBe("agent-workflow");
     expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
       content: "",
-      revision: 2,
+      revision: 3,
     });
   });
 
@@ -189,7 +206,7 @@ describe("terminal-view-store", () => {
     ]);
     expect(useTerminalViewStore.getState().buffers[getTerminalBufferKey("tab:1")]).toEqual({
       content: "\u001b[?1049h\u001b[2J",
-      revision: 1,
+      revision: 2,
     });
   });
 
