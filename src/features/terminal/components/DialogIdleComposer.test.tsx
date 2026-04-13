@@ -333,4 +333,264 @@ describe("DialogIdleComposer", () => {
 
     expect(host.textContent).toContain('git commit -m ""');
   });
+
+  it("accepts the highlighted suggestion with ArrowRight after navigating candidates via Ctrl+ArrowDown", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "git status",
+          source: "local",
+          score: 950,
+          kind: "git",
+        },
+        {
+          text: "git stash",
+          source: "local",
+          score: 940,
+          kind: "git",
+        },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: [],
+        recentHistory: ["git status"],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(input, "git st");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain("git status");
+    expect(host.textContent).toContain("git stash");
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", ctrlKey: true, bubbles: true }));
+    });
+
+    await flush();
+
+    const selectedOptions = host.querySelectorAll('[role="option"][aria-selected="true"]');
+    expect(selectedOptions).toHaveLength(1);
+    expect(selectedOptions[0]?.textContent).toContain("git stash");
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+
+    await flush();
+
+    expect((host.querySelector("input") as HTMLInputElement | null)?.value).toBe("git stash");
+  });
+
+  it("shows a ghost for the first suggestion whenever the Tab candidate list is available", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "git status",
+          source: "local",
+          score: 950,
+          kind: "git",
+        },
+        {
+          text: "git stash",
+          source: "local",
+          score: 940,
+          kind: "git",
+        },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: [],
+        recentHistory: ["git status"],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(input, "git st");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(host.querySelector(".dialog-terminal__ghost-suffix")?.textContent).toBe("atus");
+  });
+
+  it("refreshes workflow prediction after a commit so push outranks stale pre-commit context", async () => {
+    requestLocalCompletion
+      .mockResolvedValueOnce({
+        suggestions: [
+          {
+            text: "git add .",
+            source: "local",
+            score: 980,
+            kind: "history",
+          },
+        ],
+        context: {
+          pwd: "/workspace",
+          gitBranch: "main",
+          gitStatusSummary: ["M  src/main.tsx"],
+          recentHistory: ["git status", "git add ."],
+          cwdSummary: {
+            dirs: ["src"],
+            files: ["package.json"],
+          },
+          systemSummary: {
+            os: "ubuntu",
+            shell: "/bin/bash",
+            packageManager: "apt",
+          },
+          toolAvailability: ["git"],
+        },
+      })
+      .mockResolvedValueOnce(null);
+
+    const beforeCommitPaneState = {
+      ...createIdlePaneState(),
+      composerHistory: ["git status", "git add ."],
+      blocks: [
+        {
+          id: "cmd:add",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "git add .",
+          output: "",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={beforeCommitPaneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(input, "git ");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(host.querySelector(".dialog-terminal__ghost-suffix")?.textContent).toBe('commit -m ""');
+
+    const afterCommitPaneState = {
+      ...createIdlePaneState(),
+      composerHistory: ["git status", "git add .", 'git commit -m "ship it"'],
+      blocks: [
+        {
+          id: "cmd:add",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "git add .",
+          output: "",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+        {
+          id: "cmd:commit",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: 'git commit -m "ship it"',
+          output: "",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={afterCommitPaneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    await flush();
+    await flush();
+
+    expect(host.querySelector(".dialog-terminal__ghost-suffix")?.textContent).toBe("push");
+  });
 });

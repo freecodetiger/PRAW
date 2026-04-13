@@ -125,7 +125,7 @@ describe("suggestion ranker", () => {
     expect(ghost?.text).toBe('git commit -m ""');
   });
 
-  it("suppresses ghost completions when multiple candidates are still ambiguous", () => {
+  it("uses the first ranked suggestion as the ghost when the Tab list already has candidates", () => {
     const ghost = selectRankedGhostSuggestion({
       draft: "git st",
       recentCommands: ["ls"],
@@ -153,6 +153,6 @@ describe("suggestion ranker", () => {
       ],
     });
 
-    expect(ghost).toBeNull();
+    expect(ghost?.text).toBe("git status");
   });
 });

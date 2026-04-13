@@ -249,6 +249,18 @@ export function DialogIdleComposer({
                 return;
               }
 
+              if (
+                event.key === "ArrowRight" &&
+                showSuggestionBar &&
+                visibleSuggestions.length > 0 &&
+                !isComposing &&
+                cursorAtEnd
+              ) {
+                event.preventDefault();
+                acceptVisibleSuggestion();
+                return;
+              }
+
               if (event.key === "ArrowRight" && suggestion.length > 0 && !isComposing && cursorAtEnd) {
                 event.preventDefault();
                 acceptGhostOverlay();

@@ -21,34 +21,24 @@ export interface SuggestionPresentationModel {
   ghostSuggestion: SuggestionItem | null;
 }
 
-const GHOST_CONFIDENCE_MARGIN = 120;
-const STRONG_GHOST_CONFIDENCE_MARGIN = 180;
-
 export function rankSuggestionItems(context: SuggestionRankingContext): SuggestionItem[] {
   return buildRankedSuggestions(context).map((entry) => entry.item);
 }
 
 export function buildSuggestionPresentationModel(context: SuggestionRankingContext): SuggestionPresentationModel {
+  const rankedSuggestions = rankSuggestionItems(context);
+
   return {
-    rankedSuggestions: rankSuggestionItems(context),
-    ghostSuggestion: selectRankedGhostSuggestion(context),
+    rankedSuggestions,
+    ghostSuggestion: selectRankedGhostSuggestion({
+      ...context,
+      suggestions: rankedSuggestions,
+    }),
   };
 }
 
 export function selectRankedGhostSuggestion(context: SuggestionRankingContext): SuggestionItem | null {
-  const ranked = buildRankedSuggestions(context).filter(({ item }) => isGhostCandidate(context.draft, item));
-  const top = ranked[0];
-  if (!top) {
-    return null;
-  }
-
-  const margin = top.rank - (ranked[1]?.rank ?? Number.NEGATIVE_INFINITY);
-  const requiredMargin = top.item.kind === "intent" ? GHOST_CONFIDENCE_MARGIN : STRONG_GHOST_CONFIDENCE_MARGIN;
-  if (margin < requiredMargin) {
-    return null;
-  }
-
-  return top.item;
+  return buildRankedSuggestions(context).map(({ item }) => item).find((item) => isGhostCandidate(context.draft, item)) ?? null;
 }
 
 function buildRankedSuggestions(context: SuggestionRankingContext): RankedSuggestion[] {

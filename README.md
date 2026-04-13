@@ -1,115 +1,170 @@
 # PRAW
 
-PRAW 是一款面向未来工作流的智能终端项目。它希望把传统终端的可靠性、现代工作区的组织能力，以及 AI 辅助的自然交互方式放进同一个桌面应用中。
+> A desktop terminal workspace for modern CLI workflows: multi-pane layouts, a Warp-like dialog flow, classic terminal fallback, and AI-assisted command UX built on top of a real shell.
 
-当前它还不是完成品，而是一个正在持续迭代中的半成品项目。很多核心能力已经成形，但整体体验、兼容性和 AI 能力仍在持续打磨中。
+PRAW is an experimental terminal application built with `Tauri + React + Rust`. It is not trying to replace the shell. It is trying to make shell-heavy work easier to organize, easier to read, and easier to extend with AI without breaking core terminal semantics.
 
-## 这个项目想解决什么问题
-传统终端很强，但在多任务、多分屏、上下文切换、工作区组织和 AI 协作这几个方向上，用户体验往往并不理想。PRAW 的目标不是替代 shell，而是在不牺牲终端本质的前提下，给终端一个更适合现代开发者的桌面外壳。
+## Why PRAW
 
-从用户视角看，它希望做到：
+Traditional terminals are powerful, but modern developer workflows usually spill across too many windows, too much context switching, and too little structure.
 
-- 像工作区一样管理多个终端任务，而不是把所有内容堆在一个窗口里
-- 支持灵活分屏、拖拽调整和 pane 重组
-- 在对话式输入和传统终端输入之间自然切换
-- 为 AI 工作模式提供更明确的界面反馈，而不是把 AI 功能粗暴塞进终端里
-- 逐步加入更自然的补全、上下文感知和智能辅助能力
+PRAW explores a different model:
 
-## 当前亮点
-从用户视角，这个项目目前最值得关注的地方有：
+- A terminal window as a workspace, not a single scrolling buffer
+- Split panes that stay usable under real resize constraints
+- A dialog-style command experience for readability and flow
+- A classic terminal path when full terminal semantics matter
+- AI-aware interactions layered on top of the terminal instead of replacing it
 
-- 支持一个窗口内的多 pane 分屏工作区，不同 pane 可以继续拆分、调整大小和重排
-- 终端支持对话式输入体验，历史记录紧贴输入区呈现，更适合连续执行命令和回看结果
-- 保留 classic 模式，兼容更传统的终端工作方式
-- 针对 AI agent 工作流引入独立的 AI mode 呈现，让用户清楚知道自己当前进入了哪种工作语境
-- 历史输出正在逐步具备更直观的高亮表达，包括命令结果、路径、状态词和 ANSI 颜色保留
-- 支持 tab 备注，有助于在复杂分屏场景下区分每个 pane 的用途
-- 设置层已经开始接管主题和 AI 能力的关键参数，后续可继续扩展成更完整的个性化系统
+## What It Can Do Today
 
-## 为什么这个项目对开发者有意义
-从开发者视角，这个项目的意义不只是“又一个终端”，而是一次关于桌面终端架构的系统性探索。
+- Multi-pane terminal workspace with repeatable horizontal and vertical splits
+- Dialog mode for structured command input and transcript-oriented reading
+- Classic mode fallback for compatibility-sensitive terminal behavior
+- Warp-inspired live command console flow for running commands in dialog mode
+- AI workflow presentation states for agent-style CLI sessions
+- Workflow-aware ghost completion and suggestion ranking in dialog mode
+- Phrase completion for repeated command snippets
+- Theme and appearance controls through the settings panel
+- Stable bundled default mono font: `CaskaydiaCove Nerd Font Mono`
+- Per-tab notes, pane actions, resize constraints, and workspace persistence
+- English-first settings UI with in-app language switching support
 
-它在尝试回答几个很现实的问题：
+## Current Status
 
-- 现代智能终端的 UI 和系统能力应该如何解耦
-- 复杂分屏工作区应该如何建模，才能长期维护而不失控
-- AI 功能应该如何作为增强层接入，而不是破坏终端原有的操作模型
-- 如何在桌面端同时兼顾交互效率、系统稳定性和资源占用
+PRAW is usable, but it is still an actively evolving project.
 
-目前项目已经形成了一些明确的技术方向：
+- The architecture is already serious enough to explore long-term terminal UX ideas
+- Core workspace, dialog, completion, and settings systems are in place
+- Ubuntu/Linux is the primary development target right now
+- Interaction details, terminal compatibility, and AI behavior are still being refined
 
-- 前端使用 React 负责高频交互、模式切换、布局呈现和设置界面
-- 后端使用 Rust 负责终端会话、系统资源、持久化和能力桥接
-- 桌面壳采用 Tauri，在保持桌面能力的同时避免过重的运行时负担
-- 布局系统从严格二叉分割演进为多叉容器树，以更稳定地支持复杂分屏、边界约束和拖拽重排
+If you try it today, treat it as a fast-moving experimental product rather than a finished terminal replacement.
 
-如果你关心桌面开发、终端产品、工作区建模、Tauri 应用架构，或者想观察一个“终端 + AI + 工作区”方向的工程实践，这个项目是一个值得跟踪的样本。
+## Getting Started
 
-## 当前状态
-请把这个项目视为一个半成品。
-
-这意味着：
-
-- 已经有可运行的主线能力
-- 已经有比较清晰的架构方向
-- 但仍然存在大量待完善细节
-- 产品体验还没有收敛到最终形态
-- 一些交互、兼容性和 AI 相关能力仍在快速演进中
-
-如果你现在就体验它，应该把它看成一个“积极成长中的实验型产品”，而不是已经完全稳定的成熟终端。
-
-## 计划支持的平台
-当前开发环境主要围绕 Ubuntu 展开，但项目目标不是只停留在 Linux。
-
-预计将逐步支持主流三大桌面操作系统：
-
-- Linux
-- macOS
-- Windows
-
-具体支持节奏会取决于：
-
-- Tauri 桌面封装表现
-- 终端会话层在不同平台上的适配成本
-- 输入法、字体、快捷键、窗口行为等细节兼容性
-- 打包、签名和分发链路的成熟度
-
-## 技术文档
-如果你更关心项目的架构思路，可以继续看根目录下的技术说明：
-
-- [为什么从二叉树改成多叉容器树](./project-insights/why-multi-container-tree.md)
-- [为什么项目前后端选择 Tauri + React + Rust](./project-insights/why-tauri-react-rust.md)
-
-## 开发与运行
-当前项目基于 `Tauri + React + TypeScript + Rust`。
-
-本地开发前建议至少准备：
+### Prerequisites
 
 - Node.js
 - npm
-- Rust / Cargo
-- Tauri 所需系统依赖
+- Rust toolchain
+- Tauri development dependencies for your platform
 
-启动开发环境：
+For Linux, install the standard Tauri system packages first, then continue with the project setup.
+
+### Run In Development
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-如果你只想跑前端调试界面，也可以使用：
+### Run Frontend Only
 
 ```bash
 npm run dev
 ```
 
-## 推荐开发环境
+### Quality Checks
 
-- [VS Code](https://code.visualstudio.com/)
-- [Tauri VS Code Extension](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)
-- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
-## 最后
-PRAW 还在路上。
+## Tech Stack
 
-它现在最有价值的，不是“已经完美”，而是它已经开始形成一套比较清楚的产品方向和技术结构。后续会继续围绕终端体验、工作区组织、AI 补全与协作、跨平台能力和分发质量持续迭代。
+- `Tauri` for the desktop shell and native bridge
+- `React 19` for interaction-heavy workspace UI
+- `TypeScript` for front-end domain modeling
+- `Rust` for terminal/runtime/system-side logic
+- `xterm.js` for terminal rendering where terminal semantics require it
+- `Zustand` for focused application and workspace state
+
+## Architecture In One Screen
+
+PRAW is intentionally split into clear layers:
+
+- `React` handles workspace presentation, settings, pane interactions, dialog flows, and UI state
+- `Rust` handles terminal sessions, system integration, persistence, AI/completion bridging, and runtime-sensitive logic
+- `Tauri` keeps the contract between those two layers explicit
+
+This separation matters because PRAW is not just a themed shell. It is a desktop terminal workspace with long-lived sessions, pane geometry, transcript logic, and AI-assisted input behaviors.
+
+## Project Highlights
+
+### 1. Dialog And Classic Are Separate On Purpose
+
+PRAW does not try to fake one input model as the other.
+
+- `dialog` mode is optimized for readability, structured history, suggestions, and command-centric workflows
+- `classic` mode exists for cases where terminal compatibility and raw semantics win
+
+That boundary is deliberate. It keeps advanced UX experiments from corrupting the baseline terminal experience.
+
+### 2. Layout Is Built For Real Pane Work
+
+The workspace model is designed around actual screen geometry and pane constraints, not just naive split history.
+
+That matters for:
+
+- repeated splits on the same axis
+- stable resizing behavior
+- edge constraints near headers and composers
+- long-running usability in dense pane layouts
+
+### 3. AI Is Treated As An Enhancement Layer
+
+PRAW already includes the foundations for smarter command UX:
+
+- ghost completion
+- ranked suggestions
+- recovery suggestions
+- context-aware workflow continuation
+
+The goal is not "chat inside a terminal". The goal is terminal-native assistance that still feels like command execution.
+
+## Repository Structure
+
+```text
+src/                 React app, domain logic, workspace UI, settings, suggestion engine
+src-tauri/           Rust backend, terminal runtime, native commands, persistence
+project-insights/    Short write-ups on architectural choices and implementation ideas
+docs/                Internal specs and implementation plans
+```
+
+## Design And Engineering Notes
+
+If you want the reasoning behind the current architecture, start here:
+
+- [Why Tauri + React + Rust](./project-insights/why-tauri-react-rust.md)
+- [Why the workspace moved to a multi-container tree](./project-insights/why-multi-container-tree.md)
+- [Ghost completion highlights](./project-insights/ghost-completion-highlights.md)
+- [UI theme highlights](./project-insights/ui-theme-highlights.md)
+
+## Roadmap Direction
+
+The current direction is clear even though the product is still converging:
+
+- Smarter workflow prediction beyond simple prefix history
+- Better AI-assisted command recovery and intent handling
+- Stronger dialog/classic compatibility boundaries
+- More polished cross-platform behavior outside the current Ubuntu-first workflow
+- Better packaging, onboarding, and public-facing project materials
+
+## Contributing
+
+The codebase is still moving quickly, but issues and pull requests are welcome if they align with the product direction.
+
+Before making larger changes:
+
+- read the architecture notes in [`project-insights/`](./project-insights)
+- inspect the current domain boundaries in `src/domain` and `src/features`
+- avoid flattening dialog/classic distinctions unless the change is explicitly about terminal semantics
+
+## Philosophy
+
+PRAW is built around a simple idea:
+
+the terminal should stay powerful, but it does not need to stay primitive.

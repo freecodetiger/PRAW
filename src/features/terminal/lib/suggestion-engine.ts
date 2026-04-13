@@ -31,6 +31,14 @@ export interface SuggestionEngineContext {
 }
 
 export function shouldRequestLocalInlineSuggestions(context: SuggestionEngineContext): boolean {
+  if (!shouldRequestLocalContext(context)) {
+    return false;
+  }
+
+  return context.draft.trim().length >= MIN_INLINE_SUGGESTION_CHARS;
+}
+
+export function shouldRequestLocalContext(context: SuggestionEngineContext): boolean {
   if (context.suppressInlineSuggestions) {
     return false;
   }
@@ -43,7 +51,7 @@ export function shouldRequestLocalInlineSuggestions(context: SuggestionEngineCon
     return false;
   }
 
-  return context.draft.trim().length >= MIN_INLINE_SUGGESTION_CHARS;
+  return true;
 }
 
 export function shouldRequestAiInlineSuggestions(context: SuggestionEngineContext): boolean {
@@ -94,7 +102,7 @@ export function shouldRequestRecoverySuggestions(
 }
 
 export function buildLocalCompletionRequest(context: SuggestionEngineContext): LocalCompletionRequest | null {
-  if (!shouldRequestLocalInlineSuggestions(context)) {
+  if (!shouldRequestLocalContext(context)) {
     return null;
   }
 

@@ -128,10 +128,6 @@ pub struct SystemSummary {
 }
 
 pub fn complete_local(request: LocalCompletionRequest) -> Result<Option<LocalCompletionResponse>> {
-    if request.input_prefix.trim().chars().count() < MIN_COMPLETION_CHARS {
-        return Ok(None);
-    }
-
     let cwd = resolve_cwd(&request.cwd)?;
     let tool_availability = detect_tool_availability();
     let git_dir = find_git_dir(&cwd);
@@ -155,13 +151,17 @@ pub fn complete_local(request: LocalCompletionRequest) -> Result<Option<LocalCom
         tool_availability: tool_availability.clone(),
     };
 
-    let suggestions = build_candidates(
-        &request,
-        &cwd,
-        &tool_availability,
-        git_branch.as_deref(),
-        &git_branches,
-    )?;
+    let suggestions = if request.input_prefix.trim().chars().count() < MIN_COMPLETION_CHARS {
+        Vec::new()
+    } else {
+        build_candidates(
+            &request,
+            &cwd,
+            &tool_availability,
+            git_branch.as_deref(),
+            &git_branches,
+        )?
+    };
 
     Ok(Some(LocalCompletionResponse {
         suggestions,
@@ -867,6 +867,23 @@ mod tests {
             .iter()
             .any(|candidate| candidate.text.starts_with("systemctl")
                 && candidate.source == CompletionCandidateSource::System));
+    }
+
+    #[test]
+    fn returns_context_for_short_prefix_without_noisy_candidates() {
+        let cwd = temp_dir("short-prefix");
+
+        let response = complete_local(LocalCompletionRequest {
+            cwd: cwd.to_string_lossy().into_owned(),
+            input_prefix: "g".to_string(),
+            shell: "/bin/bash".to_string(),
+            recent_history: vec!["git status".to_string()],
+        })
+        .expect("completion should succeed")
+        .expect("response should exist");
+
+        assert_eq!(response.context.pwd, cwd.to_string_lossy());
+        assert!(response.suggestions.is_empty());
     }
 
     #[test]

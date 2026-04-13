@@ -14,6 +14,7 @@ import {
   buildRecoverySuggestionRequest,
   buildSuggestionFromLocalCandidate,
   findMostRecentFailedCommandBlock,
+  shouldRequestLocalInlineSuggestions,
   shouldRequestRecoverySuggestions,
   type SuggestionEngineContext,
 } from "../lib/suggestion-engine";
@@ -62,6 +63,14 @@ export function useSuggestionEngine({
   const recoveryGenerationRef = useRef(0);
   const sessionIdRef = useRef(crypto.randomUUID());
   const userIdRef = useRef(getOrCreateUserId());
+  const blockVersionKey = useMemo(
+    () =>
+      paneState.blocks
+        .map((block) => `${block.id}:${block.status}:${block.exitCode ?? ""}:${block.command ?? ""}`)
+        .join("|"),
+    [paneState.blocks],
+  );
+  const historyVersionKey = useMemo(() => paneState.composerHistory.join("\u0000"), [paneState.composerHistory]);
 
   const baseContext = useMemo<SuggestionEngineContext>(
     () => ({
@@ -129,7 +138,7 @@ export function useSuggestionEngine({
 
   useEffect(() => {
     setLocalContextSnapshot(null);
-  }, [paneState.cwd, paneState.shell]);
+  }, [blockVersionKey, historyVersionKey, paneState.cwd, paneState.shell]);
 
   useEffect(() => {
     const generation = inlineGenerationRef.current + 1;
@@ -152,11 +161,13 @@ export function useSuggestionEngine({
           setLocalContextSnapshot(localResponse.context);
         }
 
-        const localSuggestions = (localResponse?.suggestions ?? [])
-          .map((candidate) => buildSuggestionFromLocalCandidate(draft, candidate))
-          .filter(
-            (suggestion) => suggestion.replacement.type !== "append" || suggestion.replacement.suffix.length > 0,
-          );
+        const localSuggestions = shouldRequestLocalInlineSuggestions(baseContext)
+          ? (localResponse?.suggestions ?? [])
+              .map((candidate) => buildSuggestionFromLocalCandidate(draft, candidate))
+              .filter(
+                (suggestion) => suggestion.replacement.type !== "append" || suggestion.replacement.suffix.length > 0,
+              )
+          : [];
         setInlineSuggestions(mergeSuggestionItems(localSuggestions));
 
         const aiRequest = buildAiInlineSuggestionRequest({
@@ -192,7 +203,7 @@ export function useSuggestionEngine({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [baseContext, draft]);
+  }, [baseContext, blockVersionKey, draft, historyVersionKey]);
 
   useEffect(() => {
     const generation = recoveryGenerationRef.current + 1;
