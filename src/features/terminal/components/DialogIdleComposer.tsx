@@ -180,7 +180,7 @@ export function DialogIdleComposer({
             ref={inputRef}
             className="dialog-terminal__input"
             disabled={isDisabled}
-            placeholder={status !== "running" ? "Session is not accepting input." : "Run a command"}
+            placeholder={status !== "running" ? "Session is not accepting input." : showGhostOverlay ? "" : "Run a command"}
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { applySuggestion, mergeSuggestionItems, selectGhostSuggestion } from "../../../domain/suggestion/items";
+import type { CompletionContextSnapshot } from "../../../domain/ai/types";
+import { applySuggestion, mergeSuggestionItems } from "../../../domain/suggestion/items";
+import { buildSuggestionPresentationModel } from "../../../domain/suggestion/ranker";
 import type { SuggestionGroup, SuggestionItem } from "../../../domain/suggestion/types";
+import { deriveWorkflowSuggestions } from "../../../domain/suggestion/workflow";
 import { requestAiInlineSuggestions, requestAiRecoverySuggestions } from "../../../lib/tauri/ai";
 import { requestLocalCompletion } from "../../../lib/tauri/completion";
 import { useAppConfigStore } from "../../config/state/app-config-store";
@@ -54,6 +57,7 @@ export function useSuggestionEngine({
   const [inlineSuggestions, setInlineSuggestions] = useState<SuggestionItem[]>([]);
   const [recoverySuggestions, setRecoverySuggestions] = useState<SuggestionItem[]>([]);
   const [dismissedRecoveryBlockId, setDismissedRecoveryBlockId] = useState<string | null>(null);
+  const [localContextSnapshot, setLocalContextSnapshot] = useState<CompletionContextSnapshot | null>(null);
   const inlineGenerationRef = useRef(0);
   const recoveryGenerationRef = useRef(0);
   const sessionIdRef = useRef(crypto.randomUUID());
@@ -100,12 +104,32 @@ export function useSuggestionEngine({
   );
 
   const failedBlock = useMemo(() => findMostRecentFailedCommandBlock(paneState.blocks), [paneState.blocks]);
+  const inlinePresentation = useMemo(() => {
+    const workflowSuggestions = deriveWorkflowSuggestions({
+      draft,
+      recentCommands: paneState.composerHistory,
+      blocks: paneState.blocks,
+      localContext: localContextSnapshot,
+    });
+
+    return buildSuggestionPresentationModel({
+      draft,
+      recentCommands: paneState.composerHistory,
+      blocks: paneState.blocks,
+      localContext: localContextSnapshot,
+      suggestions: [...inlineSuggestions, ...workflowSuggestions],
+    });
+  }, [draft, inlineSuggestions, localContextSnapshot, paneState.blocks, paneState.composerHistory]);
 
   useEffect(() => {
     if (failedBlock?.id !== dismissedRecoveryBlockId) {
       setDismissedRecoveryBlockId((current) => (current === null || current === failedBlock?.id ? current : null));
     }
   }, [dismissedRecoveryBlockId, failedBlock?.id]);
+
+  useEffect(() => {
+    setLocalContextSnapshot(null);
+  }, [paneState.cwd, paneState.shell]);
 
   useEffect(() => {
     const generation = inlineGenerationRef.current + 1;
@@ -122,6 +146,10 @@ export function useSuggestionEngine({
         const localResponse = await requestLocalCompletion(localRequest);
         if (inlineGenerationRef.current !== generation) {
           return;
+        }
+
+        if (localResponse?.context) {
+          setLocalContextSnapshot(localResponse.context);
         }
 
         const localSuggestions = (localResponse?.suggestions ?? [])
@@ -209,9 +237,18 @@ export function useSuggestionEngine({
   }, [baseContext, dismissedRecoveryBlockId, failedBlock]);
 
   const activeGroup: SuggestionGroup | null =
-    draft.trim().length === 0 && recoverySuggestions.length > 0 ? "recovery" : inlineSuggestions.length > 0 ? "inline" : null;
-  const visibleSuggestions = activeGroup === "recovery" ? recoverySuggestions : activeGroup === "inline" ? inlineSuggestions : [];
-  const ghostSuggestion = activeGroup === "inline" ? selectGhostSuggestion(draft, inlineSuggestions) : null;
+    draft.trim().length === 0 && recoverySuggestions.length > 0
+      ? "recovery"
+      : inlinePresentation.rankedSuggestions.length > 0
+        ? "inline"
+        : null;
+  const visibleSuggestions =
+    activeGroup === "recovery"
+      ? recoverySuggestions
+      : activeGroup === "inline"
+        ? inlinePresentation.rankedSuggestions
+        : [];
+  const ghostSuggestion = activeGroup === "inline" ? inlinePresentation.ghostSuggestion : null;
 
   return {
     ghostSuggestion,

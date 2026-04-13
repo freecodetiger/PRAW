@@ -217,6 +217,7 @@ describe("DialogIdleComposer", () => {
 
     const ghostSuffix = host.querySelector(".dialog-terminal__ghost-suffix");
     expect(ghostSuffix?.textContent).toBe(" status");
+    expect((host.querySelector("input") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("");
     expect(host.querySelectorAll('[role="option"]')).toHaveLength(0);
 
     act(() => {
@@ -235,5 +236,101 @@ describe("DialogIdleComposer", () => {
     await flush();
 
     expect((host.querySelector("input") as HTMLInputElement | null)?.value).toBe("git status");
+  });
+
+  it("prefers the workflow continuation over repeating the previous git history entry", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "git add .",
+          source: "local",
+          score: 980,
+          kind: "history",
+        },
+        {
+          text: "git status",
+          source: "local",
+          score: 920,
+          kind: "git",
+        },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: ["M  src/main.tsx"],
+        recentHistory: ["git status", "git add ."],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+
+    const paneState = {
+      ...createIdlePaneState(),
+      composerHistory: ["git status", "git add ."],
+      blocks: [
+        {
+          id: "cmd:status",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "git status",
+          output: "",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+        {
+          id: "cmd:add",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "git add .",
+          output: "",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(input, "git ");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    const ghostSuffix = host.querySelector(".dialog-terminal__ghost-suffix");
+    expect(ghostSuffix?.textContent).toBe('commit -m ""');
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain('git commit -m ""');
   });
 });
