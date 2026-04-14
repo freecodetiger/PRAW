@@ -1,10 +1,9 @@
-import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { XtermTerminalSurface } from "./XtermTerminalSurface";
 
 interface LiveCommandConsoleProps {
+  tabId: string;
   sessionId: string | null;
-  bufferedOutput: TerminalBufferSnapshot;
   command: string;
   cwd: string;
   fontFamily: string;
@@ -18,8 +17,8 @@ interface LiveCommandConsoleProps {
 }
 
 export function LiveCommandConsole({
+  tabId,
   sessionId,
-  bufferedOutput,
   command,
   cwd,
   fontFamily,
@@ -44,8 +43,8 @@ export function LiveCommandConsole({
       </header>
       <div className="dialog-live-console__body">
         <XtermTerminalSurface
+          tabId={tabId}
           sessionId={sessionId}
-          bufferedOutput={bufferedOutput}
           fontFamily={fontFamily}
           fontSize={fontSize}
           theme={theme}

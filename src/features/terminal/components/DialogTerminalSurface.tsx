@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
@@ -11,10 +10,10 @@ import { DialogTranscript } from "./DialogTranscript";
 import { LiveCommandConsole } from "./LiveCommandConsole";
 
 interface DialogTerminalSurfaceProps {
+  tabId: string;
   paneState: TerminalTabViewState;
   status: TerminalSessionStatus;
   sessionId: string | null;
-  bufferedOutput: TerminalBufferSnapshot;
   paneHeight: number;
   fontFamily: string;
   fontSize: number;
@@ -26,10 +25,10 @@ interface DialogTerminalSurfaceProps {
 }
 
 export function DialogTerminalSurface({
+  tabId,
   paneState,
   status,
   sessionId,
-  bufferedOutput,
   paneHeight,
   fontFamily,
   fontSize,
@@ -58,7 +57,12 @@ export function DialogTerminalSurface({
       return;
     }
 
-    node.scrollTop = node.scrollHeight;
+    // 只有在用户主动滚动到底部时才自动滚动
+    // 避免在用户查看历史记录时强制跳转
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    if (distanceFromBottom < 100) {
+      node.scrollTop = node.scrollHeight;
+    }
   }, [isPinnedBottom, paneState.blocks, surfaceModel.phase]);
 
   useEffect(() => {
@@ -144,8 +148,8 @@ export function DialogTerminalSurface({
 
       {surfaceModel.liveConsole && activeCommand?.command ? (
         <LiveCommandConsole
+          tabId={tabId}
           sessionId={sessionId}
-          bufferedOutput={bufferedOutput}
           command={activeCommand.command}
           cwd={activeCommand.cwd}
           fontFamily={fontFamily}

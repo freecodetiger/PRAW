@@ -4,7 +4,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 
@@ -41,26 +40,16 @@ describe("ClassicTerminalSurface", () => {
     host.remove();
   });
 
-  it("keeps the terminal guard installer stable across buffer-only rerenders", () => {
-    const firstBuffer: TerminalBufferSnapshot = {
-      content: "\u001b[6n",
-      revision: 1,
-    };
-    const secondBuffer: TerminalBufferSnapshot = {
-      content: "\u001b[6n\u001b[c",
-      revision: 2,
-    };
-
+  it("keeps the terminal guard installer stable across rerenders", () => {
     act(() => {
       root.render(
         <ClassicTerminalSurface
+          tabId="tab:1"
           sessionId="session-1"
-          bufferedOutput={firstBuffer}
           fontFamily="monospace"
           fontSize={14}
           theme={theme}
           isActive={true}
-          presentation="agent-workflow"
           write={write}
           resize={resize}
         />,
@@ -72,13 +61,12 @@ describe("ClassicTerminalSurface", () => {
     act(() => {
       root.render(
         <ClassicTerminalSurface
+          tabId="tab:1"
           sessionId="session-1"
-          bufferedOutput={secondBuffer}
           fontFamily="monospace"
           fontSize={14}
           theme={theme}
           isActive={true}
-          presentation="agent-workflow"
           write={write}
           resize={resize}
         />,

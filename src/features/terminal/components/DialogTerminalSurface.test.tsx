@@ -114,8 +114,9 @@ describe("DialogTerminalSurface", () => {
         <DialogTerminalSurface
           paneState={paneState}
           status="running"
+          tabId="tab:1"
           sessionId="session-1"
-          bufferedOutput={{ content: "", revision: 0 }}
+          
           paneHeight={720}
           fontFamily="monospace"
           fontSize={14}

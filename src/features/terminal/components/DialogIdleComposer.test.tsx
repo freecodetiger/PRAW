@@ -128,11 +128,11 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input");
+    const input = host.querySelector("textarea");
     expect(input).not.toBeNull();
 
     act(() => {
-      (input as HTMLInputElement | null)?.focus();
+      (input as HTMLTextAreaElement | null)?.focus();
     });
 
     await flush();
@@ -159,7 +159,7 @@ describe("DialogIdleComposer", () => {
 
     await flush();
 
-    expect((host.querySelector("input") as HTMLInputElement | null)?.value).toBe("git status");
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
   });
 
   it("shows the ghost inline immediately, reveals suggestions on Tab, and accepts the ghost with ArrowRight", async () => {
@@ -198,14 +198,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -217,7 +217,7 @@ describe("DialogIdleComposer", () => {
 
     const ghostSuffix = host.querySelector(".dialog-terminal__ghost-suffix");
     expect(ghostSuffix?.textContent).toBe(" status");
-    expect((host.querySelector("input") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("");
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.getAttribute("placeholder")).toBe("");
     expect(host.querySelectorAll('[role="option"]')).toHaveLength(0);
 
     act(() => {
@@ -235,7 +235,7 @@ describe("DialogIdleComposer", () => {
 
     await flush();
 
-    expect((host.querySelector("input") as HTMLInputElement | null)?.value).toBe("git status");
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
   });
 
   it("prefers the workflow continuation over repeating the previous git history entry", async () => {
@@ -305,14 +305,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git ");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -376,14 +376,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git st");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -418,7 +418,7 @@ describe("DialogIdleComposer", () => {
 
     await flush();
 
-    expect((host.querySelector("input") as HTMLInputElement | null)?.value).toBe("git stash");
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git stash");
   });
 
   it("shows a ghost for the first suggestion whenever the Tab candidate list is available", async () => {
@@ -463,14 +463,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git st");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -514,14 +514,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git st");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -564,14 +564,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git st");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));
@@ -645,14 +645,14 @@ describe("DialogIdleComposer", () => {
       );
     });
 
-    const input = host.querySelector("input") as HTMLInputElement | null;
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
 
     act(() => {
       input?.focus();
       input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
       if (input) {
-        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
         descriptor?.set?.call(input, "git ");
       }
       input?.dispatchEvent(new Event("input", { bubbles: true }));

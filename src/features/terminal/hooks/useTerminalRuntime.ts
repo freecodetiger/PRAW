@@ -11,6 +11,7 @@ import {
 import { getTerminalBufferKey, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
+import { writeDirect } from "../lib/terminal-registry";
 
 function asMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -26,7 +27,6 @@ export function useTerminalRuntime() {
   const attachSession = useWorkspaceStore((state) => state.attachSession);
   const markTabExited = useWorkspaceStore((state) => state.markTabExited);
   const markTabError = useWorkspaceStore((state) => state.markTabError);
-  const appendOutput = useTerminalViewStore((state) => state.appendOutput);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
   const consumeSemantic = useTerminalViewStore((state) => state.consumeSemantic);
   const resetTabBuffer = useTerminalViewStore((state) => state.resetTabBuffer);
@@ -151,7 +151,11 @@ export function useTerminalRuntime() {
         return;
       }
 
-      appendOutput(tabRef.tabId, event.data);
+      // 核心重构：直接写入 xterm，绕过 React 状态同步
+      // 这消除了频闪的根本原因 - 不再触发 React 渲染
+      writeDirect(tabRef.tabId, event.data);
+
+      // 仍然更新元数据（用于对话框/语义分析）
       consumeOutput(tabRef.tabId, event.data);
     }).then((cleanup) => {
       if (disposed) {
@@ -166,7 +170,7 @@ export function useTerminalRuntime() {
       disposed = true;
       unlistenOutput?.();
     };
-  }, [appendOutput, consumeOutput]);
+  }, [consumeOutput]);
 
   useEffect(() => {
     let disposed = false;

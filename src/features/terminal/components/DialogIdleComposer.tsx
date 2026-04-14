@@ -32,7 +32,7 @@ export function DialogIdleComposer({
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [suggestionBarVisible, setSuggestionBarVisible] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const history = paneState.composerHistory;
 
   const phraseCompletionEnabled =
@@ -107,7 +107,7 @@ export function DialogIdleComposer({
     setSuggestionBarVisible(false);
   }, [draft]);
 
-  const syncCursorState = (input: HTMLInputElement) => {
+  const syncCursorState = (input: HTMLTextAreaElement) => {
     const end = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
     setCursorAtEnd(end);
   };
@@ -185,15 +185,16 @@ export function DialogIdleComposer({
               <span className="dialog-terminal__ghost-suffix">{suggestion}</span>
             </div>
           ) : null}
-          <input
+          <textarea
             ref={inputRef}
-            className="dialog-terminal__input"
+            className="dialog-terminal__input dialog-terminal__input--multiline"
             disabled={isDisabled}
             placeholder={status !== "running" ? "Session is not accepting input." : showGhostOverlay ? "" : "Run a command"}
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"
             value={draft}
+            rows={1}
             onChange={(event) => {
               setDraft(event.target.value);
               syncCursorState(event.target);
@@ -201,6 +202,10 @@ export function DialogIdleComposer({
                 setHistoryIndex(null);
               }
               setSuggestionBarVisible(false);
+              // 自动调整高度
+              const target = event.target;
+              target.style.height = "auto";
+              target.style.height = `${Math.min(target.scrollHeight, 120)}px`; // 最大 120px
             }}
             onFocus={(event) => {
               setIsFocused(true);
@@ -222,6 +227,18 @@ export function DialogIdleComposer({
               syncCursorState(event.currentTarget);
             }}
             onKeyDown={(event) => {
+              // Shift+Enter 允许换行
+              if (event.key === "Enter" && event.shiftKey) {
+                // 允许默认行为（插入换行）
+                return;
+              }
+
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+                return;
+              }
+
               if (event.ctrlKey && event.key === "ArrowUp" && phraseMatches.length > 1) {
                 event.preventDefault();
                 setSuggestionBarVisible(false);
@@ -279,12 +296,6 @@ export function DialogIdleComposer({
               if (event.key === "Escape" && (suggestionBarVisible || visibleSuggestions.length > 0 || suggestion)) {
                 event.preventDefault();
                 setSuggestionBarVisible(false);
-                return;
-              }
-
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submit();
                 return;
               }
 

@@ -4,16 +4,15 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
-import type { TerminalBufferSnapshot } from "../../../domain/terminal/buffer";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
 import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
-import { getTerminalReplayPlan } from "../lib/output-replay";
 import { applyTerminalAppearance } from "../lib/terminal-appearance";
+import { registerTerminal, unregisterTerminal } from "../lib/terminal-registry";
 
 interface XtermTerminalSurfaceProps {
+  tabId: string;
   sessionId: string | null;
-  bufferedOutput: TerminalBufferSnapshot;
   fontFamily: string;
   fontSize: number;
   theme: ThemeTerminalPalette;
@@ -26,8 +25,8 @@ interface XtermTerminalSurfaceProps {
 }
 
 export function XtermTerminalSurface({
+  tabId,
   sessionId,
-  bufferedOutput,
   fontFamily,
   fontSize,
   theme,
@@ -41,7 +40,6 @@ export function XtermTerminalSurface({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const appliedBufferContentRef = useRef("");
   const { handleShortcutKeyDown } = useTerminalClipboard(terminalRef);
 
   useEffect(() => {
@@ -66,9 +64,11 @@ export function XtermTerminalSurface({
     fitAddon.fit();
     terminal.focus();
 
+    // 注册到全局注册表，让 PTY 输出可以直接写入
+    registerTerminal(tabId, terminal);
+
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
-    appliedBufferContentRef.current = "";
     if (forwardedTerminalRef) {
       forwardedTerminalRef.current = terminal;
     }
@@ -104,10 +104,10 @@ export function XtermTerminalSurface({
       removeTerminalGuards();
       imeGuard?.dispose();
       textarea?.removeEventListener("keydown", handleShortcutKeyDown, { capture: true });
+      unregisterTerminal(tabId);
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
-      appliedBufferContentRef.current = "";
       if (forwardedTerminalRef) {
         forwardedTerminalRef.current = null;
       }
@@ -157,38 +157,6 @@ export function XtermTerminalSurface({
       void resize(terminalRef.current.cols, terminalRef.current.rows);
     });
   }, [sessionId, resize]);
-
-  useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) {
-      return;
-    }
-
-    const replayPlan = getTerminalReplayPlan(appliedBufferContentRef.current, bufferedOutput.content);
-    if (replayPlan.type === "noop") {
-      return;
-    }
-
-    if (replayPlan.type === "append") {
-      if (!replayPlan.content) {
-        return;
-      }
-
-      terminal.write(replayPlan.content);
-      appliedBufferContentRef.current = bufferedOutput.content;
-      return;
-    }
-
-    terminal.reset();
-    appliedBufferContentRef.current = "";
-
-    if (!replayPlan.content) {
-      return;
-    }
-
-    terminal.write(replayPlan.content);
-    appliedBufferContentRef.current = replayPlan.content;
-  }, [bufferedOutput]);
 
   return <div ref={containerRef} className={className} />;
 }

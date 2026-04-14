@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm test)",
+      "Bash(sed *)",
+      "Bash(pkill *)",
+      "Bash(sleep *)",
+      "Bash(cat)",
+      "Bash(import *)",
+      "Bash(with)",
+      "Bash(as *)",
+      "Bash(content *)",
+      "Bash(r'\\s*expect\\(useterminalviewstore\\.getstate\\(\\)\\.tabstates\\[getterminalbufferkey\\([^)]+\\)\\]\\)\\.todeepequal\\(\\{[^}]*\\}\\);', *)",
+      "Bash(r'expect\\(useterminalviewstore\\.getstate\\(\\)\\.tabstates\\[getterminalbufferkey\\(tabid\\)\\]\\)\\.toequal\\(\\{.*?\\}\\);', *)",
+      "Bash(f.write)",
+      "Bash(eof)",
+      "Bash(python3 *)",
+      "Bash(git show *)",
+      "Bash(diff *)",
+      "Bash(git checkout *)",
+      "Bash(head *)",
+      "Bash(echo *)",
+      "Bash(mv *)",
+      "Bash(printf *)",
+      "Bash(rm *)",
+      "Bash(git clone *)"
+    ]
+  },
+  "$version": 3
+}

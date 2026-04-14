@@ -11,7 +11,7 @@ import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
 import { resolvePaneActions, type PaneActionId } from "../lib/pane-actions";
 import { resolveTerminalRenderFont } from "../lib/terminal-fonts";
-import { selectTerminalBuffer, selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
+import { selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
@@ -39,7 +39,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const dialogFontSize = useAppConfigStore((state) => state.config.terminal.dialogFontSize);
   const themePresetId = useAppConfigStore((state) => state.config.terminal.themePreset);
   const aiThemeColor = useAppConfigStore((state) => state.config.ai.themeColor);
-  const bufferedOutput = useTerminalViewStore((state) => selectTerminalBuffer(state.buffers, tabId));
   const tabState = useTerminalViewStore((state) => selectTerminalTabState(state.tabStates, tabId));
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
   const { tab, currentStreamSessionId, write, resize, restart, terminate } = useTerminalSession(tabId);
@@ -290,10 +289,10 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
       {renderMode === "dialog" && tabState ? (
         <DialogTerminalSurface
+          tabId={tabId}
           paneState={tabState}
           status={tab.status}
           sessionId={currentStreamSessionId}
-          bufferedOutput={bufferedOutput}
           paneHeight={paneSize.height}
           fontFamily={resolvedTerminalFont.fontFamily}
           fontSize={resolvedTerminalFont.fontSize}
@@ -308,13 +307,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         />
       ) : (
         <ClassicTerminalSurface
+          tabId={tabId}
           sessionId={currentStreamSessionId}
-          bufferedOutput={bufferedOutput}
           fontFamily={resolvedTerminalFont.fontFamily}
           fontSize={resolvedTerminalFont.fontSize}
           theme={themePreset.terminal}
           isActive={Boolean(isActive)}
-          presentation={tabState?.presentation ?? "default"}
           write={write}
           resize={resize}
         />

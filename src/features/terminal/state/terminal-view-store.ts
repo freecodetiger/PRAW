@@ -1,12 +1,6 @@
 import { create } from "zustand";
 
 import {
-  appendTerminalBuffer,
-  EMPTY_TERMINAL_BUFFER,
-  resetTerminalBuffer,
-  type TerminalBufferSnapshot,
-} from "../../../domain/terminal/buffer";
-import {
   appendLiveConsoleOutput,
   applyTerminalSemanticEvent,
   appendDialogOutput,
@@ -28,9 +22,7 @@ import {
 } from "../lib/shell-integration";
 
 interface TerminalViewStore {
-  buffers: Record<string, TerminalBufferSnapshot>;
   tabStates: Record<string, TerminalTabViewState>;
-  appendOutput: (tabId: string, data: string) => void;
   resetTabBuffer: (tabId: string) => void;
   removeTabBuffer: (tabId: string) => void;
   syncTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
@@ -48,16 +40,7 @@ export interface TerminalTabViewState extends DialogState {
 }
 
 export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
-  buffers: {},
   tabStates: {},
-
-  appendOutput: (tabId, data) =>
-    set((state) => ({
-      buffers: {
-        ...state.buffers,
-        [getTerminalBufferKey(tabId)]: appendTerminalBuffer(state.buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER, data),
-      },
-    })),
 
   syncTabState: (tabId, shell, cwd, preferredMode) =>
     set((state) => {
@@ -96,20 +79,12 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
       };
-      const nextBuffers =
-        nextTabState.activeCommandBlockId === null
-          ? state.buffers
-          : {
-              ...state.buffers,
-              [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
-            };
 
       return {
         tabStates: {
           ...state.tabStates,
           [key]: nextTabState,
         },
-        buffers: nextBuffers,
       };
     }),
 
@@ -165,7 +140,6 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           ...state.tabStates,
           [key]: nextState,
         },
-        buffers: state.buffers,
       };
     }),
 
@@ -182,20 +156,11 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         ...applyTerminalSemanticEvent(tabState, event),
       };
 
-      const nextBuffers =
-        event.kind === "agent-workflow"
-          ? {
-              ...state.buffers,
-              [key]: resetTerminalBuffer(state.buffers[key] ?? EMPTY_TERMINAL_BUFFER),
-            }
-          : state.buffers;
-
       return {
         tabStates: {
           ...state.tabStates,
           [key]: nextState,
         },
-        buffers: nextBuffers,
       };
     }),
 
@@ -239,36 +204,13 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       return { tabStates };
     }),
 
-  resetTabBuffer: (tabId) =>
-    set((state) => ({
-      buffers: {
-        ...state.buffers,
-        [getTerminalBufferKey(tabId)]: resetTerminalBuffer(state.buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER),
-      },
-    })),
+  resetTabBuffer: () => {},
 
-  removeTabBuffer: (tabId) =>
-    set((state) => {
-      const key = getTerminalBufferKey(tabId);
-      if (!state.buffers[key]) {
-        return state;
-      }
-
-      const buffers = { ...state.buffers };
-      delete buffers[key];
-      return { buffers };
-    }),
+  removeTabBuffer: () => {},
 }));
 
 export function getTerminalBufferKey(tabId: string): string {
   return tabId;
-}
-
-export function selectTerminalBuffer(
-  buffers: Record<string, TerminalBufferSnapshot>,
-  tabId: string,
-): TerminalBufferSnapshot {
-  return buffers[getTerminalBufferKey(tabId)] ?? EMPTY_TERMINAL_BUFFER;
 }
 
 export function selectTerminalTabState(

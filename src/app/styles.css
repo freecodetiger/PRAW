@@ -743,6 +743,16 @@ button {
   border: 0;
   background: transparent;
   color: var(--text-primary);
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 32px;
+  max-height: 120px;
+}
+
+.dialog-terminal__input--multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .dialog-terminal__input--pty {

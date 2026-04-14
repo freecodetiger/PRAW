@@ -32,6 +32,7 @@ export function getTerminalReplayPlan(renderedContent: string, bufferedContent: 
     };
   }
 
+  // 直接 hydrate - 避免复杂的匹配逻辑导致性能问题
   return {
     type: "hydrate",
     content: bufferedContent,
