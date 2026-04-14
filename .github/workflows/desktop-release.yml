@@ -80,6 +80,56 @@ jobs:
           short_sha="${GITHUB_SHA::12}"
           echo "main_tag=main-build-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "main_name=PRAW main build ${version} (${short_sha})" >> "$GITHUB_OUTPUT"
+          {
+            echo "main_body<<EOF"
+            echo "这是从 \`main\` 自动产出的桌面端预发布版本。"
+            echo
+            echo "欢迎下载体验。当前版本已经同时附带："
+            echo
+            echo "- macOS 安装包（\`.dmg\`）"
+            echo "- macOS 应用归档（\`.app.tar.gz\`）"
+            echo "- Linux 安装包（\`.deb\` / \`.rpm\` / \`.AppImage\`）"
+            echo
+            echo "### 作者的话"
+            echo
+            echo "- 这是一个持续快速迭代中的版本，适合想提前体验新能力的用户"
+            echo "- 如果你主要关注终端交互、Dialog 体验、AI 辅助命令流，这个版本已经可以上手"
+            echo "- 如果你在 macOS 或 Linux 上遇到安装、启动、交互兼容问题，欢迎继续反馈"
+            echo
+            echo "### 本次构建"
+            echo
+            echo "- Version: ${version}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Release tag: main-build-${version}-${short_sha}"
+            echo
+            echo "### 当前方向"
+            echo
+            echo "- 继续完善 shell 兼容能力，尤其是 zsh / interactive 场景"
+            echo "- 持续打磨 Dialog 模式和 Classic 模式的体验边界"
+            echo "- 稳定跨平台打包与发布质量"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "tag_body<<EOF"
+            echo "这是 PRAW 的自动化桌面端版本发布。"
+            echo
+            echo "### 作者的话"
+            echo
+            echo "- 这一版聚合了 macOS 与 Linux 的桌面端安装资产"
+            echo "- 欢迎直接下载使用，也欢迎继续反馈产品体验与兼容性问题"
+            echo
+            echo "### 发布资产"
+            echo
+            echo "- macOS: \`.dmg\`, \`.app.tar.gz\`"
+            echo "- Linux: \`.deb\`, \`.rpm\`, \`.AppImage\`"
+            echo
+            echo "### 构建信息"
+            echo
+            echo "- Version: ${version}"
+            echo "- Source ref: ${GITHUB_REF}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build workflow artifacts only
         if: github.event_name == 'workflow_dispatch'
@@ -97,10 +147,7 @@ jobs:
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
           releaseName: ${{ steps.release_meta.outputs.main_name }}
-          releaseBody: |
-            Automated desktop prerelease built from `main`.
-
-            Commit: ${{ github.sha }}
+          releaseBody: ${{ steps.release_meta.outputs.main_body }}
           releaseDraft: false
           prerelease: true
           args: ${{ matrix.bundle_args }}
@@ -113,7 +160,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
-          releaseBody: Automated desktop release artifacts for PRAW.
+          releaseBody: ${{ steps.release_meta.outputs.tag_body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.bundle_args }}
