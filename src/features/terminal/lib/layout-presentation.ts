@@ -22,16 +22,18 @@ export function getChildBorderMask(
   total: number,
 ): PaneBorderMask {
   if (axis === "horizontal") {
-    return {
+    return compactMask({
       ...mask,
+      left: index > 0 ? true : mask.left,
       right: index < total - 1 ? true : mask.right,
-    };
+    });
   }
 
-  return {
+  return compactMask({
     ...mask,
+    top: index > 0 ? true : mask.top,
     bottom: index < total - 1 ? true : mask.bottom,
-  };
+  });
 }
 
 export function splitPaneBorderMask(
@@ -42,4 +44,8 @@ export function splitPaneBorderMask(
     first: getChildBorderMask(mask, axis, 0, 2),
     second: getChildBorderMask(mask, axis, 1, 2),
   };
+}
+
+function compactMask(mask: PaneBorderMask): PaneBorderMask {
+  return Object.fromEntries(Object.entries(mask).filter(([, value]) => value === true)) as PaneBorderMask;
 }

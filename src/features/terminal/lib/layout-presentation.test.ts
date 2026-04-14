@@ -15,19 +15,40 @@ describe("layout presentation", () => {
     });
   });
 
-  it("marks every non-terminal child in a horizontal container as flush-right", () => {
+  it("marks both panes touching a horizontal seam as flush on their shared edge", () => {
     expect(getChildBorderMask({}, "horizontal", 0, 3)).toEqual({
       right: true,
     });
-    expect(getChildBorderMask({}, "horizontal", 2, 3)).toEqual({});
+    expect(getChildBorderMask({}, "horizontal", 1, 3)).toEqual({
+      left: true,
+      right: true,
+    });
+    expect(getChildBorderMask({}, "horizontal", 2, 3)).toEqual({
+      left: true,
+    });
   });
 
-  it("preserves the two-child compatibility helper", () => {
+  it("marks both panes touching a vertical seam as flush on their shared edge", () => {
+    expect(getChildBorderMask({}, "vertical", 0, 3)).toEqual({
+      bottom: true,
+    });
+    expect(getChildBorderMask({}, "vertical", 1, 3)).toEqual({
+      top: true,
+      bottom: true,
+    });
+    expect(getChildBorderMask({}, "vertical", 2, 3)).toEqual({
+      top: true,
+    });
+  });
+
+  it("preserves the two-child compatibility helper while rounding both sides of the split", () => {
     expect(splitPaneBorderMask({}, "vertical")).toEqual({
       first: {
         bottom: true,
       },
-      second: {},
+      second: {
+        top: true,
+      },
     });
   });
 });
