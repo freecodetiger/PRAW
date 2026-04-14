@@ -55,6 +55,7 @@ export type ShellLifecycleEvent =
   | { type: "prompt-state"; cwd: string };
 
 let nextSessionBlockId = 1;
+const ANSI_ESCAPE_PATTERN = /\u001b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/g;
 
 export function createDialogState(shell: string, cwd: string, preferredMode: PaneRenderMode = "dialog"): DialogState {
   const supported = isDialogShellSupported(shell);
@@ -174,7 +175,7 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
     return state;
   }
 
-  if (data.trim().length === 0) {
+  if (isVisuallyEmptyOutput(data)) {
     return state;
   }
 
@@ -252,7 +253,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
                       ...block,
                       output:
                         state.transcriptPolicy === "defer-until-exit" && state.liveConsole?.blockId === block.id
-                          ? state.liveConsole.transcriptCapture
+                          ? finalizeDeferredCommandOutput(block.command, state.liveConsole.transcriptCapture)
                           : block.output,
                       status: "completed",
                       exitCode: event.exitCode,
@@ -268,6 +269,60 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
       return nextState;
     }
   }
+}
+
+function finalizeDeferredCommandOutput(command: string | null, output: string): string {
+  if (output.length === 0) {
+    return output;
+  }
+
+  const commandText = command?.trim() ?? "";
+  let normalized = output.replace(/\r/g, "");
+
+  if (commandText.length > 0) {
+    const lines = normalized.split("\n");
+    const firstNonEmptyLineIndex = lines.findIndex((line) => line.trim().length > 0);
+    if (firstNonEmptyLineIndex >= 0 && lines[firstNonEmptyLineIndex]?.trim() === commandText) {
+      lines.splice(firstNonEmptyLineIndex, 1);
+      normalized = lines.join("\n");
+    }
+  }
+
+  const trimmedTrailingNewlines = normalized.replace(/\n+$/g, "");
+  const lines = trimmedTrailingNewlines.split("\n");
+  const lastNonEmptyLineIndex = findLastNonEmptyLineIndex(lines);
+
+  if (lastNonEmptyLineIndex >= 0 && isLikelyPromptLine(lines[lastNonEmptyLineIndex] ?? "")) {
+    lines.splice(lastNonEmptyLineIndex, 1);
+    normalized = lines.join("\n").replace(/\n+$/g, "");
+  } else {
+    normalized = trimmedTrailingNewlines;
+  }
+
+  return normalized.length === 0 ? "" : `${normalized}\n`;
+}
+
+function isVisuallyEmptyOutput(output: string): boolean {
+  return stripAnsi(output).trim().length === 0;
+}
+
+function stripAnsi(output: string): string {
+  return output.replace(ANSI_ESCAPE_PATTERN, "");
+}
+
+function findLastNonEmptyLineIndex(lines: string[]): number {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if ((lines[index] ?? "").trim().length > 0) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isLikelyPromptLine(line: string): boolean {
+  const trimmed = stripAnsi(line).trim();
+  return trimmed === "%" || trimmed === "$" || trimmed === "#" || trimmed === "❯";
 }
 
 export function isDialogShellSupported(shell: string): boolean {
