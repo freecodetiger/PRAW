@@ -37,7 +37,7 @@ export function LiveCommandConsole({
       aria-label="Live command console"
     >
       <header className="dialog-live-console__header">
-        <span className="dialog-live-console__label">Live Command Console</span>
+        <span className="dialog-live-console__label">Live Console</span>
         <span className="dialog-live-console__meta">{cwd}</span>
         <code className="dialog-live-console__command">{command}</code>
       </header>

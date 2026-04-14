@@ -8,34 +8,36 @@ describe("theme presets", () => {
       id: "light",
       colorScheme: "light",
       app: {
-        background: "#ffffff",
-        surface: "#ffffff",
-        textPrimary: "#000000",
+        background: "#f3f5f8",
+        surface: "#fcfdff",
+        textPrimary: "#16202b",
+        historyCommand: "#3159b8",
       },
       terminal: {
-        background: "#ffffff",
-        foreground: "#000000",
+        background: "#f9fbff",
+        foreground: "#16202b",
+        blue: "#4f6fb8",
       },
     });
   });
 
-  it("returns a dark preset with traditional near-black terminal contrast", () => {
+  it("returns a dark preset with restrained graphite contrast instead of pure black", () => {
     expect(getThemePreset("dark")).toMatchObject({
       id: "dark",
       colorScheme: "dark",
       app: {
-        background: "#000000",
-        surface: "#050505",
-        textPrimary: "#f7f7f7",
-        historyCommand: "#8ab4ff",
-        historyAccent: "#e0b7ff",
+        background: "#0d1117",
+        surface: "#121821",
+        textPrimary: "#edf2f7",
+        historyCommand: "#93adf5",
+        historyAccent: "#aebcff",
       },
       terminal: {
-        background: "#000000",
-        foreground: "#f5f5f5",
-        cursor: "#f5f5f5",
-        blue: "#61afef",
-        brightBlue: "#8fc7ff",
+        background: "#111723",
+        foreground: "#e6edf5",
+        cursor: "#e6edf5",
+        blue: "#7ea2ff",
+        brightBlue: "#a9c1ff",
       },
     });
   });
@@ -45,12 +47,12 @@ describe("theme presets", () => {
       id: "sepia",
       colorScheme: "light",
       app: {
-        background: "#f4ead7",
-        surface: "#fbf3e4",
-        textPrimary: "#2f2419",
+        background: "#f3eadc",
+        surface: "#fcf7ef",
+        textPrimary: "#312519",
       },
       terminal: {
-        background: "#f7efe2",
+        background: "#f8f1e7",
         foreground: "#2f2419",
         cursor: "#2f2419",
       },

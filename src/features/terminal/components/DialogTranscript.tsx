@@ -17,7 +17,11 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
       {blocks.map((block, index) => (
         <article className="command-block" key={block.id}>
           {index > 0 ? <hr className="command-block__divider" /> : null}
-          {block.kind === "command" ? <CommandTranscriptHeader block={block} /> : <p className="command-block__session-label">session output</p>}
+          {block.kind === "command" ? (
+            <CommandTranscriptHeader block={block} />
+          ) : (
+            <p className="command-block__session-label">shell output</p>
+          )}
           <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
         </article>
       ))}
