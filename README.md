@@ -75,6 +75,55 @@ npm test
 npm run build
 ```
 
+## Release Process
+
+PRAW uses two different release lanes:
+
+- `main` pushes automatically create a **multi-platform prerelease**
+- `v*` tags automatically create a **draft formal release**
+
+This is deliberate:
+
+- prereleases stay automatic for testing and fast internal handoff
+- formal releases still build and upload assets automatically, but the final public text is expected to be reviewed and edited by a human author
+
+### Main Prerelease Lane
+
+Every push to `main` creates one shared prerelease that aggregates:
+
+- macOS `.dmg`
+- macOS `.app.tar.gz`
+- Linux `.deb`
+- Linux `.rpm`
+- Linux `.AppImage`
+
+These are intended for preview/testing and can use workflow-generated notes.
+
+### Formal Release Lane
+
+To publish an official version:
+
+1. make sure the target commit is already merged into `main`
+2. update the application version if needed
+3. create a version tag such as `v0.1.2`
+4. push that tag to GitHub
+5. wait for the `desktop-release` workflow to finish
+6. open the generated **Draft Release**
+7. hand-write or edit:
+   - version highlights
+   - author notes
+   - known issues
+   - upgrade notes
+8. verify the attached assets
+9. click **Publish release** manually
+
+### Release Contract For Humans And Agents
+
+- do **not** use a `main` prerelease as the final public release
+- do **not** assume the draft release body is final copy
+- tagged releases are expected to remain **drafts** until a human reviews and publishes them
+- if another maintainer adds or adjusts platform bundles, keep using the shared `desktop-release` workflow instead of introducing separate per-platform public releases
+
 ## Tech Stack
 
 - `Tauri` for the desktop shell and native bridge
