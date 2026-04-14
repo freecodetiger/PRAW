@@ -384,6 +384,12 @@ describe("dialog terminal state", () => {
     ]);
   });
 
+  it("ignores whitespace-only startup output when no command block is active", () => {
+    const state = appendDialogOutput(createDialogState("/bin/bash", "/workspace"), "\r\n  \r\n");
+
+    expect(state.blocks).toEqual([]);
+  });
+
   it("updates the cwd from shell prompt markers for the next command header", () => {
     const state = applyShellLifecycleEvent(createDialogState("/bin/bash", "/workspace"), {
       type: "prompt-state",

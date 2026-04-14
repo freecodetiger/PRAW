@@ -170,6 +170,10 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
     };
   }
 
+  if (data.trim().length === 0) {
+    return state;
+  }
+
   const lastBlock = state.blocks[state.blocks.length - 1];
   if (lastBlock?.kind === "session") {
     return {

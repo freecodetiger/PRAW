@@ -8,15 +8,15 @@ describe("theme presets", () => {
       id: "light",
       colorScheme: "light",
       app: {
-        background: "#f3f5f8",
-        surface: "#fcfdff",
-        textPrimary: "#16202b",
-        historyCommand: "#3159b8",
+        background: "#f5f1e8",
+        surface: "#fdfaf4",
+        textPrimary: "#241f17",
+        historyCommand: "#5c7198",
       },
       terminal: {
-        background: "#f9fbff",
-        foreground: "#16202b",
-        blue: "#4f6fb8",
+        background: "#fbf8f2",
+        foreground: "#241f17",
+        blue: "#6e83ac",
       },
     });
   });
