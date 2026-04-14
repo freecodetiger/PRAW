@@ -15,6 +15,14 @@ jobs:
   build-desktop:
     name: build-desktop (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
+    env:
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +79,49 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Validate macOS signing prerequisites for tagged releases
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "${APPLE_CERTIFICATE}" ]] || missing+=("APPLE_CERTIFICATE")
+          [[ -n "${APPLE_CERTIFICATE_PASSWORD}" ]] || missing+=("APPLE_CERTIFICATE_PASSWORD")
+          [[ -n "${KEYCHAIN_PASSWORD}" ]] || missing+=("KEYCHAIN_PASSWORD")
+          [[ -n "${APPLE_ID}" ]] || missing+=("APPLE_ID")
+          [[ -n "${APPLE_PASSWORD}" ]] || missing+=("APPLE_PASSWORD")
+          [[ -n "${APPLE_TEAM_ID}" ]] || missing+=("APPLE_TEAM_ID")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required macOS signing/notarization secrets for tagged release:"
+            printf ' - %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Import Apple Developer ID certificate
+        id: apple_signing
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.KEYCHAIN_PASSWORD != ''
+        shell: bash
+        run: |
+          CERT_PATH="$RUNNER_TEMP/apple-certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/praw-signing.keychain-db"
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep 'Developer ID Application' | head -n 1 | sed -E 's/.*"(.+)"/\1/')"
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "Unable to find a Developer ID Application signing identity in imported certificate"
+            exit 1
+          fi
+
+          echo "signing_identity=$SIGNING_IDENTITY" >> "$GITHUB_OUTPUT"
 
       - name: Compute release metadata
         id: release_meta
@@ -137,6 +188,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ env.APPLE_ID }}
+          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           args: ${{ matrix.bundle_args }}
 
@@ -145,6 +201,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ env.APPLE_ID }}
+          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
           releaseName: ${{ steps.release_meta.outputs.main_name }}
@@ -158,6 +219,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ env.APPLE_ID }}
+          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
