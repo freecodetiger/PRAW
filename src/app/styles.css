@@ -433,10 +433,10 @@ button {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 5px;
+  padding: 6px;
   border-radius: calc(var(--radius-xl) + 1px);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 72%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 70%, transparent), transparent 34%),
     var(--app-background);
 }
 
@@ -449,10 +449,10 @@ button {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid var(--border-muted);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, #d0d7de);
   border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--surface) 96%, var(--surface-muted));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  background: color-mix(in srgb, var(--surface-elevated) 99%, #ffffff);
+  box-shadow: 0 1px 0 rgba(27, 31, 36, 0.04);
   overflow: hidden;
   container-type: inline-size;
 }
@@ -464,21 +464,19 @@ button {
   content: "";
   position: absolute;
   pointer-events: none;
-  background: color-mix(in srgb, var(--app-background) 94%, transparent);
+  background: color-mix(in srgb, var(--app-background) 97%, transparent);
   z-index: 1;
 }
 
 .terminal-pane--active {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 24%, #0969da);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    0 0 0 1px color-mix(in srgb, var(--accent-soft) 100%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--accent-soft) 86%, transparent);
 }
 
 .terminal-pane--agent-workflow {
   border-color: color-mix(in srgb, var(--ai-theme-color) 34%, var(--border));
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--ai-theme-color) 16%, transparent),
     0 0 0 1px color-mix(in srgb, var(--ai-theme-color) 12%, transparent);
 }
 
@@ -494,9 +492,9 @@ button {
 
 .terminal-pane--flush-top::after {
   top: 0;
-  left: 6px;
-  right: 6px;
-  height: 6px;
+  left: 5px;
+  right: 5px;
+  height: 4px;
   border-radius: 0 0 var(--radius-seam) var(--radius-seam);
 }
 
@@ -507,10 +505,10 @@ button {
 }
 
 .terminal-pane--flush-right::after {
-  top: 6px;
+  top: 5px;
   right: 0;
-  bottom: 6px;
-  width: 6px;
+  bottom: 5px;
+  width: 4px;
   border-radius: var(--radius-seam) 0 0 var(--radius-seam);
 }
 
@@ -521,10 +519,10 @@ button {
 }
 
 .terminal-pane--flush-bottom::after {
-  right: 6px;
+  right: 5px;
   bottom: 0;
-  left: 6px;
-  height: 6px;
+  left: 5px;
+  height: 4px;
   border-radius: var(--radius-seam) var(--radius-seam) 0 0;
 }
 
@@ -535,10 +533,10 @@ button {
 }
 
 .terminal-pane--flush-left::after {
-  top: 6px;
-  bottom: 6px;
+  top: 5px;
+  bottom: 5px;
   left: 0;
-  width: 6px;
+  width: 4px;
   border-radius: 0 var(--radius-seam) var(--radius-seam) 0;
 }
 
@@ -549,16 +547,16 @@ button {
   justify-content: space-between;
   gap: 12px;
   min-height: 43px;
-  padding: 10px 11px;
-  box-shadow: inset 0 -1px 0 var(--border-muted);
-  background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+  padding: 9px 11px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 78%, #d8dee4);
+  background: color-mix(in srgb, var(--surface-muted) 55%, #f6f8fa);
   cursor: move;
   user-select: none;
 }
 
 .terminal-pane--agent-workflow .terminal-pane__header {
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ai-theme-color) 28%, var(--border-muted));
-  background: color-mix(in srgb, var(--ai-background-color) 78%, var(--surface-elevated));
+  background: color-mix(in srgb, var(--ai-background-color) 52%, #f6f8fa);
 }
 
 .terminal-pane__title {
@@ -573,8 +571,8 @@ button {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .terminal-pane__title--editing {
@@ -599,19 +597,19 @@ button {
   margin-left: auto;
   flex: 0 0 auto;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-subtle);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
 .terminal-pane--agent-workflow .terminal-pane__mode-indicator {
   border: 1px solid color-mix(in srgb, var(--ai-theme-color) 28%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ai-theme-color) 18%, transparent);
+  border-radius: calc(var(--radius-md) + 2px);
+  background: color-mix(in srgb, var(--ai-theme-color) 14%, transparent);
   color: var(--ai-badge-text);
-  padding: 4px 10px;
+  padding: 3px 8px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
 }
 
 .pane-action-menu {
@@ -621,11 +619,12 @@ button {
 }
 
 .pane-action-menu__trigger {
-  min-width: 28px;
+  min-width: 24px;
   height: 24px;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-muted);
   padding: 0 6px;
 }
 
@@ -670,27 +669,28 @@ button {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border-muted);
-  border-radius: calc(var(--radius-lg) + 3px);
-  background: color-mix(in srgb, var(--surface-elevated) 95%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .pane-header-actions__button {
-  min-width: 26px;
-  height: 26px;
-  border: 0;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  padding: 0 6px;
+  padding: 0 5px;
 }
 
 .pane-header-actions__button:hover:not(:disabled),
 .pane-action-menu__trigger:hover:not(:disabled) {
-  background: var(--button-hover);
-  border-radius: calc(var(--radius-md) + 3px);
+  border-color: color-mix(in srgb, var(--border) 84%, #d0d7de);
+  background: color-mix(in srgb, var(--surface-elevated) 96%, #ffffff);
   color: var(--text-primary);
 }
 
@@ -710,7 +710,7 @@ button {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: transparent;
+  background: color-mix(in srgb, var(--surface-elevated) 99%, #ffffff);
 }
 
 .terminal-pane--agent-workflow .terminal-pane__body,
@@ -1266,7 +1266,7 @@ button {
 
 .layout-tree__divider {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   flex: 0 0 6px;
   width: 6px;
   height: 6px;
@@ -1279,12 +1279,14 @@ button {
 .layout-tree__divider::before {
   content: "";
   position: absolute;
-  inset: 1px 2px;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 0.5px);
+  width: 1px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border-muted) 72%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-elevated) 72%, transparent);
+  background: color-mix(in srgb, var(--border) 76%, #d0d7de);
   transition: background 120ms ease, opacity 120ms ease;
-  opacity: 0.9;
+  opacity: 0.78;
 }
 
 .layout-tree__divider--vertical {
@@ -1294,7 +1296,12 @@ button {
 }
 
 .layout-tree__divider--vertical::before {
-  inset: 2px 1px;
+  top: calc(50% - 0.5px);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: 1px;
 }
 
 .layout-tree__divider--horizontal {
@@ -1460,7 +1467,8 @@ button {
 
 .layout-tree__divider:hover::before,
 .layout-tree--resizing .layout-tree__divider::before {
-  background: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
+  background: color-mix(in srgb, var(--accent) 38%, var(--border));
+  opacity: 1;
 }
 
 .terminal-pane__resize-handle--left,

@@ -158,6 +158,13 @@ Panes remain the product’s core structural unit, but their visual treatment ch
 
 Current panes feel like engineering boxes. New panes should feel like professional workspace modules.
 
+**Implementation refinement after visual review:**
+
+- pane chrome should now lean closer to **GitHub’s repository/file-list card language** than to Manus’s softer card treatment
+- pane headers should read like restrained utility bars: pale neutral background, thin divider, compact title weight, low-noise actions
+- split seams should stay **very thin visually** even when the hit target remains larger for resizing
+- seam endpoints must feel intentional and rounded without turning the split into a heavy pill or decorative rail
+
 ### Active Pane State
 
 The active pane should no longer announce itself mainly through thicker borders.
