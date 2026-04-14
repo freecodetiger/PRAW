@@ -3,6 +3,8 @@ name: macos-release
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -44,7 +46,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --bundles app --target ${{ matrix.target }}
+          args: --bundles app,dmg --target ${{ matrix.target }}
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
+
+      - name: Build and publish main-branch prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: "main-build-__VERSION__-${{ github.run_number }}"
+          releaseName: "PRAW main build #${{ github.run_number }}"
+          releaseBody: |
+            Automated macOS prerelease built from `main`.
+
+            Commit: ${{ github.sha }}
+            Target: ${{ matrix.target }}
+          releaseDraft: false
+          prerelease: true
+          args: --bundles app,dmg --target ${{ matrix.target }}
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
 
@@ -57,8 +78,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "PRAW ${{ github.ref_name }}"
           releaseBody: "Automated macOS release artifacts for PRAW."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
-          args: --bundles app --target ${{ matrix.target }}
+          args: --bundles app,dmg --target ${{ matrix.target }}
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
