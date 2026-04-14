@@ -469,9 +469,8 @@ button {
 }
 
 .terminal-pane--active {
-  border-color: color-mix(in srgb, var(--accent) 24%, #0969da);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent-soft) 86%, transparent);
+  border-color: color-mix(in srgb, var(--border) 84%, #d0d7de);
+  box-shadow: 0 1px 0 rgba(27, 31, 36, 0.04);
 }
 
 .terminal-pane--agent-workflow {
@@ -553,12 +552,32 @@ button {
   user-select: none;
 }
 
+.terminal-pane--active .terminal-pane__header {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 7%, #f6f8fa),
+      color-mix(in srgb, var(--surface-elevated) 96%, #ffffff)
+    );
+}
+
 .terminal-pane--agent-workflow .terminal-pane__header {
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ai-theme-color) 18%, var(--border));
   background:
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--ai-theme-color) 6%, #f6f8fa),
+      color-mix(in srgb, var(--surface-elevated) 96%, #ffffff)
+    );
+}
+
+.terminal-pane--agent-workflow.terminal-pane--active .terminal-pane__header {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--ai-theme-color) 28%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ai-theme-color) 9%, #f6f8fa),
       color-mix(in srgb, var(--surface-elevated) 96%, #ffffff)
     );
 }
