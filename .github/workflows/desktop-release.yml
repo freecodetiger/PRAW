@@ -111,12 +111,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           {
             echo "tag_body<<EOF"
-            echo "这是 PRAW 的自动化桌面端版本发布。"
+            echo "这是 PRAW 的正式版发布草稿。"
             echo
             echo "### 作者的话"
             echo
-            echo "- 这一版聚合了 macOS 与 Linux 的桌面端安装资产"
-            echo "- 欢迎直接下载使用，也欢迎继续反馈产品体验与兼容性问题"
+            echo "- 这一版已经自动聚合了 macOS 与 Linux 的桌面端安装资产"
+            echo "- 请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议"
+            echo "- 确认文案无误后，再从 GitHub Release 页面手动点击 Publish release"
             echo
             echo "### 发布资产"
             echo
@@ -161,6 +162,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
           releaseBody: ${{ steps.release_meta.outputs.tag_body }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.bundle_args }}

@@ -39,6 +39,8 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("startsWith(github.ref, 'refs/tags/v')");
     expect(workflow).toContain("tagName: ${{ github.ref_name }}");
     expect(workflow).toContain('releaseBody: ${{ steps.release_meta.outputs.tag_body }}');
+    expect(workflow).toContain("releaseDraft: true");
+    expect(workflow).toContain("prerelease: false");
   });
 
   it("includes author-facing release note sections for prereleases and tags", () => {
@@ -46,6 +48,6 @@ describe("release workflow contract", () => {
 
     expect(workflow).toContain("### 作者的话");
     expect(workflow).toContain('echo "这是从 \\`main\\` 自动产出的桌面端预发布版本。"');
-    expect(workflow).toContain("这一版聚合了 macOS 与 Linux 的桌面端安装资产");
+    expect(workflow).toContain("请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议");
   });
 });
