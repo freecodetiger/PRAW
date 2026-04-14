@@ -96,4 +96,13 @@ describe("shell integration parser", () => {
     expect(result.visibleOutput).toBe("file-a\nfile-b\n");
   });
 
+  it("removes zsh line-redraw backspaces from visible output", () => {
+    const result = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "e\becho hello\n",
+    );
+
+    expect(result.visibleOutput).toBe("echo hello\n");
+  });
+
 });

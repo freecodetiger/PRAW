@@ -263,7 +263,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
 }
 
 export function isDialogShellSupported(shell: string): boolean {
-  return /(^|\/)bash$/.test(shell.trim());
+  return /(^|\/)(bash|zsh)$/.test(shell.trim());
 }
 
 export function applyTerminalSemanticEvent(state: DialogState, event: TerminalSemanticEvent): DialogState {

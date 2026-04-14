@@ -11,8 +11,16 @@ import {
 } from "./dialog";
 
 describe("dialog terminal state", () => {
-  it("starts bash panes in the preferred mode and unsupported shells in classic mode", () => {
+  it("starts bash and zsh panes in the preferred mode and unsupported shells in classic mode", () => {
     expect(createDialogState("/bin/bash", "/home/zpc")).toMatchObject({
+      preferredMode: "dialog",
+      mode: "dialog",
+      modeSource: "default",
+      shellIntegration: "supported",
+      cwd: "/home/zpc",
+    });
+
+    expect(createDialogState("/usr/bin/zsh", "/home/zpc")).toMatchObject({
       preferredMode: "dialog",
       mode: "dialog",
       modeSource: "default",
@@ -28,7 +36,7 @@ describe("dialog terminal state", () => {
       cwd: "/home/zpc",
     });
 
-    expect(createDialogState("/usr/bin/zsh", "/home/zpc", "dialog")).toMatchObject({
+    expect(createDialogState("/opt/homebrew/bin/fish", "/home/zpc", "dialog")).toMatchObject({
       preferredMode: "dialog",
       mode: "classic",
       modeSource: "shell-unsupported",
