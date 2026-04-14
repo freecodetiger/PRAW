@@ -1,0 +1,15 @@
+{
+  "product_name": "PRAW",
+  "sprints": [
+    {
+      "id": "sprint-1",
+      "goal": "Create a credible macOS compatibility and release baseline",
+      "features": [
+        "mac-baseline-audit",
+        "mac-release-workflow",
+        "zsh-dialog-integration"
+      ],
+      "status": "in-progress"
+    }
+  ]
+}

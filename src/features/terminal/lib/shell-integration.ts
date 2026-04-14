@@ -125,14 +125,14 @@ function sanitizeVisibleTerminalOutput(
   while (cursor < source.length) {
     const escapeIndex = source.indexOf(ESC, cursor);
     if (escapeIndex === -1) {
-      visibleOutput += source.slice(cursor);
+      visibleOutput = appendPlainText(visibleOutput, source.slice(cursor));
       return {
         visibleOutput,
         pendingControl: "",
       };
     }
 
-    visibleOutput += source.slice(cursor, escapeIndex);
+    visibleOutput = appendPlainText(visibleOutput, source.slice(cursor, escapeIndex));
     const sequence = consumeEscapeSequence(source, escapeIndex);
     if (!sequence) {
       return {
@@ -152,6 +152,35 @@ function sanitizeVisibleTerminalOutput(
     visibleOutput,
     pendingControl: "",
   };
+}
+
+function appendPlainText(output: string, chunk: string): string {
+  let next = output;
+
+  for (const char of chunk) {
+    if (char === "\b") {
+      next = removeLastVisibleCharacter(next);
+      continue;
+    }
+
+    next += char;
+  }
+
+  return next;
+}
+
+function removeLastVisibleCharacter(output: string): string {
+  const trailingAnsiMatch = output.match(/(?:\u001b\[[0-9;]*m)+$/u);
+  const trailingAnsi = trailingAnsiMatch?.[0] ?? "";
+  const visiblePrefix = trailingAnsi.length > 0 ? output.slice(0, -trailingAnsi.length) : output;
+  const codepoints = Array.from(visiblePrefix);
+
+  if (codepoints.length === 0) {
+    return output;
+  }
+
+  codepoints.pop();
+  return `${codepoints.join("")}${trailingAnsi}`;
 }
 
 function consumeEscapeSequence(

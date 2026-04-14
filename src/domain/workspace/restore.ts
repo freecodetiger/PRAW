@@ -1,5 +1,6 @@
 import { collectLeafPaneIds } from "../layout/tree";
 import type { LayoutNode, SplitAxis } from "../layout/types";
+import { DEFAULT_TERMINAL_SHELL } from "../config/default-shell";
 import type { PaneSnapshot, WorkspaceSnapshot } from "./snapshot";
 
 export function normalizeWorkspaceSnapshot(
@@ -105,7 +106,7 @@ function normalizePaneSnapshot(pane: unknown): PaneSnapshot | null {
   return {
     paneId: pane.paneId,
     title: pane.title,
-    shell: isNonEmptyString(pane.shell) ? pane.shell : "/bin/bash",
+    shell: isNonEmptyString(pane.shell) ? pane.shell : DEFAULT_TERMINAL_SHELL,
     cwd: isNonEmptyString(pane.cwd) ? pane.cwd : "~",
   };
 }

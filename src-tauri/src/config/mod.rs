@@ -132,11 +132,23 @@ fn default_settings_panel_language() -> String {
     "en".to_string()
 }
 
+fn fallback_default_shell(is_macos: bool) -> String {
+    if is_macos {
+        "/bin/zsh".to_string()
+    } else {
+        "/bin/bash".to_string()
+    }
+}
+
+fn default_terminal_shell() -> String {
+    std::env::var("SHELL").unwrap_or_else(|_| fallback_default_shell(cfg!(target_os = "macos")))
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             terminal: TerminalConfig {
-                default_shell: std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()),
+                default_shell: default_terminal_shell(),
                 default_cwd: "~".to_string(),
                 dialog_font_family: default_terminal_dialog_font_family(),
                 dialog_font_size: default_terminal_dialog_font_size(),
@@ -163,7 +175,17 @@ impl Default for AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{fallback_default_shell, AppConfig};
+
+    #[test]
+    fn falls_back_to_zsh_for_macos_default_shell() {
+        assert_eq!(fallback_default_shell(true), "/bin/zsh");
+    }
+
+    #[test]
+    fn keeps_bash_as_the_non_macos_fallback_shell() {
+        assert_eq!(fallback_default_shell(false), "/bin/bash");
+    }
 
     #[test]
     fn deserializes_full_ai_config_shape() {

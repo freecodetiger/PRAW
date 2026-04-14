@@ -1,4 +1,5 @@
 import { DEFAULT_BUNDLED_MONO_FONT_FAMILY, DEFAULT_DIALOG_FONT_SIZE } from "./font-defaults";
+import { DEFAULT_TERMINAL_SHELL } from "./default-shell";
 import { DEFAULT_SETTINGS_PANEL_LANGUAGE, normalizeSettingsPanelLanguage } from "./settings-panel-language";
 import { isThemePresetId } from "../theme/presets";
 import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode, UiConfig } from "./types";
@@ -6,7 +7,7 @@ import { DEFAULT_TERMINAL_SHORTCUTS, normalizeTerminalShortcutConfig, type Termi
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   terminal: {
-    defaultShell: "/bin/bash",
+    defaultShell: DEFAULT_TERMINAL_SHELL,
     defaultCwd: "~",
     dialogFontFamily: DEFAULT_BUNDLED_MONO_FONT_FAMILY,
     dialogFontSize: DEFAULT_DIALOG_FONT_SIZE,

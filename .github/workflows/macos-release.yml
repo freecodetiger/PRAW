@@ -1,0 +1,85 @@
+name: macos-release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: build-macos (${{ matrix.target }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build workflow artifacts only
+        if: github.event_name == 'workflow_dispatch'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --bundles app,dmg --target ${{ matrix.target }}
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
+
+      - name: Build and publish main-branch prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: "main-build-__VERSION__-${{ github.run_number }}"
+          releaseName: "PRAW main build #${{ github.run_number }}"
+          releaseBody: |
+            Automated macOS prerelease built from `main`.
+
+            Commit: ${{ github.sha }}
+            Target: ${{ matrix.target }}
+          releaseDraft: false
+          prerelease: true
+          args: --bundles app,dmg --target ${{ matrix.target }}
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
+
+      - name: Build and publish tagged release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "PRAW ${{ github.ref_name }}"
+          releaseBody: "Automated macOS release artifacts for PRAW."
+          releaseDraft: false
+          prerelease: false
+          args: --bundles app,dmg --target ${{ matrix.target }}
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: "[name]-[platform]-[arch]-[bundle]"
