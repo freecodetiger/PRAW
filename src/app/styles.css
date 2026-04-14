@@ -38,10 +38,10 @@
   --accent-soft: rgba(110, 131, 172, 0.11);
   --button-hover: #f8f3ea;
   --panel-shadow: 0 18px 48px rgba(17, 24, 39, 0.08);
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 22px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 14px;
+  --radius-xl: 17px;
   --ai-badge-text: #ffffff;
 }
 

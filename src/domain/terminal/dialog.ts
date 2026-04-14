@@ -170,6 +170,10 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
     };
   }
 
+  if (state.composerHistory.length === 0) {
+    return state;
+  }
+
   if (data.trim().length === 0) {
     return state;
   }

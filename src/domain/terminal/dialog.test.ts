@@ -372,16 +372,28 @@ describe("dialog terminal state", () => {
     });
   });
 
-  it("captures non-command output in a session output block", () => {
+  it("suppresses startup output before the first user command runs", () => {
     const state = appendDialogOutput(createDialogState("/bin/bash", "/workspace"), "Welcome\n");
 
-    expect(state.blocks).toEqual([
+    expect(state.blocks).toEqual([]);
+  });
+
+  it("captures non-command output in a session output block after the user has run a command", () => {
+    const started = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "pwd", () => "cmd:1");
+    const finished = applyShellLifecycleEvent(started, {
+      type: "command-end",
+      exitCode: 0,
+    });
+    const state = appendDialogOutput(finished, "Welcome\n");
+
+    expect(state.blocks).toHaveLength(2);
+    expect(state.blocks[1]).toEqual(
       expect.objectContaining({
         kind: "session",
         output: "Welcome\n",
         status: "completed",
       }),
-    ]);
+    );
   });
 
   it("ignores whitespace-only startup output when no command block is active", () => {
