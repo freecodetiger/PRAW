@@ -20,6 +20,7 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
           {block.kind === "command" ? (
             <CommandTranscriptHeader block={block} />
           ) : (
+            // Internally this remains a session-scoped transcript block; the UI copy is calmer.
             <p className="command-block__session-label">shell output</p>
           )}
           <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
