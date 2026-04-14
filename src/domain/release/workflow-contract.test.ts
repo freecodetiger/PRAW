@@ -50,4 +50,16 @@ describe("release workflow contract", () => {
     expect(workflow).toContain('echo "这是从 \\`main\\` 自动产出的桌面端预发布版本。"');
     expect(workflow).toContain("请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议");
   });
+
+  it("documents and wires the macOS signing secrets expected by CI", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+
+    expect(workflow).toContain("APPLE_CERTIFICATE");
+    expect(workflow).toContain("APPLE_CERTIFICATE_PASSWORD");
+    expect(workflow).toContain("KEYCHAIN_PASSWORD");
+    expect(workflow).toContain("APPLE_ID");
+    expect(workflow).toContain("APPLE_PASSWORD");
+    expect(workflow).toContain("APPLE_TEAM_ID");
+    expect(workflow).toContain("Developer ID Application");
+  });
 });

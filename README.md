@@ -124,6 +124,10 @@ To publish an official version:
 - tagged releases are expected to remain **drafts** until a human reviews and publishes them
 - if another maintainer adds or adjusts platform bundles, keep using the shared `desktop-release` workflow instead of introducing separate per-platform public releases
 
+For the full release and macOS signing/notarization setup, see:
+
+- [docs/releasing.md](./docs/releasing.md)
+
 ## Tech Stack
 
 - `Tauri` for the desktop shell and native bridge
