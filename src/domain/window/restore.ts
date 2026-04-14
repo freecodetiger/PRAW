@@ -1,5 +1,6 @@
 import { collectLeafIds } from "../layout/tree";
 import type { LayoutNode, SplitAxis } from "../layout/types";
+import { DEFAULT_TERMINAL_SHELL } from "../config/default-shell";
 import { WINDOW_SNAPSHOT_VERSION, type WindowSnapshot } from "./snapshot";
 
 export function normalizeWindowSnapshot(snapshot: unknown): WindowSnapshot | null {
@@ -58,7 +59,7 @@ function normalizeTabSnapshot(tab: unknown): WindowSnapshot["tabs"][number] | nu
     tabId: tab.tabId,
     title: isNonEmptyString(tab.title) ? tab.title : tab.tabId,
     note: isNonEmptyString(tab.note) ? tab.note.trim() : undefined,
-    shell: isNonEmptyString(tab.shell) ? tab.shell : "/bin/bash",
+    shell: isNonEmptyString(tab.shell) ? tab.shell : DEFAULT_TERMINAL_SHELL,
     cwd: isNonEmptyString(tab.cwd) ? tab.cwd : "~",
   };
 }

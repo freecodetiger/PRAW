@@ -3,8 +3,18 @@ import { describe, expect, it } from "vitest";
 import { AI_PROVIDER_OPTIONS, getAiProviderOption } from "../ai/catalog";
 import type { AiCapability, CompletionProvider } from "../ai/types";
 import { DEFAULT_APP_CONFIG, resolveAppConfig } from "./model";
+import { resolvePlatformDefaultShell } from "./default-shell";
 
 describe("resolveAppConfig", () => {
+  it("uses zsh as the platform default shell on macOS", () => {
+    expect(resolvePlatformDefaultShell("MacIntel")).toBe("/bin/zsh");
+  });
+
+  it("keeps bash as the platform default shell outside macOS", () => {
+    expect(resolvePlatformDefaultShell("Linux x86_64")).toBe("/bin/bash");
+    expect(resolvePlatformDefaultShell(undefined)).toBe("/bin/bash");
+  });
+
   it("uses the bundled mono font as the default dialog font", () => {
     expect(DEFAULT_APP_CONFIG.terminal.dialogFontFamily).toBe(
       "\"CaskaydiaCove Nerd Font Mono\", \"CaskaydiaCove Nerd Font\", monospace",

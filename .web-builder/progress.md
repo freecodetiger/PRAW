@@ -16,3 +16,4 @@
 - Wrote `mac-release-workflow.md` to document triggers, artifacts, and unresolved signing / DMG gaps
 - Added zsh dialog integration support in Rust + TypeScript and marked `zsh-dialog-integration` as done
 - Added a runtime PTY test proving zsh emits real OSC 133 shell markers during command execution
+- Unified macOS default shell fallbacks so first-run defaults prefer `/bin/zsh` across front-end and back-end paths
