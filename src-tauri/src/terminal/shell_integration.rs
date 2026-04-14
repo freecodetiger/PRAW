@@ -52,21 +52,29 @@ pub fn install_shell_integration(shell: &str, session_id: &str) -> Result<Vec<Pa
 
     if is_zsh_shell(shell) {
         let dir = shell_integration_zdotdir_path(session_id);
-        fs::create_dir_all(&dir).with_context(|| {
+        fs::create_dir_all(&dir)
+            .with_context(|| format!("failed to create shell integration dir {}", dir.display()))?;
+
+        let zshenv_path = dir.join(".zshenv");
+        fs::write(
+            &zshenv_path,
+            build_zsh_shell_integration_envfile(session_id),
+        )
+        .with_context(|| {
             format!(
-                "failed to create shell integration dir {}",
-                dir.display()
+                "failed to write shell integration envfile {}",
+                zshenv_path.display()
             )
         })?;
 
-        let zshenv_path = dir.join(".zshenv");
-        fs::write(&zshenv_path, build_zsh_shell_integration_envfile(session_id)).with_context(
-            || format!("failed to write shell integration envfile {}", zshenv_path.display()),
-        )?;
-
         let zshrc_path = dir.join(".zshrc");
         fs::write(&zshrc_path, build_zsh_shell_integration_script(session_id)).with_context(
-            || format!("failed to write shell integration rcfile {}", zshrc_path.display()),
+            || {
+                format!(
+                    "failed to write shell integration rcfile {}",
+                    zshrc_path.display()
+                )
+            },
         )?;
 
         return Ok(vec![dir]);
@@ -162,6 +170,8 @@ fi
 unset __praw_saved_vte_version
 
 typeset -g __praw_prompt_ready=''
+typeset -ga precmd_functions
+typeset -ga preexec_functions
 
 __praw_precmd() {{
   local exit_code=$?
