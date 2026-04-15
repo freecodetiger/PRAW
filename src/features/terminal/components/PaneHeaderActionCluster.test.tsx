@@ -24,7 +24,7 @@ describe("PaneHeaderActionCluster", () => {
     host.remove();
   });
 
-  it("renders the focus button beside the split buttons with the circle-plus glyph", () => {
+  it("renders the focus button beside the split buttons with a fullscreen icon", () => {
     act(() => {
       root.render(
         <PaneHeaderActionCluster
@@ -43,7 +43,14 @@ describe("PaneHeaderActionCluster", () => {
     });
 
     const buttons = Array.from(host.querySelectorAll("button"));
-    expect(buttons.map((button) => button.textContent)).toEqual(["→", "↓", "⊕", "...", "×"]);
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Split Right",
+      "Split Down",
+      "Enter Pane Fullscreen",
+      "Pane actions",
+      "Close tab",
+    ]);
     expect(buttons[2]?.getAttribute("aria-label")).toBe("Enter Pane Fullscreen");
+    expect(buttons[2]?.querySelector(".pane-header-actions__focus-icon")?.tagName).toBe("svg");
   });
 });

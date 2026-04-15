@@ -74,7 +74,21 @@ export function PaneHeaderActionCluster({
           onToggleFocus();
         }}
       >
-        ⊕
+        <svg
+          className="pane-header-actions__focus-icon"
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M2.5 6V2.5H6M10 2.5H13.5V6M13.5 10V13.5H10M6 13.5H2.5V10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
       <PaneActionMenu actions={menuActions} onSelect={onMenuSelect} triggerClassName="pane-header-actions__button" />
       <button

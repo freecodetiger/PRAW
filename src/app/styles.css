@@ -588,8 +588,14 @@ button {
 }
 
 .pane-header-actions__button--focus {
-  font-size: 15px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pane-header-actions__focus-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .pane-header-actions__button--active {
