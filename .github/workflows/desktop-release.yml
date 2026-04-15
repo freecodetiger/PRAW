@@ -15,12 +15,6 @@ jobs:
   build-desktop:
     name: build-desktop (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
-    env:
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +78,10 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           missing=()
           [[ -n "${APPLE_CERTIFICATE}" ]] || missing+=("APPLE_CERTIFICATE")
@@ -105,6 +103,7 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           if [[ -z "${APPLE_CERTIFICATE}" || -z "${APPLE_CERTIFICATE_PASSWORD}" || -z "${KEYCHAIN_PASSWORD}" ]]; then
             echo "No Apple signing certificate configured; keeping ad-hoc signing identity"
@@ -211,15 +210,15 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.apple_signing.outputs.signing_identity != '' && env.APPLE_ID != '' && env.APPLE_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.apple_signing.outputs.signing_identity != '' && secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != ''
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
           releaseName: ${{ steps.release_meta.outputs.main_name }}
@@ -229,7 +228,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease without notarization
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (steps.apple_signing.outputs.signing_identity == '' || env.APPLE_ID == '' || env.APPLE_PASSWORD == '' || env.APPLE_TEAM_ID == '')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (steps.apple_signing.outputs.signing_identity == '' || secrets.APPLE_ID == '' || secrets.APPLE_PASSWORD == '' || secrets.APPLE_TEAM_ID == '')
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -247,11 +246,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
