@@ -101,6 +101,28 @@ else
 fi
 unset __praw_saved_vte_version
 
+__praw_agent_wrapper() {{
+  local provider="$1"
+  shift
+  if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
+    command "$provider" "$@"
+    return $?
+  fi
+  "$PRAW_APP_BIN" --praw-agent-host "$provider" --session-id "$PRAW_SESSION_ID" --cwd "$PWD" -- "$@"
+}}
+
+function codex() {{
+  __praw_agent_wrapper codex "$@"
+}}
+
+function claude() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
+function qwen() {{
+  __praw_agent_wrapper qwen "$@"
+}}
+
 __praw_emit_prompt_markers() {{
   local exit_code=$?
   if [[ -n "${{__praw_prompt_ready:-}}" ]]; then
@@ -162,6 +184,28 @@ fi
 unset __praw_saved_vte_version
 
 typeset -g __praw_prompt_ready=''
+
+__praw_agent_wrapper() {{
+  local provider="$1"
+  shift
+  if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
+    command "$provider" "$@"
+    return $?
+  fi
+  "$PRAW_APP_BIN" --praw-agent-host "$provider" --session-id "$PRAW_SESSION_ID" --cwd "$PWD" -- "$@"
+}}
+
+function codex() {{
+  __praw_agent_wrapper codex "$@"
+}}
+
+function claude() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
+function qwen() {{
+  __praw_agent_wrapper qwen "$@"
+}}
 
 __praw_precmd() {{
   local exit_code=$?

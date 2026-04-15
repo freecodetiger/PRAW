@@ -27,7 +27,7 @@ describe("app-config-store", () => {
       defaultShell: "/usr/bin/zsh",
       dialogFontFamily: DEFAULT_APP_CONFIG.terminal.dialogFontFamily,
       dialogFontSize: 32,
-      preferredMode: "classic",
+      preferredMode: "dialog",
     });
   });
 

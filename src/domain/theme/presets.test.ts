@@ -34,6 +34,9 @@ describe("theme presets", () => {
         background: "#000000",
         foreground: "#f5f5f5",
         cursor: "#f5f5f5",
+        selectionBackground: "#456ca7",
+        selectionForeground: "#f5f5f5",
+        selectionInactiveBackground: "#324f7a",
         blue: "#61afef",
         brightBlue: "#8fc7ff",
       },
@@ -53,6 +56,8 @@ describe("theme presets", () => {
         background: "#f7efe2",
         foreground: "#2f2419",
         cursor: "#2f2419",
+        selectionBackground: "#d8c19c",
+        selectionForeground: "#2f2419",
       },
     });
   });

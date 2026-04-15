@@ -1,19 +1,26 @@
 /**
  * Terminal Registry
  * 
- * 全局注册表：tabId → xterm Terminal 实例映射
+ * 全局注册表：tabId → terminal controller 映射
  * 
  * 目的：让 PTY 输出可以直接写入 xterm，绕过 React 状态同步，彻底消除频闪
  */
+export interface TerminalController {
+  writeDirect: (data: string) => void;
+  pasteText: (text: string) => void;
+  sendEnter: () => Promise<void> | void;
+  focus: () => void;
+  blur: () => void;
+  hasSelection: () => boolean;
+  getSelectionText: () => string;
+}
 
-import type { Terminal } from "@xterm/xterm";
-
-const registry = new Map<string, Terminal>();
+const registry = new Map<string, TerminalController>();
 
 /**
  * 注册终端实例
  */
-export function registerTerminal(tabId: string, terminal: Terminal): void {
+export function registerTerminal(tabId: string, terminal: TerminalController): void {
   registry.set(tabId, terminal);
 }
 
@@ -27,7 +34,7 @@ export function unregisterTerminal(tabId: string): void {
 /**
  * 获取终端实例
  */
-export function getTerminal(tabId: string): Terminal | undefined {
+export function getTerminal(tabId: string): TerminalController | undefined {
   return registry.get(tabId);
 }
 
@@ -45,7 +52,7 @@ export function hasTerminal(tabId: string): boolean {
 export function writeDirect(tabId: string, data: string): void {
   const terminal = registry.get(tabId);
   if (terminal) {
-    terminal.write(data);
+    terminal.writeDirect(data);
   }
 }
 
@@ -53,10 +60,7 @@ export function writeDirect(tabId: string, data: string): void {
  * 清空指定终端
  */
 export function resetDirect(tabId: string): void {
-  const terminal = registry.get(tabId);
-  if (terminal) {
-    terminal.reset();
-  }
+  void tabId;
 }
 
 /**

@@ -9,13 +9,11 @@ interface SettingsPanelCopy {
     shell: string;
     mode: string;
     theme: string;
-    classicFont: string;
-    dialogFont: string;
+    workspaceFont: string;
     ai: string;
     disabled: string;
     notConfigured: string;
-    classicMode: string;
-    dialogMode: string;
+    blockMode: string;
   };
   panelLanguage: {
     label: string;
@@ -30,14 +28,11 @@ interface SettingsPanelCopy {
     sectionDescription: string;
     defaultShell: string;
     defaultCwd: string;
-    preferClassic: string;
     themePreset: string;
-    classicFontTitle: string;
-    classicFontDescription: string;
-    dialogFontTitle: string;
-    dialogFontDescription: string;
-    dialogFontSize: string;
-    dialogFontFamily: string;
+    workspaceFontTitle: string;
+    workspaceFontDescription: string;
+    workspaceFontSize: string;
+    workspaceFontFamily: string;
     shortcutsTitle: string;
     shortcutsDescription: string;
     shortcutLabels: {
@@ -90,17 +85,15 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       eyebrow: "Workspace Settings",
       title: "Runtime profile",
       close: "Close",
-      runtimeSummary: "Shell {shell} · Mode {mode} · Theme {theme} · Classic Font {classicFont} · Dialog Font {dialogFont} {dialogFontSize}px · AI {aiStatus}",
+      runtimeSummary: "Shell {shell} · Mode {mode} · Theme {theme} · Workspace Font {workspaceFont} {dialogFontSize}px · AI {aiStatus}",
       shell: "Shell",
       mode: "Mode",
       theme: "Theme",
-      classicFont: "Classic Font",
-      dialogFont: "Dialog Font",
+      workspaceFont: "Workspace Font",
       ai: "AI",
       disabled: "disabled",
       notConfigured: "not configured",
-      classicMode: "Classic",
-      dialogMode: "Dialog",
+      blockMode: "Blocks",
     },
     panelLanguage: {
       label: "Panel Language",
@@ -112,17 +105,14 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
     },
     terminal: {
       sectionTitle: "Terminal",
-      sectionDescription: "Classic keeps a bundled fixed-width font for stability. Dialog mode remains configurable.",
+      sectionDescription: "The terminal uses a single block workspace. Interactive commands open a live island when needed.",
       defaultShell: "Default shell",
       defaultCwd: "Default cwd",
-      preferClassic: "Prefer classic terminal mode",
       themePreset: "Theme preset",
-      classicFontTitle: "Classic Terminal Font",
-      classicFontDescription: "CaskaydiaCove Nerd Font Mono is bundled and fixed in classic mode for stable xterm rendering.",
-      dialogFontTitle: "Dialog Terminal Font",
-      dialogFontDescription: "These controls apply only to dialog mode.",
-      dialogFontSize: "Dialog font size",
-      dialogFontFamily: "Dialog font family",
+      workspaceFontTitle: "Workspace Font",
+      workspaceFontDescription: "These controls apply to block transcripts, the command composer, and live islands.",
+      workspaceFontSize: "Workspace font size",
+      workspaceFontFamily: "Workspace font family",
       shortcutsTitle: "Pane Shortcuts",
       shortcutsDescription: "These stay active whenever the app window is focused.",
       shortcutLabels: {
@@ -173,17 +163,15 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       eyebrow: "工作区设置",
       title: "运行配置",
       close: "关闭",
-      runtimeSummary: "Shell {shell} · 模式 {mode} · 主题 {theme} · Classic Font {classicFont} · Dialog Font {dialogFont} {dialogFontSize}px · AI {aiStatus}",
+      runtimeSummary: "Shell {shell} · 模式 {mode} · 主题 {theme} · Workspace Font {workspaceFont} {dialogFontSize}px · AI {aiStatus}",
       shell: "Shell",
       mode: "模式",
       theme: "主题",
-      classicFont: "Classic Font",
-      dialogFont: "Dialog Font",
+      workspaceFont: "Workspace Font",
       ai: "AI",
       disabled: "已禁用",
       notConfigured: "未配置",
-      classicMode: "Classic",
-      dialogMode: "Dialog",
+      blockMode: "Blocks",
     },
     panelLanguage: {
       label: "Panel Language",
@@ -195,17 +183,14 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
     },
     terminal: {
       sectionTitle: "Terminal",
-      sectionDescription: "Classic 使用内置等宽字体以保证稳定性。Dialog 模式仍可自定义。",
+      sectionDescription: "终端统一使用 block workspace；遇到交互式命令时会在当前 block 中打开 live island。",
       defaultShell: "默认 shell",
       defaultCwd: "默认 cwd",
-      preferClassic: "优先使用 classic terminal 模式",
       themePreset: "Theme preset",
-      classicFontTitle: "Classic Terminal Font",
-      classicFontDescription: "Classic 模式固定使用内置的 CaskaydiaCove Nerd Font Mono，以保证 xterm 渲染稳定。",
-      dialogFontTitle: "Dialog Terminal Font",
-      dialogFontDescription: "这些设置只作用于 Dialog 模式。",
-      dialogFontSize: "Dialog 字体大小",
-      dialogFontFamily: "Dialog 字体家族",
+      workspaceFontTitle: "Workspace Font",
+      workspaceFontDescription: "这些设置会同时作用于 block transcript、命令输入区和 live island。",
+      workspaceFontSize: "Workspace 字体大小",
+      workspaceFontFamily: "Workspace 字体家族",
       shortcutsTitle: "Pane Shortcuts",
       shortcutsDescription: "这些快捷键会在应用窗口聚焦时始终生效。",
       shortcutLabels: {

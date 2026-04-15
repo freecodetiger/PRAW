@@ -119,6 +119,19 @@ describe("SettingsPanel", () => {
     expect(useAppConfigStore.getState().config.ai.smartSuggestionBubble).toBe(false);
   });
 
+  it("no longer exposes a classic terminal preference toggle", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).not.toContain("Prefer classic terminal mode");
+    expect(host.textContent).not.toContain("优先使用 classic terminal 模式");
+  });
+
   it("does not render a select-provider placeholder option in the provider dropdown", () => {
     act(() => {
       root.render(<SettingsPanel />);

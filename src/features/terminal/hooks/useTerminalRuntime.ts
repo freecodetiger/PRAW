@@ -4,11 +4,16 @@ import { useAppConfigStore } from "../../config/state/app-config-store";
 import {
   closeTerminalSession,
   createTerminalSession,
+  onTerminalAgent,
   onTerminalExit,
   onTerminalOutput,
   onTerminalSemantic,
 } from "../../../lib/tauri/terminal";
-import { getTerminalBufferKey, useTerminalViewStore } from "../state/terminal-view-store";
+import {
+  getTerminalBufferKey,
+  selectTerminalTabState,
+  useTerminalViewStore,
+} from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
 import { writeDirect } from "../lib/terminal-registry";
@@ -29,6 +34,7 @@ export function useTerminalRuntime() {
   const markTabError = useWorkspaceStore((state) => state.markTabError);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
   const consumeSemantic = useTerminalViewStore((state) => state.consumeSemantic);
+  const consumeAgentEvent = useTerminalViewStore((state) => state.consumeAgentEvent);
   const resetTabBuffer = useTerminalViewStore((state) => state.resetTabBuffer);
   const removeTabBuffer = useTerminalViewStore((state) => state.removeTabBuffer);
   const syncTabState = useTerminalViewStore((state) => state.syncTabState);
@@ -151,11 +157,13 @@ export function useTerminalRuntime() {
         return;
       }
 
-      // 核心重构：直接写入 xterm，绕过 React 状态同步
-      // 这消除了频闪的根本原因 - 不再触发 React 渲染
-      writeDirect(tabRef.tabId, event.data);
+      const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
+      const allowRawTerminalWrite =
+        tabState?.presentation !== "agent-workflow" || tabState.agentBridge?.mode === "raw-fallback";
+      if (allowRawTerminalWrite) {
+        writeDirect(tabRef.tabId, event.data);
+      }
 
-      // 仍然更新元数据（用于对话框/语义分析）
       consumeOutput(tabRef.tabId, event.data);
     }).then((cleanup) => {
       if (disposed) {
@@ -171,6 +179,32 @@ export function useTerminalRuntime() {
       unlistenOutput?.();
     };
   }, [consumeOutput]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlistenAgent: (() => void) | undefined;
+
+    void onTerminalAgent((event) => {
+      const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
+      if (!tabRef) {
+        return;
+      }
+
+      consumeAgentEvent(tabRef.tabId, event);
+    }).then((cleanup) => {
+      if (disposed) {
+        cleanup();
+        return;
+      }
+
+      unlistenAgent = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unlistenAgent?.();
+    };
+  }, [consumeAgentEvent]);
 
   useEffect(() => {
     let disposed = false;

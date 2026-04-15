@@ -68,6 +68,10 @@ mod tests {
         assert!(script.contains("__praw_emit_command_start"));
         assert!(script.contains("entry="));
         assert!(script.contains("printf '\\033]133;C;entry=%s\\a' \"$command\""));
+        assert!(script.contains("function codex()"));
+        assert!(script.contains("function claude()"));
+        assert!(script.contains("function qwen()"));
+        assert!(script.contains("__praw_agent_wrapper codex \"$@\""));
     }
 
     #[test]
@@ -84,6 +88,9 @@ mod tests {
         assert!(script.contains("printf '\\033]133;C;entry=%s\\a' \"$1\""));
         assert!(script.contains("printf '\\033]133;D;%s\\a' \"$exit_code\""));
         assert!(script.contains("printf '\\033]133;P;cwd=%s\\a' \"$PWD\""));
+        assert!(script.contains("function codex()"));
+        assert!(script.contains("function claude()"));
+        assert!(script.contains("function qwen()"));
     }
 
     #[test]
@@ -94,6 +101,10 @@ mod tests {
 
     #[test]
     fn zsh_runtime_emits_shell_markers_for_real_commands() {
+        if !Path::new("/bin/zsh").exists() {
+            return;
+        }
+
         let expected_cwd = std::fs::canonicalize("/tmp")
             .expect("/tmp should resolve")
             .to_string_lossy()

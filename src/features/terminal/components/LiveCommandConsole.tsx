@@ -12,6 +12,7 @@ interface LiveCommandConsoleProps {
   isActive: boolean;
   compact: boolean;
   heightPx: number;
+  inputSuspended?: boolean;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
 }
@@ -27,6 +28,7 @@ export function LiveCommandConsole({
   isActive,
   compact,
   heightPx,
+  inputSuspended = false,
   write,
   resize,
 }: LiveCommandConsoleProps) {
@@ -49,6 +51,7 @@ export function LiveCommandConsole({
           fontSize={fontSize}
           theme={theme}
           isActive={isActive}
+          inputSuspended={inputSuspended}
           write={write}
           resize={resize}
           className="dialog-live-console__terminal"

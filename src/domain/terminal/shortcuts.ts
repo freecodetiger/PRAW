@@ -66,6 +66,16 @@ export function resolveTerminalShortcut(event: TerminalShortcutEvent): TerminalS
     return { type: "paste" };
   }
 
+  if (!event.ctrlKey && !event.altKey && !event.shiftKey && event.metaKey) {
+    if (key === "c") {
+      return { type: "copy-selection" };
+    }
+
+    if (key === "v") {
+      return { type: "paste" };
+    }
+  }
+
   return null;
 }
 

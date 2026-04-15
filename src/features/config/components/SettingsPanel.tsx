@@ -51,8 +51,7 @@ export function SettingsPanel() {
     const summary = `${config.ai.provider} / ${config.ai.model}`;
     return config.ai.enabled ? summary : `${summary} · ${copy.header.disabled}`;
   }, [config.ai.enabled, config.ai.model, config.ai.provider, copy.header.disabled, copy.header.notConfigured]);
-  const terminalModeLabel =
-    config.terminal.preferredMode === "classic" ? copy.header.classicMode : copy.header.dialogMode;
+  const terminalModeLabel = copy.header.blockMode;
   const themePresetLabel =
     THEME_PRESET_OPTIONS.find((option) => option.value === config.terminal.themePreset)?.label ?? "Light";
   const selectedProvider = getAiProviderOption(config.ai.provider);
@@ -62,8 +61,7 @@ export function SettingsPanel() {
     shell: config.terminal.defaultShell,
     mode: terminalModeLabel,
     theme: themePresetLabel,
-    classicFont: CLASSIC_FONT_FAMILY,
-    dialogFont: config.terminal.dialogFontFamily,
+    workspaceFont: config.terminal.dialogFontFamily || CLASSIC_FONT_FAMILY,
     dialogFontSize: config.terminal.dialogFontSize,
     aiStatus,
   });
@@ -237,17 +235,6 @@ export function SettingsPanel() {
               />
             </label>
 
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                checked={config.terminal.preferredMode === "classic"}
-                onChange={(event) =>
-                  patchTerminalConfig({ preferredMode: event.target.checked ? "classic" : "dialog" })
-                }
-              />
-              <span>{copy.terminal.preferClassic}</span>
-            </label>
-
             <div className="settings-grid">
               <label className="settings-field">
                 <span>{copy.terminal.themePreset}</span>
@@ -265,18 +252,13 @@ export function SettingsPanel() {
             </div>
 
             <div className="settings-section__title">
-              <strong>{copy.terminal.classicFontTitle}</strong>
-              <p>{copy.terminal.classicFontDescription}</p>
-            </div>
-
-            <div className="settings-section__title">
-              <strong>{copy.terminal.dialogFontTitle}</strong>
-              <p>{copy.terminal.dialogFontDescription}</p>
+              <strong>{copy.terminal.workspaceFontTitle}</strong>
+              <p>{copy.terminal.workspaceFontDescription}</p>
             </div>
 
             <div className="settings-grid">
               <label className="settings-field">
-                <span>{copy.terminal.dialogFontSize}</span>
+                <span>{copy.terminal.workspaceFontSize}</span>
                 <input
                   type="number"
                   min={10}
@@ -293,7 +275,7 @@ export function SettingsPanel() {
             </div>
 
             <label className="settings-field">
-              <span>{copy.terminal.dialogFontFamily}</span>
+              <span>{copy.terminal.workspaceFontFamily}</span>
               <input
                 value={config.terminal.dialogFontFamily}
                 onChange={(event) => patchTerminalConfig({ dialogFontFamily: event.target.value })}
