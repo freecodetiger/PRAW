@@ -61,7 +61,7 @@ describe("app-config-store", () => {
       baseUrl: "https://open.bigmodel.cn/api/paas/v4",
       apiKey: "secret-key",
       themeColor: "#2b6fff",
-      backgroundColor: "#eef4ff",
+      backgroundColor: DEFAULT_APP_CONFIG.ai.backgroundColor,
     });
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
   });
