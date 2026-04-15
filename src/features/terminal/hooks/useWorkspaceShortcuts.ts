@@ -7,6 +7,7 @@ interface UseWorkspaceShortcutsOptions {
   focusAdjacentTab: (direction: "left" | "right" | "up" | "down") => void;
   splitActiveTab: (axis: "horizontal" | "vertical") => void;
   requestEditNoteForActiveTab: () => void;
+  toggleFocusPane: () => void;
   shortcuts: TerminalShortcutConfig;
 }
 
@@ -14,6 +15,7 @@ export function useWorkspaceShortcuts({
   focusAdjacentTab,
   splitActiveTab,
   requestEditNoteForActiveTab,
+  toggleFocusPane,
   shortcuts,
 }: UseWorkspaceShortcutsOptions) {
   useEffect(() => {
@@ -47,6 +49,9 @@ export function useWorkspaceShortcuts({
         case "edit-note":
           requestEditNoteForActiveTab();
           return;
+        case "toggle-focus-pane":
+          toggleFocusPane();
+          return;
       }
     };
 
@@ -54,5 +59,5 @@ export function useWorkspaceShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab]);
+  }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab, toggleFocusPane]);
 }

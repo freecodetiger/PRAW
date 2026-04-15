@@ -7,9 +7,12 @@ describe("pane actions", () => {
     expect(
       resolvePaneActions({
         canClose: true,
+        isFocusModeActive: false,
+        isFocusedPane: false,
       }),
     ).toEqual([
       { id: "edit-note", label: "Edit Note", disabled: false },
+      { id: "focus-pane", label: "Focus Pane", disabled: false },
       { id: "close-tab", label: "Close Tab", disabled: false },
       { id: "restart-shell", label: "Restart Shell", disabled: false },
     ]);
@@ -19,9 +22,40 @@ describe("pane actions", () => {
     expect(
       resolvePaneActions({
         canClose: false,
+        isFocusModeActive: false,
+        isFocusedPane: false,
       }),
     ).toEqual([
       { id: "edit-note", label: "Edit Note", disabled: false },
+      { id: "focus-pane", label: "Focus Pane", disabled: false },
+      { id: "close-tab", label: "Close Tab", disabled: true },
+      { id: "restart-shell", label: "Restart Shell", disabled: false },
+    ]);
+  });
+
+  it("adds a focus action that flips to exit focus when the pane is focused", () => {
+    expect(
+      resolvePaneActions({
+        canClose: true,
+        isFocusModeActive: false,
+        isFocusedPane: false,
+      }),
+    ).toEqual([
+      { id: "edit-note", label: "Edit Note", disabled: false },
+      { id: "focus-pane", label: "Focus Pane", disabled: false },
+      { id: "close-tab", label: "Close Tab", disabled: false },
+      { id: "restart-shell", label: "Restart Shell", disabled: false },
+    ]);
+
+    expect(
+      resolvePaneActions({
+        canClose: true,
+        isFocusModeActive: true,
+        isFocusedPane: true,
+      }),
+    ).toEqual([
+      { id: "edit-note", label: "Edit Note", disabled: false },
+      { id: "focus-pane", label: "Exit Focus", disabled: false },
       { id: "close-tab", label: "Close Tab", disabled: true },
       { id: "restart-shell", label: "Restart Shell", disabled: false },
     ]);

@@ -8,9 +8,12 @@ import { useWorkspaceStore } from "../state/workspace-store";
 
 export function TerminalWorkspace() {
   const windowModel = useWorkspaceStore((state) => state.window);
+  const activeTabId = useWorkspaceStore((state) => state.window?.activeTabId ?? null);
   const focusAdjacentTab = useWorkspaceStore((state) => state.focusAdjacentTab);
   const splitActiveTab = useWorkspaceStore((state) => state.splitActiveTab);
   const requestEditNoteForActiveTab = useWorkspaceStore((state) => state.requestEditNoteForActiveTab);
+  const toggleFocusMode = useWorkspaceStore((state) => state.toggleFocusMode);
+  const isFocusModeActive = useWorkspaceStore((state) => state.focusMode !== null);
   const shortcuts = useAppConfigStore((state) => state.config.terminal.shortcuts);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [frame, setFrame] = useState<LayoutFrame>({
@@ -22,6 +25,13 @@ export function TerminalWorkspace() {
     focusAdjacentTab,
     splitActiveTab,
     requestEditNoteForActiveTab,
+    toggleFocusPane: () => {
+      if (!activeTabId) {
+        return;
+      }
+
+      toggleFocusMode(activeTabId);
+    },
     shortcuts,
   });
 
@@ -53,7 +63,7 @@ export function TerminalWorkspace() {
   }
 
   return (
-    <section className="workspace">
+    <section className={`workspace${isFocusModeActive ? " workspace--focus-mode" : ""}`}>
       <div ref={canvasRef} className="workspace__canvas">
         <LayoutTree node={windowModel.layout} frame={frame} />
       </div>

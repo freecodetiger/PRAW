@@ -374,6 +374,11 @@ button {
   min-height: 0;
 }
 
+.workspace--focus-mode {
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--surface-muted) 72%, transparent), transparent 42%);
+}
+
 .workspace__canvas {
   display: flex;
   flex: 1;
@@ -496,6 +501,21 @@ button {
   padding: 2px 8px;
   font-weight: 600;
   letter-spacing: 0.14em;
+}
+
+.terminal-pane__focus-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.terminal-pane--agent-workflow .terminal-pane__focus-badge {
+  border-color: var(--ai-theme-color);
+  color: var(--ai-theme-color);
 }
 
 .pane-action-menu {

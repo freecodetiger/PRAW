@@ -36,4 +36,11 @@ describe("styles selection contract", () => {
     expect(styles).toContain(".dialog-terminal__ai-prompt-error");
     expect(styles).toContain(".dialog-terminal__ai-prompt-status");
   });
+
+  it("defines styles for workspace focus mode chrome", () => {
+    const styles = readStyles();
+
+    expect(styles).toContain(".workspace--focus-mode");
+    expect(styles).toContain(".terminal-pane__focus-badge");
+  });
 });

@@ -1,4 +1,4 @@
-export type PaneActionId = "edit-note" | "close-tab" | "restart-shell";
+export type PaneActionId = "edit-note" | "focus-pane" | "close-tab" | "restart-shell";
 
 export interface PaneAction {
   id: PaneActionId;
@@ -8,10 +8,14 @@ export interface PaneAction {
 
 interface ResolvePaneActionsInput {
   canClose: boolean;
+  isFocusModeActive: boolean;
+  isFocusedPane: boolean;
 }
 
 export function resolvePaneActions({
   canClose,
+  isFocusModeActive,
+  isFocusedPane,
 }: ResolvePaneActionsInput): PaneAction[] {
   return [
     {
@@ -20,9 +24,14 @@ export function resolvePaneActions({
       disabled: false,
     },
     {
+      id: "focus-pane",
+      label: isFocusedPane ? "Exit Focus" : "Focus Pane",
+      disabled: false,
+    },
+    {
       id: "close-tab",
       label: "Close Tab",
-      disabled: !canClose,
+      disabled: !canClose || isFocusModeActive,
     },
     {
       id: "restart-shell",

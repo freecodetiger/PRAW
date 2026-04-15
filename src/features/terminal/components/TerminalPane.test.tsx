@@ -45,6 +45,7 @@ vi.mock("../hooks/useTerminalSession", () => ({
 }));
 
 let latestBlockWorkspaceProps: Record<string, unknown> | null = null;
+let latestPaneHeaderActionClusterProps: Record<string, unknown> | null = null;
 
 vi.mock("./BlockWorkspaceSurface", () => ({
   BlockWorkspaceSurface: (props: Record<string, unknown>) => {
@@ -54,7 +55,10 @@ vi.mock("./BlockWorkspaceSurface", () => ({
 }));
 
 vi.mock("./PaneHeaderActionCluster", () => ({
-  PaneHeaderActionCluster: () => <div data-testid="pane-header-actions" />,
+  PaneHeaderActionCluster: (props: Record<string, unknown>) => {
+    latestPaneHeaderActionClusterProps = props;
+    return <div data-testid="pane-header-actions" />;
+  },
 }));
 
 describe("TerminalPane", () => {
@@ -70,6 +74,7 @@ describe("TerminalPane", () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
     latestBlockWorkspaceProps = null;
+    latestPaneHeaderActionClusterProps = null;
     terminalApi.submitTerminalAgentPrompt.mockClear();
     terminalApi.listCodexSessions.mockReset();
     terminalApi.resetTerminalAgentSession.mockClear();
@@ -232,5 +237,85 @@ describe("TerminalPane", () => {
         text: expect.stringContaining("codex-session-1"),
       }),
     ]);
+  });
+
+  it("offers a focus menu action and toggles focus mode through the pane header action callback", async () => {
+    useWorkspaceStore.setState((state) => ({
+      ...state,
+      window: {
+        ...state.window!,
+        layout: {
+          kind: "container",
+          id: "root",
+          axis: "horizontal",
+          children: [
+            { kind: "pane", id: "pane:tab:1", paneId: "tab:1" },
+            { kind: "pane", id: "pane:tab:2", paneId: "tab:2" },
+          ],
+          sizes: [1, 1],
+        },
+        tabs: {
+          ...state.window!.tabs,
+          "tab:2": {
+            tabId: "tab:2",
+            title: "Tab 2",
+            shell: "/bin/bash",
+            cwd: "/workspace",
+            status: "running",
+            sessionId: "session-2",
+          },
+        },
+        activeTabId: "tab:1",
+        nextTabNumber: 3,
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestPaneHeaderActionClusterProps?.menuActions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "focus-pane", label: "Focus Pane" })]),
+    );
+
+    await act(async () => {
+      (latestPaneHeaderActionClusterProps?.onMenuSelect as (id: string) => void)("focus-pane");
+    });
+
+    expect(useWorkspaceStore.getState().focusMode?.focusedTabId).toBe("tab:1");
+    expect(useWorkspaceStore.getState().window?.layout).toEqual({
+      kind: "pane",
+      id: "pane:tab:1",
+      paneId: "tab:1",
+    });
+  });
+
+  it("disables split and close controls and shows focused chrome while focus mode is active", async () => {
+    useWorkspaceStore.setState((state) => ({
+      ...state,
+      focusMode: {
+        focusedTabId: "tab:1",
+        layoutBeforeFocus: {
+          kind: "container",
+          id: "root",
+          axis: "horizontal",
+          children: [
+            { kind: "pane", id: "pane:tab:1", paneId: "tab:1" },
+            { kind: "pane", id: "pane:tab:2", paneId: "tab:2" },
+          ],
+          sizes: [1, 1],
+        },
+        activeTabIdBeforeFocus: "tab:1",
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestPaneHeaderActionClusterProps?.canSplitRight).toBe(false);
+    expect(latestPaneHeaderActionClusterProps?.canSplitDown).toBe(false);
+    expect(latestPaneHeaderActionClusterProps?.canClose).toBe(false);
+    expect(host.textContent).toContain("FOCUSED");
   });
 });

@@ -39,6 +39,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const setTabNote = useWorkspaceStore((state) => state.setTabNote);
   const splitTab = useWorkspaceStore((state) => state.splitTab);
   const closeTab = useWorkspaceStore((state) => state.closeTab);
+  const focusMode = useWorkspaceStore((state) => state.focusMode);
+  const toggleFocusMode = useWorkspaceStore((state) => state.toggleFocusMode);
   const dragState = useWorkspaceStore((state) => state.dragState);
   const dragPreview = useWorkspaceStore((state) => state.dragPreview);
   const beginTabDrag = useWorkspaceStore((state) => state.beginTabDrag);
@@ -67,6 +69,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
   const themePreset = getThemePreset(themePresetId);
   const isDragSource = dragState?.sourceTabId === tabId;
+  const isFocusModeActive = focusMode !== null;
+  const isFocusedPane = focusMode?.focusedTabId === tabId;
   const previewEdge =
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
   const isAgentWorkflow = tabState?.presentation === "agent-workflow";
@@ -127,12 +131,17 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     "--dialog-terminal-font-size": `${dialogFontSize}px`,
   } as CSSProperties;
 
-  const canSplitHorizontal = canSplitPaneAtSize("horizontal", paneSize.width, {
-    preserveTrailingBoundary: !(borderMask?.right ?? false),
-  });
-  const canSplitVertical = canSplitPaneAtSize("vertical", paneSize.height, {
-    preserveTrailingBoundary: !(borderMask?.bottom ?? false),
-  });
+  const canSplitHorizontal =
+    !isFocusModeActive &&
+    canSplitPaneAtSize("horizontal", paneSize.width, {
+      preserveTrailingBoundary: !(borderMask?.right ?? false),
+    });
+  const canSplitVertical =
+    !isFocusModeActive &&
+    canSplitPaneAtSize("vertical", paneSize.height, {
+      preserveTrailingBoundary: !(borderMask?.bottom ?? false),
+    });
+  const canClosePane = canClose && !isFocusModeActive;
 
   const startEditingNote = () => {
     setNoteDraft(tab.note ?? "");
@@ -193,12 +202,17 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const clearNoteEditorRequest = useWorkspaceStore((state) => state.clearNoteEditorRequest);
   const paneActions = resolvePaneActions({
     canClose,
+    isFocusModeActive,
+    isFocusedPane,
   });
 
   const runPaneAction = (actionId: PaneActionId) => {
     switch (actionId) {
       case "edit-note":
         startEditingNote();
+        return;
+      case "focus-pane":
+        toggleFocusMode(tabId);
         return;
       case "close-tab":
         void requestClose();
@@ -331,9 +345,9 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     >
       <div
         className="terminal-pane__header"
-        draggable={!isEditingNote}
+        draggable={!isEditingNote && !isFocusModeActive}
         onDragStart={(event) => {
-          if (isEditingNote) {
+          if (isEditingNote || isFocusModeActive) {
             event.preventDefault();
             return;
           }
@@ -388,10 +402,16 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           </span>
         ) : null}
 
+        {isFocusedPane ? (
+          <span className="terminal-pane__focus-badge" aria-label="Focused pane mode">
+            FOCUSED
+          </span>
+        ) : null}
+
         <PaneHeaderActionCluster
           canSplitRight={canSplitHorizontal}
           canSplitDown={canSplitVertical}
-          canClose={canClose}
+          canClose={canClosePane}
           menuActions={paneActions}
           onSplitRight={() => runSplitAction("horizontal")}
           onSplitDown={() => runSplitAction("vertical")}
