@@ -2,18 +2,11 @@ import { useEffect, useState } from "react";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
-import { useTranscriptViewport } from "../hooks/useTranscriptViewport";
-import { createAiTranscriptState } from "../lib/ai-transcript";
-import { getAiComposerPlaceholder, getStructuredAiCommandCapabilities } from "../lib/ai-command";
-import {
-  resolveStructuredAgentCapabilities,
-  resolveStructuredAgentLabel,
-} from "../lib/structured-agent-capabilities";
+import { getStructuredAiCommandCapabilities } from "../lib/ai-command";
+import { resolveStructuredAgentCapabilities } from "../lib/structured-agent-capabilities";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
-import { AiTranscript } from "./AiTranscript";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
-import { StructuredAiPromptInput } from "./StructuredAiPromptInput";
 
 interface ResumeSessionOption {
   id: string;
@@ -64,36 +57,16 @@ export function AiWorkflowSurface({
   forceOpenExpertDrawerKey = 0,
   quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
-  const [composerDraft, setComposerDraft] = useState("");
-  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
   const [bypassError, setBypassError] = useState<string | null>(null);
   const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
-  const transcript = paneState.aiTranscript ?? createAiTranscriptState();
   const bridge = paneState.agentBridge ?? null;
   const providerId = bridge?.provider ?? "";
-  const hasTranscriptEntries = transcript.entries.length > 0;
-  const isRawFallback = bridge?.mode === "raw-fallback";
-  const isStructuredSurface = !isRawFallback;
-  const providerLabel = resolveStructuredAgentLabel(providerId);
   const bridgeCapabilities = resolveStructuredAgentCapabilities(providerId, bridge?.capabilities);
   const commandCapabilities = getStructuredAiCommandCapabilities(providerId, bridge?.capabilities);
-  const composerPlaceholder = getAiComposerPlaceholder(providerId);
   const showsBypassCapsule = bridgeCapabilities.showsBypassCapsule;
   const composerDisabled = status !== "running";
-  const { scrollRef, bottomRef, isPinnedBottom, onScroll, jumpToLatest } = useTranscriptViewport({
-    tabId,
-    contentKey: transcript.entries,
-  });
-
-  useEffect(() => {
-    if (forceOpenExpertDrawerKey <= 0) {
-      return;
-    }
-
-    setIsInspectorOpen(true);
-  }, [forceOpenExpertDrawerKey]);
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
@@ -104,15 +77,14 @@ export function AiWorkflowSurface({
     setBypassError(null);
   }, [quickPromptOpenRequestKey, showsBypassCapsule]);
 
-  const submitComposer = async () => {
-    const normalizedInput = composerDraft.trim();
-    if (!normalizedInput) {
+  useEffect(() => {
+    if (forceOpenExpertDrawerKey <= 0) {
       return;
     }
 
-    await onSubmitAiInput(normalizedInput);
-    setComposerDraft("");
-  };
+    setBypassPromptOpen(false);
+    setBypassError(null);
+  }, [forceOpenExpertDrawerKey]);
 
   const closeBypassPrompt = () => {
     if (bypassDraft.trim().length > 0) {
@@ -162,150 +134,49 @@ export function AiWorkflowSurface({
         />
       ) : null}
 
-      {isStructuredSurface ? (
-        <>
-          <header className="ai-workflow__toolbar">
-            <div className="ai-workflow__toolbar-copy">
-              <strong>{providerLabel} workspace chat</strong>
-              <span>
-                {bridge?.state === "connecting"
-                  ? "Preparing bridge"
-                  : "Use the main composer for prompts and slash commands. The quick prompt capsule stays available as a side input."}
-              </span>
-            </div>
-            <button className="button button--ghost" type="button" onClick={() => setIsInspectorOpen((value) => !value)}>
-              {isInspectorOpen ? "Close Expert Drawer" : "Open Expert Drawer"}
+      <div className="ai-workflow__bootstrap-terminal">
+        <ClassicTerminalSurface
+          tabId={tabId}
+          sessionId={sessionId}
+          fontFamily={fontFamily}
+          fontSize={fontSize}
+          theme={theme}
+          isActive={isActive}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />
+      </div>
+
+      {resumePicker?.open ? (
+        <section className="ai-workflow__resume-picker" aria-label="Resume Codex session">
+          <header className="ai-workflow__resume-picker-header">
+            <strong>Resume Codex session</strong>
+            <button className="button button--ghost" type="button" onClick={resumePicker.onClose}>
+              Close
             </button>
           </header>
-
-          <div className="ai-workflow__history-shell">
-            <AiTranscript
-              entries={transcript.entries}
-              scrollRef={scrollRef}
-              bottomRef={bottomRef}
-              onScroll={onScroll}
-            />
-
-            {!hasTranscriptEntries ? (
-              <div className="ai-workflow__empty-state">
-                <strong>{bridge?.state === "connecting" ? "Connecting AI bridge" : "Ask AI"}</strong>
-                <p>
-                  {bridge?.state === "connecting"
-                    ? "Preparing the structured provider bridge."
-                    : "Use the main composer for prompts and slash commands. The quick prompt capsule stays available as a side input."}
-                </p>
-              </div>
-            ) : null}
-
-            {!isPinnedBottom ? (
-              <div className="dialog-terminal__jump">
+          {resumePicker.error ? <p className="ai-workflow__resume-picker-message">{resumePicker.error}</p> : null}
+          {resumePicker.isLoading ? (
+            <p className="ai-workflow__resume-picker-message">Loading recent Codex sessions...</p>
+          ) : (
+            <div className="ai-workflow__resume-picker-list">
+              {resumePicker.sessions.map((session) => (
                 <button
-                  className="button button--ghost"
+                  key={session.id}
+                  className="ai-workflow__resume-picker-item"
                   type="button"
-                  onClick={jumpToLatest}
+                  onClick={() => void resumePicker.onSelect(session.id)}
                 >
-                  Jump to latest
+                  <strong>{session.latestPrompt?.trim() || session.id}</strong>
+                  <span>{session.cwd}</span>
+                  <span>{session.timestamp}</span>
                 </button>
-              </div>
-            ) : null}
-
-            {resumePicker?.open ? (
-              <section className="ai-workflow__resume-picker" aria-label="Resume Codex session">
-                <header className="ai-workflow__resume-picker-header">
-                  <strong>Resume Codex session</strong>
-                  <button className="button button--ghost" type="button" onClick={resumePicker.onClose}>
-                    Close
-                  </button>
-                </header>
-                {resumePicker.error ? <p className="ai-workflow__resume-picker-message">{resumePicker.error}</p> : null}
-                {resumePicker.isLoading ? (
-                  <p className="ai-workflow__resume-picker-message">Loading recent Codex sessions…</p>
-                ) : (
-                  <div className="ai-workflow__resume-picker-list">
-                    {resumePicker.sessions.map((session) => (
-                      <button
-                        key={session.id}
-                        className="ai-workflow__resume-picker-item"
-                        type="button"
-                        onClick={() => void resumePicker.onSelect(session.id)}
-                      >
-                        <strong>{session.latestPrompt?.trim() || session.id}</strong>
-                        <span>{session.cwd}</span>
-                        <span>{session.timestamp}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-            ) : null}
-          </div>
-
-          <section className={`ai-workflow__inspector${isInspectorOpen ? " ai-workflow__inspector--open" : ""}`}>
-            <header className="ai-workflow__inspector-header">
-              <span>Expert Drawer</span>
-              <span>Raw terminal for native provider commands and escape hatches</span>
-            </header>
-            <div className="ai-workflow__inspector-body">
-              <ClassicTerminalSurface
-                tabId={tabId}
-                sessionId={sessionId}
-                fontFamily={fontFamily}
-                fontSize={fontSize}
-                theme={theme}
-                isActive={isActive}
-                inputSuspended={!isInspectorOpen}
-                write={write}
-                resize={resize}
-              />
+              ))}
             </div>
-          </section>
-
-          <footer className="ai-workflow__composer-shell">
-            <label className="ai-workflow__composer-label" htmlFor={`ai-composer-${tabId}`}>
-              Prompt or slash command
-            </label>
-            <div className="ai-workflow__composer-row">
-              <StructuredAiPromptInput
-                draft={composerDraft}
-                commandCapabilities={commandCapabilities}
-                inputId={`ai-composer-${tabId}`}
-                ariaLabel="AI composer input"
-                className="ai-workflow__composer-input"
-                rows={2}
-                disabled={composerDisabled}
-                placeholder={composerPlaceholder}
-                onChange={setComposerDraft}
-                onSubmit={submitComposer}
-              />
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={composerDisabled}
-                onClick={() => void submitComposer()}
-              >
-                Send
-              </button>
-            </div>
-            {composerDisabled ? (
-              <p className="ai-workflow__composer-hint">The composer becomes active once the terminal session is running.</p>
-            ) : null}
-          </footer>
-        </>
-      ) : (
-        <div className="ai-workflow__bootstrap-terminal">
-          <ClassicTerminalSurface
-            tabId={tabId}
-            sessionId={sessionId}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            theme={theme}
-            isActive={isActive}
-            inputSuspended={false}
-            write={write}
-            resize={resize}
-          />
-        </div>
-      )}
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

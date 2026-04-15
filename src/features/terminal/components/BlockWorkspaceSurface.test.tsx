@@ -9,8 +9,15 @@ import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { BlockWorkspaceSurface } from "./BlockWorkspaceSurface";
 
-vi.mock("./AiWorkflowSurface", () => ({
-  AiWorkflowSurface: () => <div data-testid="ai-workflow-surface" />,
+const renderCalls: Array<{ inputSuspended?: boolean }> = [];
+
+vi.mock("./ClassicTerminalSurface", () => ({
+  ClassicTerminalSurface: (props: { inputSuspended?: boolean }) => {
+    renderCalls.push({
+      inputSuspended: props.inputSuspended,
+    });
+    return <div data-testid="classic-terminal-surface" />;
+  },
 }));
 
 vi.mock("./LiveCommandConsole", () => ({
@@ -31,6 +38,7 @@ describe("BlockWorkspaceSurface", () => {
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    renderCalls.length = 0;
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -43,10 +51,27 @@ describe("BlockWorkspaceSurface", () => {
     host.remove();
   });
 
-  it("routes agent workflow panes through the AI workspace inside the unified block surface", () => {
+  it("renders the AI workflow path as one raw terminal surface without structured transcript chrome", () => {
     const paneState = {
       ...createPaneState(),
       presentation: "agent-workflow" as const,
+      mode: "classic" as const,
+      modeSource: "auto-interactive" as const,
+      agentBridge: {
+        provider: "codex" as const,
+        mode: "structured" as const,
+        state: "ready" as const,
+        fallbackReason: null,
+      },
+      aiTranscript: {
+        entries: [
+          {
+            id: "prompt:1",
+            kind: "prompt" as const,
+            text: "Summarize the latest diff",
+          },
+        ],
+      },
     };
 
     act(() => {
@@ -69,7 +94,54 @@ describe("BlockWorkspaceSurface", () => {
       );
     });
 
-    expect(host.querySelector('[data-testid="ai-workflow-surface"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
+    expect(renderCalls[renderCalls.length - 1]?.inputSuspended).toBe(false);
+    expect(host.querySelector(".ai-workflow__transcript")).toBeNull();
+    expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
+    expect(host.textContent).not.toContain("Open Expert Drawer");
+  });
+
+  it("forwards AI-path prompt-control props into the raw-only workflow surface", () => {
+    const paneState = {
+      ...createPaneState(),
+      presentation: "agent-workflow" as const,
+      mode: "classic" as const,
+      modeSource: "auto-interactive" as const,
+      agentBridge: {
+        provider: "codex" as const,
+        mode: "structured" as const,
+        state: "ready" as const,
+        fallbackReason: null,
+      },
+      aiTranscript: {
+        entries: [],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <BlockWorkspaceSurface
+          tabId="tab:1"
+          paneState={paneState}
+          status="running"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitCommand={() => undefined}
+          onSubmitAiInput={async () => undefined}
+          quickPromptOpenRequestKey={1}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt dock"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt input"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
   });
 
   it("keeps interactive command tabs inside the same block workspace via a live island instead of a separate classic surface", () => {
