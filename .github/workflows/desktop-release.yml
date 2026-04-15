@@ -200,6 +200,21 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Resolve signing mode
+        id: release_signing
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+        run: |
+          if [[ -n "${APPLE_ID}" && -n "${APPLE_PASSWORD}" && -n "${APPLE_TEAM_ID}" && -n "${SIGNING_IDENTITY}" ]]; then
+            echo "can_notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_notarize=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build workflow artifacts only
         if: github.event_name == 'workflow_dispatch'
         uses: tauri-apps/tauri-action@v0.6.2
@@ -210,7 +225,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.apple_signing.outputs.signing_identity != '' && secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize == 'true'
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -228,7 +243,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease without notarization
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (steps.apple_signing.outputs.signing_identity == '' || secrets.APPLE_ID == '' || secrets.APPLE_PASSWORD == '' || secrets.APPLE_TEAM_ID == '')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize != 'true'
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
