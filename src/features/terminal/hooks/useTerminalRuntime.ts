@@ -11,7 +11,6 @@ import {
 } from "../../../lib/tauri/terminal";
 import {
   getTerminalBufferKey,
-  selectTerminalTabState,
   useTerminalViewStore,
 } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -158,12 +157,7 @@ export function useTerminalRuntime() {
         return;
       }
 
-      const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
-      const allowRawTerminalWrite =
-        tabState?.presentation !== "agent-workflow" || tabState.agentBridge?.mode === "raw-fallback";
-      if (allowRawTerminalWrite) {
-        writeDirect(tabRef.tabId, event.data);
-      }
+      writeDirect(tabRef.tabId, event.data);
 
       const promptCwd = consumeOutput(tabRef.tabId, event.data);
       if (promptCwd) {

@@ -10,31 +10,8 @@ import { useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { TerminalPane } from "./TerminalPane";
 
-const terminalApi = vi.hoisted(() => ({
-  submitTerminalAgentPrompt: vi.fn(async () => undefined),
-  listCodexSessions: vi.fn<() => Promise<Array<{
-    id: string;
-    cwd: string;
-    timestamp: string;
-    latestPrompt?: string | null;
-  }>>>(async () => []),
-  resetTerminalAgentSession: vi.fn(async () => undefined),
-  attachTerminalAgentSession: vi.fn(async () => undefined),
-  setTerminalAgentModel: vi.fn(async () => undefined),
-  runTerminalAgentReview: vi.fn(async () => "review summary"),
-}));
-
 const aiPromptTransportApi = vi.hoisted(() => ({
   sendAiPrompt: vi.fn(async () => undefined),
-}));
-
-vi.mock("../../../lib/tauri/terminal", () => ({
-  submitTerminalAgentPrompt: terminalApi.submitTerminalAgentPrompt,
-  listCodexSessions: terminalApi.listCodexSessions,
-  resetTerminalAgentSession: terminalApi.resetTerminalAgentSession,
-  attachTerminalAgentSession: terminalApi.attachTerminalAgentSession,
-  setTerminalAgentModel: terminalApi.setTerminalAgentModel,
-  runTerminalAgentReview: terminalApi.runTerminalAgentReview,
 }));
 
 vi.mock("../lib/ai-prompt-transport", () => ({
@@ -83,12 +60,6 @@ describe("TerminalPane", () => {
 
     latestBlockWorkspaceProps = null;
     latestPaneHeaderActionClusterProps = null;
-    terminalApi.submitTerminalAgentPrompt.mockClear();
-    terminalApi.listCodexSessions.mockReset();
-    terminalApi.resetTerminalAgentSession.mockClear();
-    terminalApi.attachTerminalAgentSession.mockClear();
-    terminalApi.setTerminalAgentModel.mockClear();
-    terminalApi.runTerminalAgentReview.mockClear();
     aiPromptTransportApi.sendAiPrompt.mockClear();
 
     useWorkspaceStore.setState((state) => ({
@@ -198,12 +169,6 @@ describe("TerminalPane", () => {
         prompt: "/help",
       }),
     );
-    expect(terminalApi.listCodexSessions).not.toHaveBeenCalled();
-    expect(terminalApi.attachTerminalAgentSession).not.toHaveBeenCalled();
-    expect(terminalApi.resetTerminalAgentSession).not.toHaveBeenCalled();
-    expect(terminalApi.runTerminalAgentReview).not.toHaveBeenCalled();
-    expect(terminalApi.setTerminalAgentModel).not.toHaveBeenCalled();
-    expect(terminalApi.submitTerminalAgentPrompt).not.toHaveBeenCalled();
 
     const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
     const entries = tabState.aiTranscript?.entries ?? [];
@@ -244,8 +209,6 @@ describe("TerminalPane", () => {
       [Record<string, unknown>]
     >;
     expect(structuredCallArg).not.toHaveProperty("submitStructuredPrompt");
-    expect(terminalApi.runTerminalAgentReview).not.toHaveBeenCalled();
-    expect(terminalApi.submitTerminalAgentPrompt).not.toHaveBeenCalled();
   });
 
   it("routes qwen raw-fallback composer input directly to terminal transport instead of structured slash handling", async () => {
@@ -282,7 +245,6 @@ describe("TerminalPane", () => {
       [Record<string, unknown>]
     >;
     expect(fallbackCallArg).not.toHaveProperty("submitStructuredPrompt");
-    expect(terminalApi.setTerminalAgentModel).not.toHaveBeenCalled();
   });
 
   it("renders the AI MODE badge immediately before the quick prompt trigger when the runtime supports it", async () => {
