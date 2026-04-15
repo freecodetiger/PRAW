@@ -102,6 +102,32 @@ describe("terminal-view-store AI transcript", () => {
     });
   });
 
+  it.each([
+    { commandEntry: "npx codex", expectedProvider: "codex" as const },
+    { commandEntry: "uvx qwen code", expectedProvider: "qwen" as const },
+    { commandEntry: "/usr/bin/claude-code", expectedProvider: "claude" as const },
+  ])(
+    "preserves provider metadata for backend-detected workflow command '$commandEntry'",
+    ({ commandEntry, expectedProvider }) => {
+      const store = useTerminalViewStore.getState();
+
+      store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+      store.consumeSemantic("tab:1", {
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry,
+      });
+
+      const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+      expect(tabState?.aiSession).toEqual({
+        provider: expectedProvider,
+        rawOnly: true,
+      });
+    },
+  );
+
   it("captures idle output into DOM blocks even when legacy mode state says classic", () => {
     const store = useTerminalViewStore.getState();
 

@@ -454,8 +454,15 @@ function resolveAgentProvider(commandEntry: string | undefined): AiSessionProvid
     return "unknown";
   }
 
-  const tokens = normalized.split(/\s+/u);
-  const command = tokens.find((token) => !token.includes("=") && token !== "env" && token !== "command" && token !== "exec");
+  const tokens = normalized
+    .split(/\s+/u)
+    .filter((token) => !token.includes("=") && token !== "env" && token !== "command" && token !== "exec");
+  if (tokens.length === 0) {
+    return "unknown";
+  }
+
+  const rawCommand = tokens[0] === "npx" || tokens[0] === "uvx" ? tokens[1] : tokens[0];
+  const command = rawCommand?.split(/[\\/]/u).pop();
   if (!command) {
     return "unknown";
   }
