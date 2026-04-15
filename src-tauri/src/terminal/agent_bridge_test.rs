@@ -1,137 +1,75 @@
 #[cfg(test)]
 mod tests {
-    use crate::terminal::agent_bridge::{
-        NormalizedAgentEvent, ProviderBridgeKind,
-    };
-    use crate::terminal::structured_codex::build_codex_command_for_test;
-    use crate::terminal::structured_qwen::qwen_adapter_for_test;
-    use crate::terminal::structured_runtime::parse_provider_stream_line;
-    use crate::terminal::StructuredProviderAdapter;
+    use std::fs;
+    use std::path::PathBuf;
+
+    use crate::terminal::agent_bridge::{run_agent_host_from_args, ProviderBridgeKind};
 
     #[test]
-    fn parses_codex_agent_messages_without_command_noise() {
-        let events = parse_provider_stream_line(
-            ProviderBridgeKind::Codex,
-            r#"{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"pong"}}"#,
-        )
-        .expect("codex line should parse");
-
+    fn provider_cli_aliases_are_supported_for_raw_host() {
         assert_eq!(
-            events,
-            vec![NormalizedAgentEvent::AssistantMessage {
-                text: "pong".to_string()
-            }]
+            ProviderBridgeKind::from_cli_name("codex"),
+            Some(ProviderBridgeKind::Codex)
         );
-    }
-
-    #[test]
-    fn ignores_qwen_structured_lines_once_qwen_defaults_to_raw_fallback() {
-        let thinking = parse_provider_stream_line(
-            ProviderBridgeKind::Qwen,
-            r#"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"hidden"}]}}"#,
-        )
-        .expect("qwen thinking line should parse");
-        let text = parse_provider_stream_line(
-            ProviderBridgeKind::Qwen,
-            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"pong"}]}}"#,
-        )
-        .expect("qwen text line should parse");
-
-        assert!(thinking.is_empty());
-        assert!(text.is_empty());
-    }
-
-    #[test]
-    fn parses_claude_result_errors_as_agent_errors() {
-        let events = parse_provider_stream_line(
-            ProviderBridgeKind::Claude,
-            r#"{"type":"result","subtype":"success","is_error":true,"result":"Not logged in · Please run /login"}"#,
-        )
-        .expect("claude result line should parse");
-
         assert_eq!(
-            events,
-            vec![NormalizedAgentEvent::Error {
-                message: "Not logged in · Please run /login".to_string()
-            }]
+            ProviderBridgeKind::from_cli_name("claude"),
+            Some(ProviderBridgeKind::Claude)
         );
-    }
-
-    #[test]
-    fn codex_resume_command_keeps_remote_session_and_model_override() {
-        let command = build_codex_command_for_test(
-            std::path::Path::new("/workspace"),
-            Some("codex-session-1"),
-            "continue",
-            Some("gpt-5.4"),
-        )
-        .expect("codex resume command should build");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
-            .collect();
-
         assert_eq!(
-            args,
-            vec![
-                "exec",
-                "resume",
-                "--json",
-                "--skip-git-repo-check",
-                "--model",
-                "gpt-5.4",
-                "codex-session-1",
-                "continue",
-            ]
+            ProviderBridgeKind::from_cli_name("qwen"),
+            Some(ProviderBridgeKind::Qwen)
         );
-    }
-
-    #[test]
-    fn codex_new_turn_command_uses_model_override_without_resume() {
-        let command = build_codex_command_for_test(
-            std::path::Path::new("/workspace"),
-            None,
-            "start fresh",
-            Some("gpt-5.4"),
-        )
-        .expect("codex new turn command should build");
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
-            .collect();
-
         assert_eq!(
-            args,
-            vec![
-                "exec",
-                "--json",
-                "--skip-git-repo-check",
-                "--sandbox",
-                "danger-full-access",
-                "--model",
-                "gpt-5.4",
-                "start fresh",
-            ]
+            ProviderBridgeKind::from_cli_name("qwen-code"),
+            Some(ProviderBridgeKind::Qwen)
         );
+        assert_eq!(ProviderBridgeKind::from_cli_name("unknown"), None);
     }
 
     #[test]
-    fn qwen_structured_command_builds_are_disabled_in_favor_of_raw_fallback() {
-        let error = qwen_adapter_for_test()
-            .build_command(
-                std::path::Path::new("/workspace"),
-                Some("generated-session-1"),
-                false,
-                "ignored",
-                Some("qwen3-coder-plus"),
-            )
-            .expect_err("qwen structured command should be disabled");
-
-        assert!(error.to_string().contains("raw fallback"));
+    fn returns_false_when_not_invoked_in_agent_host_mode() {
+        let args = vec!["codex".to_string(), "exec".to_string(), "status".to_string()];
+        let handled = run_agent_host_from_args(&args).expect("non-host invocation should be ignored");
+        assert!(!handled);
     }
 
     #[test]
-    fn qwen_adapter_requests_raw_fallback_even_for_plain_invocation() {
-        assert!(qwen_adapter_for_test().should_fallback_to_raw(&[]));
+    fn launcher_source_is_raw_only_and_has_no_structured_bridge_markers() {
+        let source = fs::read_to_string(agent_bridge_source_path())
+            .expect("agent_bridge.rs should be readable in tests");
+
+        assert!(source.contains("--praw-agent-host"));
+        assert!(source.contains("--session-id"));
+        assert!(source.contains("--cwd"));
+        assert!(source.contains("trailing_args"));
+
+        let forbidden_markers = [
+            "PRAW_AGENT_SOCKET",
+            "AgentBridgeRegistry",
+            "TerminalAgentEvent",
+            "TerminalAgentMode",
+            "TerminalAgentState",
+            "structured_runtime",
+            "run_structured_agent_host",
+            "emit_bridge_event",
+            "send_bridge_event",
+            "AgentControlMessage",
+            "UnixListener",
+            "UnixStream",
+        ];
+
+        for marker in forbidden_markers {
+            assert!(
+                !source.contains(marker),
+                "raw-only launcher must not contain structured marker: {marker}"
+            );
+        }
+    }
+
+    fn agent_bridge_source_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("terminal")
+            .join("agent_bridge.rs")
     }
 }

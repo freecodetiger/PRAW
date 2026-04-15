@@ -16,9 +16,7 @@ use commands::ai::{
 use commands::bootstrap::{load_app_bootstrap_state, save_app_config, save_window_snapshot};
 use commands::completion::request_local_completion;
 use commands::terminal::{
-    attach_terminal_agent_session, close_terminal_session, create_terminal_session,
-    list_codex_sessions, reset_terminal_agent_session, resize_terminal_session,
-    run_terminal_agent_review, set_terminal_agent_model, submit_terminal_agent_prompt,
+    close_terminal_session, create_terminal_session, resize_terminal_session,
     write_terminal_session,
 };
 
@@ -35,12 +33,6 @@ pub fn run() {
             write_terminal_session,
             resize_terminal_session,
             close_terminal_session,
-            submit_terminal_agent_prompt,
-            reset_terminal_agent_session,
-            attach_terminal_agent_session,
-            set_terminal_agent_model,
-            list_codex_sessions,
-            run_terminal_agent_review,
             request_completion,
             request_ai_inline_suggestions,
             request_ai_recovery_suggestions,

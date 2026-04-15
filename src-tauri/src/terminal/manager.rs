@@ -15,7 +15,7 @@ use crate::events::{
 };
 
 use super::{
-    agent_bridge::{AgentBridgeRegistry, PRAW_AGENT_SOCKET_ENV, PRAW_APP_BIN_ENV},
+    agent_bridge::PRAW_APP_BIN_ENV,
     session::TerminalSession,
     shell_integration,
     TerminalSemanticDetector,
@@ -23,14 +23,12 @@ use super::{
 
 pub struct TerminalManager {
     sessions: Mutex<HashMap<String, Arc<TerminalSession>>>,
-    agent_bridge: Arc<AgentBridgeRegistry>,
 }
 
 impl Default for TerminalManager {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
-            agent_bridge: Arc::new(AgentBridgeRegistry::default()),
         }
     }
 }
@@ -45,9 +43,8 @@ impl TerminalManager {
             "[praw-terminal] create_session id={} shell={:?} cwd={:?}",
             request.session_id, request.shell, request.cwd
         );
-        let socket_path = self.agent_bridge.ensure_server(app.clone())?;
         let app_bin = std::env::current_exe()
-            .context("failed to resolve current executable for agent bridge wrappers")?;
+            .context("failed to resolve current executable for agent host wrappers")?;
         let shell = resolve_shell(request.shell);
         let cwd = resolve_cwd(request.cwd)?;
         let mut cleanup_paths = vec![];
@@ -67,7 +64,6 @@ impl TerminalManager {
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
         command.env("PRAW_SESSION_ID", &request.session_id);
-        command.env(PRAW_AGENT_SOCKET_ENV, &socket_path);
         command.env(PRAW_APP_BIN_ENV, &app_bin);
 
         if let Some(env) = request.env {
@@ -152,7 +148,6 @@ impl TerminalManager {
     }
 
     pub fn close(&self, session_id: &str) -> Result<()> {
-        self.agent_bridge.remove_session(session_id);
         let session = self
             .sessions
             .lock()
@@ -162,23 +157,6 @@ impl TerminalManager {
 
         session.kill()
     }
-
-    pub fn submit_agent_prompt(&self, session_id: &str, prompt: &str) -> Result<()> {
-        self.agent_bridge.send_prompt(session_id, prompt)
-    }
-
-    pub fn reset_agent_session(&self, session_id: &str) -> Result<()> {
-        self.agent_bridge.reset_session(session_id)
-    }
-
-    pub fn attach_agent_session(&self, session_id: &str, remote_session_id: &str) -> Result<()> {
-        self.agent_bridge.attach_session(session_id, remote_session_id)
-    }
-
-    pub fn set_agent_model(&self, session_id: &str, model: Option<&str>) -> Result<()> {
-        self.agent_bridge.set_model(session_id, model)
-    }
-
     fn get(&self, session_id: &str) -> Option<Arc<TerminalSession>> {
         self.sessions
             .lock()

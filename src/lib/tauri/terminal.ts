@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
-  CodexSessionSummary,
   CreateTerminalSessionRequest,
   CreateTerminalSessionResponse,
   TerminalExitEvent,
@@ -35,36 +34,6 @@ export async function resizeTerminalSession(
 
 export async function closeTerminalSession(sessionId: string): Promise<void> {
   await invoke("close_terminal_session", { sessionId });
-}
-
-export async function submitTerminalAgentPrompt(sessionId: string, prompt: string): Promise<void> {
-  await invoke("submit_terminal_agent_prompt", { sessionId, prompt });
-}
-
-export async function resetTerminalAgentSession(sessionId: string): Promise<void> {
-  await invoke("reset_terminal_agent_session", { sessionId });
-}
-
-export async function attachTerminalAgentSession(
-  sessionId: string,
-  remoteSessionId: string,
-): Promise<void> {
-  await invoke("attach_terminal_agent_session", { sessionId, remoteSessionId });
-}
-
-export async function setTerminalAgentModel(sessionId: string, model: string | null): Promise<void> {
-  await invoke("set_terminal_agent_model", { sessionId, model });
-}
-
-export async function listCodexSessions(): Promise<CodexSessionSummary[]> {
-  return invoke<CodexSessionSummary[]>("list_codex_sessions");
-}
-
-export async function runTerminalAgentReview(
-  cwd: string,
-  prompt?: string,
-): Promise<string> {
-  return invoke<string>("run_terminal_agent_review", { cwd, prompt });
 }
 
 export function onTerminalOutput(
