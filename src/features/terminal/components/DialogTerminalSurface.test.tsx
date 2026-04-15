@@ -11,6 +11,7 @@ import {
 } from "../../../domain/terminal/dialog";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
+import { useTerminalViewStore } from "../state/terminal-view-store";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
 
 const observers: MockIntersectionObserver[] = [];
@@ -76,6 +77,11 @@ describe("DialogTerminalSurface", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     observers.length = 0;
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {},
+    }));
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     vi.stubGlobal(
       "IntersectionObserver",
       function MockIntersectionObserverConstructor(
@@ -188,5 +194,80 @@ describe("DialogTerminalSurface", () => {
     });
 
     expect(host.textContent).not.toContain("Jump to latest");
+  });
+
+  it("restores transcript scroll position and jump state after the dialog surface remounts", () => {
+    const paneState = {
+      ...createIdlePaneState(),
+      blocks: [
+        {
+          id: "cmd:1",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "ls",
+          output: "file-a\nfile-b\n",
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={paneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    const transcript = host.querySelector(".dialog-terminal__history") as HTMLDivElement | null;
+    expect(transcript).not.toBeNull();
+    transcript!.scrollTop = 420;
+
+    act(() => {
+      transcript?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      observers[0]?.trigger(false);
+    });
+
+    expect(host.textContent).toContain("Jump to latest");
+
+    act(() => {
+      root.render(<div />);
+    });
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={paneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    const remountedTranscript = host.querySelector(".dialog-terminal__history") as HTMLDivElement | null;
+    expect(remountedTranscript?.scrollTop).toBe(420);
+    expect(host.textContent).toContain("Jump to latest");
   });
 });

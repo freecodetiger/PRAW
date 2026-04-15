@@ -8,7 +8,7 @@ import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
 import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
 import { applyTerminalAppearance } from "../lib/terminal-appearance";
-import { registerTerminal, unregisterTerminal } from "../lib/terminal-registry";
+import { getTerminalSnapshot, registerTerminal, unregisterTerminal, updateViewport } from "../lib/terminal-registry";
 
 interface XtermTerminalSurfaceProps {
   tabId: string;
@@ -43,6 +43,7 @@ export function XtermTerminalSurface({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initialFocusEnabledRef = useRef(isActive && !inputSuspended);
+  const isReplayingRef = useRef(false);
   const { handleShortcutKeyDown } = useTerminalClipboard(terminalRef);
 
   useEffect(() => {
@@ -80,6 +81,9 @@ export function XtermTerminalSurface({
       sendEnter: async () => {
         await write("\r");
       },
+      clear: () => {
+        terminal.clear();
+      },
       focus: () => {
         terminal.focus();
       },
@@ -100,6 +104,14 @@ export function XtermTerminalSurface({
       void write(data);
     });
 
+    const scrollDisposable = terminal.onScroll((position) => {
+      if (isReplayingRef.current) {
+        return;
+      }
+
+      updateViewport(tabId, position);
+    });
+
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       void resize(cols, rows);
     });
@@ -116,13 +128,26 @@ export function XtermTerminalSurface({
     observer.observe(containerRef.current);
 
     queueMicrotask(() => {
+      const snapshot = getTerminalSnapshot(tabId);
+      isReplayingRef.current = true;
+      if (snapshot.content.length > 0) {
+        terminal.write(snapshot.content);
+      }
       fitAddon.fit();
+      const targetViewport = Math.max(0, Math.min(snapshot.viewportY, terminal.buffer.active.baseY));
+      if (targetViewport >= terminal.buffer.active.baseY) {
+        terminal.scrollToBottom();
+      } else {
+        terminal.scrollToLine(targetViewport);
+      }
+      isReplayingRef.current = false;
       void resize(terminal.cols, terminal.rows);
     });
 
     return () => {
       observer.disconnect();
       dataDisposable.dispose();
+      scrollDisposable.dispose();
       resizeDisposable.dispose();
       removeTerminalGuards();
       imeGuard?.dispose();

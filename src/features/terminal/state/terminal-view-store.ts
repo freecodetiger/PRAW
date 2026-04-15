@@ -31,6 +31,7 @@ import {
   createAiTranscriptState,
   type AiTranscriptState,
 } from "../lib/ai-transcript";
+import { removeDirect, resetDirect } from "../lib/terminal-registry";
 
 interface TerminalViewStore {
   tabStates: Record<string, TerminalTabViewState>;
@@ -48,9 +49,15 @@ interface TerminalViewStore {
   consumeOutput: (tabId: string, data: string) => string | null;
   consumeSemantic: (tabId: string, event: TerminalSemanticEvent) => void;
   consumeAgentEvent: (tabId: string, event: TerminalAgentEvent) => void;
+  updateTranscriptViewport: (tabId: string, viewport: Partial<TranscriptViewportState>) => void;
   setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
   resetTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   removeTabState: (tabId: string) => void;
+}
+
+export interface TranscriptViewportState {
+  scrollTop: number;
+  isPinnedBottom: boolean;
 }
 
 export interface TerminalTabViewState extends DialogState {
@@ -59,6 +66,7 @@ export interface TerminalTabViewState extends DialogState {
   parserState: ShellIntegrationParserState;
   aiTranscript?: AiTranscriptState;
   agentBridge?: AgentBridgeState | null;
+  transcriptViewport?: TranscriptViewportState;
 }
 
 export interface AgentBridgeState {
@@ -377,6 +385,28 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
     }),
 
+  updateTranscriptViewport: (tabId, viewport) =>
+    set((state) => {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (!tabState) {
+        return state;
+      }
+
+      return {
+        tabStates: {
+          ...state.tabStates,
+          [key]: {
+            ...tabState,
+            transcriptViewport: {
+              ...selectTranscriptViewportState(state.tabStates, tabId),
+              ...viewport,
+            },
+          },
+        },
+      };
+    }),
+
   setTabMode: (tabId, mode, source) =>
     set((state) => {
       const key = getTerminalBufferKey(tabId);
@@ -417,9 +447,13 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       return { tabStates };
     }),
 
-  resetTabBuffer: () => {},
+  resetTabBuffer: (tabId) => {
+    resetDirect(tabId);
+  },
 
-  removeTabBuffer: () => {},
+  removeTabBuffer: (tabId) => {
+    removeDirect(tabId);
+  },
 }));
 
 export function getTerminalBufferKey(tabId: string): string {
@@ -433,6 +467,13 @@ export function selectTerminalTabState(
   return tabStates[getTerminalBufferKey(tabId)] ?? null;
 }
 
+export function selectTranscriptViewportState(
+  tabStates: Record<string, TerminalTabViewState>,
+  tabId: string,
+): TranscriptViewportState {
+  return selectTerminalTabState(tabStates, tabId)?.transcriptViewport ?? createTranscriptViewportState();
+}
+
 function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
   return {
     ...createDialogState(shell, cwd, preferredMode),
@@ -441,6 +482,7 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
     parserState: createShellIntegrationParserState(),
     aiTranscript: createAiTranscriptState(),
     agentBridge: null,
+    transcriptViewport: createTranscriptViewportState(),
   };
 }
 
@@ -493,6 +535,14 @@ function reconcileShellState(
     composerHistory: nextState.composerHistory,
     aiTranscript: state.aiTranscript,
     agentBridge: state.agentBridge,
+    transcriptViewport: state.transcriptViewport,
+  };
+}
+
+function createTranscriptViewportState(): TranscriptViewportState {
+  return {
+    scrollTop: 0,
+    isPinnedBottom: true,
   };
 }
 

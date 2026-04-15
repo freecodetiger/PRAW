@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDialogState } from "../../../domain/terminal/dialog";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
+import { useTerminalViewStore } from "../state/terminal-view-store";
 import { AiWorkflowSurface } from "./AiWorkflowSurface";
 
 const renderCalls: Array<{ inputSuspended?: boolean }> = [];
@@ -95,6 +96,11 @@ describe("AiWorkflowSurface", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     renderCalls.length = 0;
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {},
+    }));
+    useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -180,6 +186,72 @@ describe("AiWorkflowSurface", () => {
     });
 
     expect(renderCalls[renderCalls.length - 1]?.inputSuspended).toBe(false);
+  });
+
+  it("restores transcript scroll position and jump state after the workflow surface remounts", () => {
+    const paneState = createAgentWorkflowPaneState();
+
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={paneState}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    const transcript = host.querySelector(".ai-workflow__transcript") as HTMLDivElement | null;
+    expect(transcript).not.toBeNull();
+    Object.defineProperty(transcript, "scrollHeight", {
+      configurable: true,
+      value: 2000,
+    });
+    Object.defineProperty(transcript, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    transcript!.scrollTop = 640;
+
+    act(() => {
+      transcript?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Jump to latest");
+
+    act(() => {
+      root.render(<div />);
+    });
+
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={paneState}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    const remountedTranscript = host.querySelector(".ai-workflow__transcript") as HTMLDivElement | null;
+    expect(remountedTranscript?.scrollTop).toBe(640);
+    expect(host.textContent).toContain("Jump to latest");
   });
 
   it("renders a native empty state instead of the raw terminal when structured AI mode has no transcript yet", () => {

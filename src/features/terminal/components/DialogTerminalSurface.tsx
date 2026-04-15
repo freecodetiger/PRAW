@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
-import { resolvePinnedBottomState } from "../lib/scroll-pinning";
+import { useTranscriptViewport } from "../hooks/useTranscriptViewport";
 import { resolveDialogSurfaceModel } from "../lib/dialog-surface-model";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { DialogIdleComposer } from "./DialogIdleComposer";
@@ -38,70 +36,18 @@ export function DialogTerminalSurface({
   write,
   resize,
 }: DialogTerminalSurfaceProps) {
-  const [isPinnedBottom, setIsPinnedBottom] = useState(true);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const manualJumpPendingRef = useRef(false);
   const surfaceModel = resolveDialogSurfaceModel({
     paneHeight,
     paneState,
+  });
+  const { scrollRef, bottomRef, isPinnedBottom, onScroll, jumpToLatest } = useTranscriptViewport({
+    tabId,
+    contentKey: paneState.blocks,
   });
   const activeCommand =
     paneState.activeCommandBlockId === null
       ? null
       : paneState.blocks.find((block) => block.id === paneState.activeCommandBlockId) ?? null;
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node || !isPinnedBottom) {
-      return;
-    }
-
-    // 只有在用户主动滚动到底部时才自动滚动
-    // 避免在用户查看历史记录时强制跳转
-    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-    if (distanceFromBottom < 100) {
-      node.scrollTop = node.scrollHeight;
-    }
-  }, [isPinnedBottom, paneState.blocks, surfaceModel.phase]);
-
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") {
-      return;
-    }
-
-    const root = scrollRef.current;
-    const target = bottomRef.current;
-    if (!root || !target) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry) {
-          return;
-        }
-
-        if (entry.isIntersecting) {
-          manualJumpPendingRef.current = false;
-          setIsPinnedBottom(true);
-          return;
-        }
-
-        if (!manualJumpPendingRef.current) {
-          setIsPinnedBottom(false);
-        }
-      },
-      {
-        root,
-        rootMargin: "0px 0px 48px 0px",
-        threshold: 0,
-      },
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div className="dialog-terminal">
@@ -110,17 +56,7 @@ export function DialogTerminalSurface({
           blocks={paneState.blocks}
           scrollRef={scrollRef}
           bottomRef={bottomRef}
-          onScroll={(event) => {
-            if (typeof IntersectionObserver !== "undefined") {
-              return;
-            }
-
-            const node = event.currentTarget;
-            const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-            const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
-            manualJumpPendingRef.current = false;
-            setIsPinnedBottom(nextPinned);
-          }}
+          onScroll={onScroll}
         />
 
         {!isPinnedBottom ? (
@@ -128,17 +64,7 @@ export function DialogTerminalSurface({
             <button
               className="button button--ghost"
               type="button"
-              onClick={() => {
-                const node = scrollRef.current;
-                if (!node) {
-                  return;
-                }
-
-                manualJumpPendingRef.current = true;
-                bottomRef.current?.scrollIntoView({ block: "end" });
-                node.scrollTop = node.scrollHeight;
-                setIsPinnedBottom(true);
-              }}
+              onClick={jumpToLatest}
             >
               Jump to latest
             </button>

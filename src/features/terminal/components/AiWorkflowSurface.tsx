@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
+import { useTranscriptViewport } from "../hooks/useTranscriptViewport";
 import { createAiTranscriptState } from "../lib/ai-transcript";
 import { getAiComposerPlaceholder, getStructuredAiCommandCapabilities } from "../lib/ai-command";
-import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import {
   resolveStructuredAgentCapabilities,
   resolveStructuredAgentLabel,
@@ -64,16 +64,12 @@ export function AiWorkflowSurface({
   forceOpenExpertDrawerKey = 0,
   quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
-  const [isPinnedBottom, setIsPinnedBottom] = useState(true);
   const [composerDraft, setComposerDraft] = useState("");
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
   const [bypassError, setBypassError] = useState<string | null>(null);
   const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const manualJumpPendingRef = useRef(false);
   const transcript = paneState.aiTranscript ?? createAiTranscriptState();
   const bridge = paneState.agentBridge ?? null;
   const providerId = bridge?.provider ?? "";
@@ -86,6 +82,10 @@ export function AiWorkflowSurface({
   const composerPlaceholder = getAiComposerPlaceholder(providerId);
   const showsBypassCapsule = bridgeCapabilities.showsBypassCapsule;
   const composerDisabled = status !== "running";
+  const { scrollRef, bottomRef, isPinnedBottom, onScroll, jumpToLatest } = useTranscriptViewport({
+    tabId,
+    contentKey: transcript.entries,
+  });
 
   useEffect(() => {
     if (forceOpenExpertDrawerKey <= 0) {
@@ -103,56 +103,6 @@ export function AiWorkflowSurface({
     setBypassPromptOpen(true);
     setBypassError(null);
   }, [quickPromptOpenRequestKey, showsBypassCapsule]);
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node || !isPinnedBottom) {
-      return;
-    }
-
-    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-    if (distanceFromBottom < 100) {
-      node.scrollTop = node.scrollHeight;
-    }
-  }, [isPinnedBottom, transcript.entries]);
-
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") {
-      return;
-    }
-
-    const root = scrollRef.current;
-    const target = bottomRef.current;
-    if (!root || !target) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry) {
-          return;
-        }
-
-        if (entry.isIntersecting) {
-          manualJumpPendingRef.current = false;
-          setIsPinnedBottom(true);
-          return;
-        }
-
-        if (!manualJumpPendingRef.current) {
-          setIsPinnedBottom(false);
-        }
-      },
-      {
-        root,
-        rootMargin: "0px 0px 48px 0px",
-        threshold: 0,
-      },
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, []);
 
   const submitComposer = async () => {
     const normalizedInput = composerDraft.trim();
@@ -233,17 +183,7 @@ export function AiWorkflowSurface({
               entries={transcript.entries}
               scrollRef={scrollRef}
               bottomRef={bottomRef}
-              onScroll={(event) => {
-                if (typeof IntersectionObserver !== "undefined") {
-                  return;
-                }
-
-                const node = event.currentTarget;
-                const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
-                const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
-                manualJumpPendingRef.current = false;
-                setIsPinnedBottom(nextPinned);
-              }}
+              onScroll={onScroll}
             />
 
             {!hasTranscriptEntries ? (
@@ -262,17 +202,7 @@ export function AiWorkflowSurface({
                 <button
                   className="button button--ghost"
                   type="button"
-                  onClick={() => {
-                    const node = scrollRef.current;
-                    if (!node) {
-                      return;
-                    }
-
-                    manualJumpPendingRef.current = true;
-                    bottomRef.current?.scrollIntoView({ block: "end" });
-                    node.scrollTop = node.scrollHeight;
-                    setIsPinnedBottom(true);
-                  }}
+                  onClick={jumpToLatest}
                 >
                   Jump to latest
                 </button>
