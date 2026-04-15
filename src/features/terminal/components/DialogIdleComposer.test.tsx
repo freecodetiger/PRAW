@@ -523,7 +523,7 @@ describe("DialogIdleComposer", () => {
     expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
   });
 
-  it("keeps plain ArrowUp bound to history when suggestions are only auto-opened", async () => {
+  it("navigates auto-opened suggestions with plain ArrowDown", async () => {
     requestLocalCompletion.mockResolvedValue({
       suggestions: [
         { text: "git status", source: "local", score: 950, kind: "git" },
@@ -578,13 +578,18 @@ describe("DialogIdleComposer", () => {
 
     expect(host.querySelectorAll('[role="option"]')).toHaveLength(3);
 
+    const beforeSelected = host.querySelector('[role="option"][aria-selected="true"]');
+    expect(beforeSelected).not.toBeNull();
+
     act(() => {
-      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
 
     await flush();
 
-    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
+    const afterSelected = host.querySelector('[role="option"][aria-selected="true"]');
+    expect(afterSelected).not.toBeNull();
+    expect(afterSelected?.textContent).not.toBe(beforeSelected?.textContent);
   });
 
   it("shows a ghost for the first suggestion whenever the Tab candidate list is available", async () => {

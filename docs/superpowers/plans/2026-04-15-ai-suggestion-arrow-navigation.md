@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make plain `ArrowUp` and `ArrowDown` navigate AI suggestions only when the user explicitly opens the suggestion bar, while preserving composer history behavior when the bar is closed or only auto-opened.
+**Goal:** Make plain `ArrowUp` and `ArrowDown` navigate AI suggestions whenever the suggestion bar is visible, while preserving composer history behavior when the bar is closed.
 
 **Architecture:** Keep the change local to the idle composer. The implementation only adjusts keyboard-routing priority in `DialogIdleComposer` and adds focused regression coverage in the existing component test file. No suggestion-engine or backend changes are required.
 
@@ -34,7 +34,7 @@ Date: 2026-04-15
 ```md
 # AI Suggestion Arrow Navigation Implementation Plan
 
-**Goal:** Make plain ArrowUp and ArrowDown navigate AI suggestions only when the user explicitly opens the suggestion bar.
+**Goal:** Make plain ArrowUp and ArrowDown navigate AI suggestions whenever the suggestion bar is visible.
 ```
 
 - [ ] **Step 3: Commit the docs context**
@@ -145,10 +145,10 @@ expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).to
 });
 ```
 
-- [ ] **Step 3: Write a failing test proving auto-opened suggestions do not hijack plain ArrowUp history behavior**
+- [ ] **Step 3: Write a failing test proving auto-opened suggestions accept plain-arrow navigation**
 
 ```tsx
-it("keeps plain ArrowUp bound to history when suggestions are only auto-opened", async () => {
+it("navigates auto-opened suggestions with plain ArrowDown", async () => {
   requestLocalCompletion.mockResolvedValue({
     suggestions: [
       { text: "git status", source: "local", score: 950, kind: "git" },
@@ -196,13 +196,18 @@ it("keeps plain ArrowUp bound to history when suggestions are only auto-opened",
 
   expect(host.querySelectorAll('[role="option"]')).toHaveLength(3);
 
+  const beforeSelected = host.querySelector('[role="option"][aria-selected="true"]');
+  expect(beforeSelected).not.toBeNull();
+
   act(() => {
-    input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
   });
 
   await flush();
 
-  expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
+  const afterSelected = host.querySelector('[role="option"][aria-selected="true"]');
+  expect(afterSelected).not.toBeNull();
+  expect(afterSelected?.textContent).not.toBe(beforeSelected?.textContent);
 });
 ```
 
@@ -214,7 +219,7 @@ Run:
 npm test -- src/features/terminal/components/DialogIdleComposer.test.tsx
 ```
 
-Expected: FAIL on the new explicit plain-arrow suggestion-navigation test because the component still requires `Ctrl+ArrowDown`.
+Expected: FAIL on the auto-opened suggestion-navigation test because the component still requires an explicit-open guard.
 
 ### Task 3: Implement Plain Arrow Navigation In The Idle Composer
 
@@ -226,7 +231,7 @@ Expected: FAIL on the new explicit plain-arrow suggestion-navigation test becaus
 
 ```tsx
 const canNavigateSuggestionBar =
-  suggestionBarVisible &&
+  showSuggestionBar &&
   visibleSuggestions.length > 0 &&
   !isComposing;
 ```

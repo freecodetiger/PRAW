@@ -85,8 +85,7 @@ export function DialogIdleComposer({
     cursorAtEnd &&
     !isComposing &&
     historyIndex === null;
-  const canNavigateExplicitSuggestionBar =
-    suggestionBarVisible &&
+  const canNavigateVisibleSuggestionBar =
     showSuggestionBar &&
     visibleSuggestions.length > 0 &&
     !isComposing;
@@ -298,13 +297,13 @@ export function DialogIdleComposer({
                 return;
               }
 
-              if (event.key === "ArrowUp" && canNavigateExplicitSuggestionBar && visibleSuggestions.length > 1) {
+              if (event.key === "ArrowUp" && canNavigateVisibleSuggestionBar && visibleSuggestions.length > 1) {
                 event.preventDefault();
                 setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "previous"));
                 return;
               }
 
-              if (event.key === "ArrowDown" && canNavigateExplicitSuggestionBar && visibleSuggestions.length > 1) {
+              if (event.key === "ArrowDown" && canNavigateVisibleSuggestionBar && visibleSuggestions.length > 1) {
                 event.preventDefault();
                 setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "next"));
                 return;

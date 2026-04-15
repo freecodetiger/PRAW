@@ -6,8 +6,8 @@ Date: 2026-04-15
 
 Improve AI completion candidate navigation in the idle command composer so the interaction feels faster and more direct:
 
-- When the suggestion bar has been explicitly opened, plain `ArrowUp` and `ArrowDown` should navigate the visible candidates.
-- When the suggestion bar is not open, plain `ArrowUp` and `ArrowDown` should keep their existing terminal history behavior.
+- When the suggestion bar is visible, plain `ArrowUp` and `ArrowDown` should navigate the visible candidates.
+- When the suggestion bar is not visible, plain `ArrowUp` and `ArrowDown` should keep their existing terminal history behavior.
 
 This change is intentionally limited to keyboard routing in the idle composer. It does not change completion generation, candidate ranking, AI suggestion sourcing, or history storage.
 
@@ -26,7 +26,7 @@ This means the user has to switch mental models after explicitly opening the sug
 
 Use a state-sensitive key routing rule:
 
-- If the suggestion bar has been explicitly opened by the user and there are visible suggestions, plain `ArrowUp` and `ArrowDown` navigate suggestions.
+- If the suggestion bar is visible and there are visible suggestions, plain `ArrowUp` and `ArrowDown` navigate suggestions.
 - Otherwise, plain `ArrowUp` and `ArrowDown` keep their existing history semantics.
 
 `Ctrl+ArrowUp` and `Ctrl+ArrowDown` remain supported as compatibility shortcuts.
@@ -64,7 +64,7 @@ Required updates:
 
 1. Reorder `onKeyDown` handling so explicit suggestion-bar navigation is checked before history navigation.
 2. Gate plain `ArrowUp` and `ArrowDown` candidate navigation on:
-   - `suggestionBarVisible === true`
+   - `showSuggestionBar === true`
    - `visibleSuggestions.length > 0`
 3. Preserve current history behavior when the suggestion bar is not open.
 4. Preserve existing `Ctrl+ArrowUp` and `Ctrl+ArrowDown` handling for compatibility.
@@ -79,7 +79,7 @@ Update [DialogIdleComposer.test.tsx](/home/zpc/projects/praw/.worktrees/ai-sugge
 - When the suggestion bar is open, plain `ArrowUp` moves selection to the previous candidate.
 - When the suggestion bar is closed, plain `ArrowUp` still enters composer history.
 - When the suggestion bar is closed, plain `ArrowDown` still follows existing history restore semantics.
-- When the suggestion bubble is auto-opened but not explicitly opened, plain arrows still preserve history semantics.
+- When the suggestion bubble is auto-opened, plain arrows navigate the visible candidates.
 - `ArrowRight` still accepts the highlighted candidate after plain-arrow navigation.
 
 ## Risks
