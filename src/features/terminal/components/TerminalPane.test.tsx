@@ -239,6 +239,77 @@ describe("TerminalPane", () => {
     ]);
   });
 
+  it("attaches a qwen session directly from /resume <session-id> without invoking the codex session picker", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...state.tabStates["tab:1"],
+          agentBridge: {
+            provider: "qwen",
+            mode: "structured",
+            state: "ready",
+            fallbackReason: null,
+          },
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    await act(async () => {
+      await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/resume qwen-session-1");
+    });
+
+    expect(terminalApi.listCodexSessions).not.toHaveBeenCalled();
+    expect(terminalApi.attachTerminalAgentSession).toHaveBeenCalledWith("session-1", "qwen-session-1");
+    const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
+    const entries = tabState.aiTranscript?.entries ?? [];
+    const lastEntry = entries[entries.length - 1];
+    expect(lastEntry).toMatchObject({
+      kind: "system",
+      text: expect.stringContaining("qwen-session-1"),
+    });
+  });
+
+  it("rejects qwen /review in the structured composer instead of silently running codex review", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...state.tabStates["tab:1"],
+          agentBridge: {
+            provider: "qwen",
+            mode: "structured",
+            state: "ready",
+            fallbackReason: null,
+          },
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    await act(async () => {
+      await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/review");
+    });
+
+    expect(terminalApi.runTerminalAgentReview).not.toHaveBeenCalled();
+    const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
+    const entries = tabState.aiTranscript?.entries ?? [];
+    const lastEntry = entries[entries.length - 1];
+    expect(lastEntry).toMatchObject({
+      kind: "system",
+      tone: "warning",
+    });
+    expect(lastEntry?.text).toContain("/review");
+    expect(lastEntry?.text).toContain("Expert Drawer");
+  });
+
   it("offers a header focus button and toggles focus mode through the pane header callback", async () => {
     useWorkspaceStore.setState((state) => ({
       ...state,

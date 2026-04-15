@@ -1,7 +1,7 @@
 import { useMemo, useState, type RefObject, type UIEventHandler } from "react";
 
 import type { CommandBlock } from "../../../domain/terminal/dialog";
-import { tokenizeDialogOutput, type DialogOutputToken } from "../lib/dialog-output";
+import { stripTerminalControlSequences, tokenizeDialogOutput, type DialogOutputToken } from "../lib/dialog-output";
 import { highlightCommandText, type HistoryHighlightToken } from "../lib/history-highlighting";
 import { writeClipboardText } from "../lib/clipboard";
 import { getSelectionTextWithin } from "../lib/selection-clipboard";
@@ -87,10 +87,10 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
 
 function formatBlockForCopy(block: CommandBlock): string {
   if (block.kind === "command") {
-    return `$ ${block.command ?? ""}\n${block.output}`;
+    return `$ ${block.command ?? ""}\n${stripTerminalControlSequences(block.output)}`;
   }
 
-  return block.output;
+  return stripTerminalControlSequences(block.output);
 }
 
 function CommandBlockOutput({ output }: { output: string }) {

@@ -770,15 +770,6 @@ button {
   line-height: 1.5;
 }
 
-.ai-workflow__fallback-banner {
-  flex: 0 0 auto;
-  padding: 12px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ai-theme-color) 20%, var(--border-muted));
-  color: var(--text-muted);
-  font-size: 12px;
-  background: color-mix(in srgb, var(--surface) 90%, var(--ai-background-color));
-}
-
 .ai-workflow__transcript {
   display: flex;
   flex: 1;
@@ -877,26 +868,40 @@ button {
   flex: 0 0 1px;
 }
 
-.ai-workflow__bypass-capsule-shell {
+.ai-workflow__bypass-dock-shell {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
+  top: 50%;
+  right: 12px;
+  width: calc(100% - 24px);
+  max-width: calc(100% - 24px);
   z-index: 6;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
-.ai-workflow__bypass-capsule {
+.ai-workflow__bypass-capsule,
+.ai-workflow__bypass-dock-panel {
   pointer-events: auto;
+}
+
+.ai-workflow__bypass-capsule {
+  flex: 0 0 auto;
   border: 1px solid color-mix(in srgb, var(--ai-theme-color) 34%, var(--border-muted));
   border-radius: 999px;
-  padding: 7px 12px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  color: var(--text-muted);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--surface) 72%, transparent);
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--ai-background-color));
+  color: var(--text-primary);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--surface) 72%, transparent);
   backdrop-filter: blur(10px);
   font: inherit;
   font-size: 12px;
-  opacity: 0.78;
+  font-weight: 600;
+  opacity: 0.96;
   transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
@@ -905,6 +910,40 @@ button {
   border-color: color-mix(in srgb, var(--ai-theme-color) 56%, var(--border));
   color: var(--text-primary);
   opacity: 1;
+}
+
+.ai-workflow__bypass-dock-panel {
+  width: 0;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-right: 0;
+  border-radius: 18px 0 0 18px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--ai-background-color));
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(10px);
+  transition: width 160ms ease, max-width 160ms ease, opacity 120ms ease, padding 120ms ease, border-color 120ms ease;
+}
+
+.ai-workflow__bypass-dock-shell[data-expanded="true"] .ai-workflow__bypass-dock-panel {
+  width: calc(100% - 68px);
+  max-width: calc(100% - 68px);
+  opacity: 1;
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--ai-theme-color) 34%, var(--border-muted));
+}
+
+.ai-workflow__bypass-input {
+  min-height: 40px;
+  max-height: 160px;
+  resize: none;
 }
 
 .ai-workflow__inspector {

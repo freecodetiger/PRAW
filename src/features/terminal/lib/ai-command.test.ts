@@ -37,4 +37,14 @@ describe("ai-command parser", () => {
     expect(help).toContain("/review");
     expect(help).toContain("Expert Drawer");
   });
+
+  it("describes qwen structured commands without codex-only copy", () => {
+    const help = getAiCommandHelpText("qwen");
+
+    expect(help).toContain("/new");
+    expect(help).toContain("/model");
+    expect(help).toContain("/resume <session-id>");
+    expect(help).not.toContain("Codex session");
+    expect(help).not.toContain("/review");
+  });
 });

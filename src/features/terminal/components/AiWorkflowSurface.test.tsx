@@ -61,6 +61,18 @@ function createBootstrapPaneState() {
   };
 }
 
+function createQwenWorkflowPaneState() {
+  return {
+    ...createAgentWorkflowPaneState(),
+    agentBridge: {
+      provider: "qwen" as const,
+      mode: "structured" as const,
+      state: "ready" as const,
+      fallbackReason: null,
+    },
+  };
+}
+
 function createRawFallbackPaneState() {
   return {
     ...createAgentWorkflowPaneState(),
@@ -213,7 +225,7 @@ describe("AiWorkflowSurface", () => {
     });
 
     expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
-    expect(host.textContent).toContain("Native terminal mode is active");
+    expect(host.textContent).not.toContain("Native terminal mode is active");
     expect(host.textContent).not.toContain("structured bridge unavailable");
     expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
   });
@@ -289,7 +301,49 @@ describe("AiWorkflowSurface", () => {
     expect(host.querySelector('[aria-label="Open quick AI prompt"]')).not.toBeNull();
   });
 
-  it("opens the bypass overlay from the capsule and submits with Enter", async () => {
+  it("renders the docked bypass composer only in structured AI mode", () => {
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt dock"]')).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createRawFallbackPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt dock"]')).toBeNull();
+  });
+
+  it("expands the docked bypass composer from the right-edge capsule and submits with Enter", async () => {
     const onSubmitAiInput = vi.fn(async () => undefined);
 
     await act(async () => {
@@ -317,7 +371,9 @@ describe("AiWorkflowSurface", () => {
       capsule?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    const shell = host.querySelector('[aria-label="AI prompt dock"]');
     const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(shell?.getAttribute("data-expanded")).toBe("true");
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
     expect(input?.getAttribute("placeholder")).toBe("");
@@ -332,12 +388,11 @@ describe("AiWorkflowSurface", () => {
     });
 
     expect(onSubmitAiInput).toHaveBeenCalledWith("continue from here");
-    expect(host.querySelector('[aria-label="AI prompt overlay"]')).toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt dock"]')?.getAttribute("data-expanded")).toBe("false");
+    expect(host.querySelector('[aria-label="Open quick AI prompt"]')).not.toBeNull();
   });
 
-  it("keeps the bypass overlay open on Shift+Enter and closes it on Escape", async () => {
-    const onSubmitAiInput = vi.fn(async () => undefined);
-
+  it("keeps the docked composer expanded on outside click and collapses on Escape while preserving draft", async () => {
     await act(async () => {
       root.render(
         <AiWorkflowSurface
@@ -351,7 +406,7 @@ describe("AiWorkflowSurface", () => {
           isActive={true}
           write={async () => undefined}
           resize={async () => undefined}
-          onSubmitAiInput={onSubmitAiInput}
+          onSubmitAiInput={async () => undefined}
         />,
       );
     });
@@ -364,17 +419,28 @@ describe("AiWorkflowSurface", () => {
     expect(input).not.toBeNull();
 
     await act(async () => {
-      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "draft survives");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     });
 
-    expect(onSubmitAiInput).not.toHaveBeenCalled();
-    expect(host.querySelector('[aria-label="AI prompt overlay"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt dock"]')?.getAttribute("data-expanded")).toBe("true");
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe("draft survives");
 
     await act(async () => {
       input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
-    expect(host.querySelector('[aria-label="AI prompt overlay"]')).toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt dock"]')?.getAttribute("data-expanded")).toBe("false");
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe("draft survives");
   });
 
   it("preserves the bypass draft and shows an error when submit fails", async () => {
@@ -415,9 +481,150 @@ describe("AiWorkflowSurface", () => {
       input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
-    expect(host.querySelector('[aria-label="AI prompt overlay"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt dock"]')?.getAttribute("data-expanded")).toBe("true");
     expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe("retry this prompt");
     expect(host.textContent).toContain("Could not send prompt");
+  });
+
+  it("clears draft only after successful submit", async () => {
+    const onSubmitAiInput = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "clear after success");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe("");
+  });
+
+  it("keeps the dock visible after successful submit and only collapses back to capsule state", async () => {
+    const onSubmitAiInput = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "submit and collapse");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    const dock = host.querySelector('[aria-label="AI prompt dock"]');
+    expect(dock).not.toBeNull();
+    expect(dock?.getAttribute("data-expanded")).toBe("false");
+    expect(host.querySelector('[aria-label="Open quick AI prompt"]')).not.toBeNull();
+  });
+
+  it("auto-resizes the bypass input with content while capping its height", async () => {
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    let currentScrollHeight = 92;
+    Object.defineProperty(input as HTMLTextAreaElement, "scrollHeight", {
+      configurable: true,
+      get: () => currentScrollHeight,
+    });
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "line 1\nline 2\nline 3");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect((input as HTMLTextAreaElement).style.height).toBe("92px");
+
+    currentScrollHeight = 240;
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect((input as HTMLTextAreaElement).style.height).toBe("160px");
+    expect((input as HTMLTextAreaElement).style.overflowY).toBe("auto");
   });
 
   it("keeps the bypass capsule visible but disables submit when the session is not running", async () => {
@@ -450,5 +657,29 @@ describe("AiWorkflowSurface", () => {
     const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
     expect(input?.disabled).toBe(true);
     expect(host.textContent).toContain("The AI session is not accepting input.");
+  });
+
+  it("uses the active provider in the fixed composer placeholder instead of hard-coding Codex", () => {
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createQwenWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    const composer = host.querySelector('[aria-label="AI composer input"]');
+    expect(composer?.getAttribute("placeholder")).toContain("Qwen");
+    expect(composer?.getAttribute("placeholder")).not.toContain("Codex");
   });
 });

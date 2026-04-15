@@ -508,7 +508,9 @@ fn run_provider_turn(
         ProviderBridgeKind::Claude => {
             build_claude_command(cwd, next_remote_session_id.as_deref(), is_resume)
         }
-        ProviderBridgeKind::Qwen => build_qwen_command(cwd, next_remote_session_id.as_deref(), is_resume),
+        ProviderBridgeKind::Qwen => {
+            build_qwen_command(cwd, next_remote_session_id.as_deref(), is_resume, model_override)
+        }
     };
 
     let mut child = command
@@ -664,7 +666,12 @@ fn build_claude_command(cwd: &Path, remote_session_id: Option<&str>, is_resume: 
     command
 }
 
-fn build_qwen_command(cwd: &Path, remote_session_id: Option<&str>, is_resume: bool) -> Command {
+fn build_qwen_command(
+    cwd: &Path,
+    remote_session_id: Option<&str>,
+    is_resume: bool,
+    model_override: Option<&str>,
+) -> Command {
     let mut command = Command::new("qwen");
     command.current_dir(cwd);
     command.args([
@@ -679,8 +686,21 @@ fn build_qwen_command(cwd: &Path, remote_session_id: Option<&str>, is_resume: bo
     } else if let Some(session_id) = remote_session_id {
         command.args(["--session-id", session_id]);
     }
+    if let Some(model) = model_override {
+        command.args(["--model", model]);
+    }
     command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     command
+}
+
+#[cfg(test)]
+pub(crate) fn build_qwen_command_for_test(
+    cwd: &Path,
+    remote_session_id: Option<&str>,
+    is_resume: bool,
+    model_override: Option<&str>,
+) -> Command {
+    build_qwen_command(cwd, remote_session_id, is_resume, model_override)
 }
 
 fn provider_prompt_payload(provider: ProviderBridgeKind, prompt: &str) -> Result<String> {

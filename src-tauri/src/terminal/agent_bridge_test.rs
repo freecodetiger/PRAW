@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::terminal::agent_bridge::{
-        build_codex_command_for_test, parse_provider_stream_line, NormalizedAgentEvent, ProviderBridgeKind,
+        build_codex_command_for_test, build_qwen_command_for_test, parse_provider_stream_line,
+        NormalizedAgentEvent, ProviderBridgeKind,
     };
 
     #[test]
@@ -110,6 +111,60 @@ mod tests {
                 "--model",
                 "gpt-5.4",
                 "start fresh",
+            ]
+        );
+    }
+
+    #[test]
+    fn qwen_new_turn_command_uses_model_override_without_resume() {
+        let command = build_qwen_command_for_test(
+            std::path::Path::new("/workspace"),
+            None,
+            false,
+            Some("qwen3-coder-plus"),
+        );
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            args,
+            vec![
+                "--input-format",
+                "stream-json",
+                "--output-format",
+                "stream-json",
+                "--model",
+                "qwen3-coder-plus",
+            ]
+        );
+    }
+
+    #[test]
+    fn qwen_resume_command_keeps_remote_session_and_model_override() {
+        let command = build_qwen_command_for_test(
+            std::path::Path::new("/workspace"),
+            Some("qwen-session-1"),
+            true,
+            Some("qwen3-coder-plus"),
+        );
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            args,
+            vec![
+                "--input-format",
+                "stream-json",
+                "--output-format",
+                "stream-json",
+                "--resume",
+                "qwen-session-1",
+                "--model",
+                "qwen3-coder-plus",
             ]
         );
     }

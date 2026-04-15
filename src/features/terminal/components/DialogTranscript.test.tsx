@@ -98,6 +98,40 @@ describe("DialogTranscript", () => {
     expect(writeText).toHaveBeenCalledWith("$ ls\nfile-a\nfile-b\n");
   });
 
+  it("copies command blocks as plain text without terminal control sequences", async () => {
+    const blocks: CommandBlock[] = [
+      {
+        id: "cmd:color",
+        kind: "command",
+        cwd: "/workspace",
+        command: "printf color",
+        output: "\u001b[31mred\u001b[0m\n\u001b]10;rgb:ffff/ffff/ffff\u001b\\plain\n",
+        status: "completed",
+        interactive: false,
+        exitCode: 0,
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DialogTranscript
+          blocks={blocks}
+          scrollRef={{ current: null }}
+          onScroll={() => undefined}
+        />,
+      );
+    });
+
+    const copyButton = host.querySelector('button[aria-label="Copy command block"]');
+    expect(copyButton).not.toBeNull();
+
+    await act(async () => {
+      copyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith("$ printf color\nred\nplain\n");
+  });
+
   it("shows a transcript context menu for copying selected text", async () => {
     const blocks: CommandBlock[] = [
       {

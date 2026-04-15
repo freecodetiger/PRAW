@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { createAiTranscriptState } from "../lib/ai-transcript";
+import { getAiComposerPlaceholder } from "../lib/ai-command";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
@@ -72,11 +73,8 @@ export function AiWorkflowSurface({
   const isRawFallback = bridge?.mode === "raw-fallback";
   const isStructuredSurface = !isRawFallback;
   const providerLabel = bridge?.provider ? bridge.provider[0].toUpperCase() + bridge.provider.slice(1) : "AI";
+  const composerPlaceholder = getAiComposerPlaceholder(bridge?.provider ?? "");
   const composerDisabled = status !== "running";
-  const fallbackMessage =
-    bridge?.fallbackReason && !/structured bridge unavailable/iu.test(bridge.fallbackReason)
-      ? `Native terminal mode is active. ${bridge.fallbackReason}`
-      : "Native terminal mode is active for this command.";
 
   useEffect(() => {
     if (forceOpenExpertDrawerKey <= 0) {
@@ -173,31 +171,22 @@ export function AiWorkflowSurface({
 
   return (
     <div className="ai-workflow">
-      <div className="ai-workflow__bypass-capsule-shell">
-        <button
-          className="ai-workflow__bypass-capsule"
-          type="button"
-          aria-label="Open quick AI prompt"
-          onClick={() => {
-            setBypassPromptOpen(true);
-            setBypassError(null);
-          }}
-        >
-          Prompt
-        </button>
-      </div>
-
-      {bypassPromptOpen ? (
+      {isStructuredSurface ? (
         <AiModePromptOverlay
+          expanded={bypassPromptOpen}
           draft={bypassDraft}
           disabled={composerDisabled || isBypassSubmitting}
           error={bypassError}
           statusMessage={composerDisabled ? "The AI session is not accepting input." : null}
+          onExpand={() => {
+            setBypassPromptOpen(true);
+            setBypassError(null);
+          }}
           onChange={(value) => {
             setBypassDraft(value);
             setBypassError(null);
           }}
-          onClose={closeBypassPrompt}
+          onCollapse={closeBypassPrompt}
           onSubmit={submitBypassPrompt}
         />
       ) : null}
@@ -328,7 +317,7 @@ export function AiWorkflowSurface({
                 value={composerDraft}
                 rows={2}
                 disabled={composerDisabled}
-                placeholder="Message Codex or use /help, /new, /resume, /review, /model"
+                placeholder={composerPlaceholder}
                 onChange={(event) => setComposerDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" || event.shiftKey) {
@@ -355,9 +344,6 @@ export function AiWorkflowSurface({
         </>
       ) : (
         <div className="ai-workflow__bootstrap-terminal">
-          <div className="ai-workflow__fallback-banner">
-            {fallbackMessage}
-          </div>
           <ClassicTerminalSurface
             tabId={tabId}
             sessionId={sessionId}

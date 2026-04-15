@@ -33,7 +33,7 @@ const BRIGHT_COLORS = [
   "#111111",
 ] as const;
 
-const ANSI_ESCAPE_PATTERN = /\u001b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/g;
+const ANSI_ESCAPE_PATTERN = /\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g;
 const SGR_PATTERN = /\u001b\[[0-9:;]*m/g;
 
 interface StyledTextSegment {
@@ -48,6 +48,10 @@ interface MutableStyleState {
 
 export function normalizeDialogOutput(text: string): string {
   return text.replace(ANSI_ESCAPE_PATTERN, (match) => (isSgrSequence(match) ? match : ""));
+}
+
+export function stripTerminalControlSequences(text: string): string {
+  return text.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
 export function tokenizeDialogOutput(text: string): DialogOutputToken[] {
