@@ -4,192 +4,251 @@ Date: 2026-04-15
 
 ## Goal
 
-Provide a low-friction side-channel input entry for AI mode so the user can send a prompt to the active Codex session even when the native Codex input area has scrolled out of view.
+Refine the AI mode bypass prompt so it feels like a compact, always-available side composer instead of a separate floating overlay.
 
-This design is intentionally not a replacement for the native Codex input surface. It adds a separate bypass entry:
+The updated experience should:
 
-- a small floating capsule that is always visible in AI mode
-- a click-to-open overlay input
-- `Enter` sends directly to the real Codex session
-- successful send closes and clears the overlay
+- keep a stable prompt entry visible while reading older AI output
+- avoid colliding with the bottom composer area and jump controls
+- feel visually integrated with the AI pane
+- preserve the existing prompt transport path and failure handling
 
 ## Problem
 
-In current AI mode usage, the real Codex input position can move with the transcript and leave the visible area while the user is reading older content. Once that happens:
+The current bypass capsule solved prompt accessibility, but two issues remain:
 
-- the user loses a stable place to start typing
-- pressing keys can snap focus back toward the latest input area
-- inspiration capture becomes fragile
+1. The trigger sits in a corner that can overlap with other pane content.
+2. The click target opens a detached overlay, which feels heavier and less elegant than the intended “side-channel” interaction.
 
-The desired experience is not a fixed bottom composer. The desired experience is a lightweight, always-available bypass prompt that can summon a temporary input surface without disturbing the current reading position.
+The user wants the bypass entry to behave more like a docked side control:
 
-## Non-Goals
-
-- Replacing the native Codex input UI
-- Rebuilding Codex chat as a custom transcript/composer product
-- Adding keyboard-shortcut-only activation
-- Making this bypass prompt global across non-AI terminal modes
-- Introducing a second prompt transport protocol separate from the existing AI send path
+- fixed at the vertical center of the right edge
+- compact when idle
+- expanding leftward into an input surface when activated
 
 ## Product Decision
 
-Use an always-visible floating capsule in AI mode.
+Replace the corner-positioned floating capsule plus detached overlay with a right-edge inline expanding capsule.
 
 Interaction model:
 
-- AI mode always shows a small capsule entry in a low-attention corner position.
-- Clicking the capsule opens a focused overlay input.
-- The overlay owns its own temporary draft state.
-- `Enter` submits directly to the active Codex session.
+- In structured AI mode, a narrow capsule remains docked to the AI pane’s right edge at vertical center.
+- Clicking the capsule expands it leftward into a compact input composer.
+- The expanded composer uses adaptive width rather than a fixed pixel width.
+- `Enter` submits.
 - `Shift+Enter` inserts a newline.
-- `Escape` closes without sending.
-- After successful send, the overlay closes and the draft clears.
-- If send fails, the overlay stays open and preserves the draft.
+- `Escape` collapses the composer.
+- Successful submit collapses the composer.
+- Clicking elsewhere does not collapse the composer.
+- Draft text persists across collapse and reopen until a successful submit clears it.
 
-This is a bypass path, not the canonical prompt UI. It exists specifically to support “capture thought immediately while reading”.
+This remains a bypass path, not the canonical AI composer.
 
-## Feasibility
+## Non-Goals
 
-This feature is feasible in the current architecture without reworking the AI bridge model.
+- Replacing the main AI composer
+- Making the bypass entry draggable or user-configurable
+- Adding outside-click dismissal
+- Supporting the old detached overlay and the new inline form at the same time
+- Changing prompt transport or agent bridge behavior
 
-The key reason is that prompt transport is already centralized:
+## Recommended Approach
 
-- [TerminalPane.tsx](/home/zpc/projects/praw/src/features/terminal/components/TerminalPane.tsx) already exposes `submitAiPrompt(...)`
-- [ai-prompt-transport.ts](/home/zpc/projects/praw/src/features/terminal/lib/ai-prompt-transport.ts) already routes prompts correctly
+Use a docked side-composer component rendered inside the AI pane.
 
-That existing send path already handles both runtime modes:
+Why this is the right tradeoff:
 
-- `structured` bridge mode via `submitTerminalAgentPrompt(...)`
-- `raw-fallback` / native terminal mode via terminal paste + enter
+- It matches the desired interaction exactly.
+- It removes the visual discontinuity of the old modal-like overlay.
+- It keeps state local to AI mode and avoids introducing new global UI abstractions.
+- It allows styling and animation to stay scoped to the existing AI workflow surface.
 
-Therefore the bypass capsule does not need to understand Codex protocol details. It only needs to collect user input and hand the normalized prompt to the existing send path.
+Lower-cost alternatives were considered and rejected:
+
+1. Keep the old overlay and only move the trigger to the right edge.
+   This lowers implementation cost but keeps the less elegant detached interaction.
+
+2. Add full position customization.
+   This is flexible but unnecessary for the requested outcome and adds avoidable config and testing surface.
 
 ## Architecture
 
 ### 1. Surface Ownership
 
-[AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) should own the bypass capsule UI state:
+[AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) should continue to own:
 
-- whether the capsule overlay is open
-- the temporary bypass draft
-- transient send error display if needed
-- submit-close-clear behavior
+- expanded/collapsed state
+- draft state
+- transient submit error state
+- submit lifecycle
 
-This keeps the bypass feature local to AI mode and avoids pushing UI state up into unrelated terminal surfaces.
+This keeps the bypass behavior local to AI mode and avoids coupling it to terminal-global state.
 
-### 2. Overlay Component Responsibility
+### 2. Component Boundary
 
-[AiModePromptOverlay.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiModePromptOverlay.tsx) should remain a focused presentation component:
+The current [AiModePromptOverlay.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiModePromptOverlay.tsx) should stop behaving like an overlay shell.
 
-- render the overlay shell
-- autofocus the textarea on open
-- expose `onChange`, `onSubmit`, and `onClose`
-- map keyboard behavior:
-  - `Enter` without `Shift` submits
-  - `Shift+Enter` preserves multiline editing
-  - `Escape` closes
+It should become a focused presentation component for the docked right-edge composer, responsible only for:
+
+- rendering collapsed and expanded visual states
+- managing textarea focus when expanded
+- exposing `onChange`, `onSubmit`, and `onCollapse`
+- handling keyboard shortcuts:
+  - `Enter` submit
+  - `Shift+Enter` newline
+  - `Escape` collapse
 
 It should not:
 
-- decide whether the session is structured or raw
-- talk directly to Tauri
-- paste into xterm itself
-- mutate transcript state on its own
+- understand structured vs raw transport
+- call Tauri directly
+- alter transcript state
+- own persistence outside its current draft value props
 
 ### 3. Prompt Transport Boundary
 
-The bypass overlay must reuse the existing AI send path instead of inventing a second one.
+Prompt delivery must continue to reuse the existing AI prompt submission chain:
 
-Required behavior:
+- `AiWorkflowSurface` submit handler
+- existing `submitAiPrompt(...)`
+- existing `sendAiPrompt(...)`
 
-- bypass overlay submit calls the same high-level AI prompt submission function already used by AI mode
-- that function continues to delegate to [ai-prompt-transport.ts](/home/zpc/projects/praw/src/features/terminal/lib/ai-prompt-transport.ts)
-- transport remains the single place that decides:
-  - structured submit
-  - native terminal paste + enter fallback
+This keeps the bypass path transport-agnostic across:
 
-This boundary is the main maintainability constraint for the feature.
+- structured bridge mode
+- raw-fallback/native terminal mode
 
-## Visibility and Placement
+No second prompt stack should be introduced.
 
-The capsule entry should be always visible in AI mode, regardless of transcript scroll position.
+## Layout and Motion
 
-Placement direction:
+### Default Position
 
-- default to a small floating button near the lower-right corner of the AI surface
-- keep it visually quiet so it does not compete with the transcript or toolbar
-- avoid placing it where it overlaps the primary send button, resume picker, or jump-to-latest affordance
+The capsule is anchored to the right edge of the AI pane and vertically centered.
 
-The exact corner can be tuned during implementation if the current AI layout exposes a stronger conflict, but the behavior requirement is fixed: the capsule is persistent and easy to rediscover.
+Placement rules:
 
-## Focus Model
+- right: flush or near-flush to the pane edge
+- vertical position: centered within the pane body
+- z-index: above transcript content, below modal-level surfaces
 
-Focus rules:
+This position is preferred over corners because it reduces collisions with:
 
-- opening the overlay moves focus into the overlay textarea
-- while overlay is open, typing should stay in the overlay instead of reaching the native Codex input
-- closing the overlay should not force-scroll the transcript
-- successful submit should close the overlay without moving the user’s viewport
+- bottom composer controls
+- jump-to-latest affordances
+- top toolbar actions
 
-This is important: the overlay is supposed to preserve reading context, not yank the user back to the latest transcript position.
+### Expanded Direction
 
-## Runtime Mode Compatibility
+The composer expands leftward from the right edge anchor point.
 
-The bypass capsule must work in both AI mode transport states:
+This preserves the “docked” feeling and avoids overflowing outside the pane.
 
-### Structured Bridge
+### Width
 
-- submit through the existing structured prompt path
-- no terminal paste fallback should be used when structured submit is available
+Use adaptive width rather than a fixed width.
 
-### Raw Fallback / Native Terminal
+Recommended rule:
 
-- submit through the existing native fallback transport
-- the prompt must go to the real Codex session, not a fake front-end composer
+- `clamp(280px, 40%, 360px)`
 
-This is the core acceptance condition for the feature.
+This gives:
+
+- enough room for practical prompt entry
+- stable behavior in larger panes
+- reasonable containment in smaller panes
+
+### Visual Language
+
+The collapsed state should remain subtle and low-attention.
+
+The expanded state should feel like the same object growing into a usable input, not like a separate dialog. That means:
+
+- shared border radius language
+- consistent material treatment
+- transform/width transition rather than pop-in overlay behavior
+
+## Focus and Dismissal Rules
+
+When the composer expands:
+
+- focus moves into the textarea
+- caret lands at the end of the existing draft
+
+When the user presses `Escape`:
+
+- the composer collapses
+- draft is preserved
+
+When submit succeeds:
+
+- the composer collapses
+- draft clears
+
+When the user clicks elsewhere:
+
+- do nothing
+- keep the composer open
+- preserve focus behavior unless another control explicitly takes focus
+
+This is intentional. The bypass composer is meant to stay available while the user reads and interacts with other content.
+
+## Runtime Compatibility
+
+The right-edge composer should only be shown when AI mode is using the structured surface.
+
+In raw-fallback/native terminal mode:
+
+- do not render the docked bypass capsule/composer
+- rely on the native terminal surface as the active interaction model
+
+This matches the current direction of removing redundant AI-mode status chrome in raw fallback.
 
 ## Error Handling
 
 If submit fails:
 
-- keep the overlay open
-- preserve the entered draft
-- show a lightweight inline error message inside the overlay shell
+- keep the composer expanded
+- preserve the draft
+- show the existing lightweight inline error text
 
-Do not silently close on failure.
+If the terminal session is not accepting input:
 
-If the AI session is not ready to accept input:
-
-- disable submit or show an explicit blocked-state message
-- keep the capsule visible so the user still understands where the bypass entry lives
+- keep the collapsed affordance visible in structured AI mode
+- disable submit while preserving the draft
+- show the existing blocked-state message when expanded
 
 ## Testing
 
-Add focused UI tests around [AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) and [AiModePromptOverlay.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiModePromptOverlay.tsx):
+Update and extend tests around [AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) and the bypass composer component.
 
-- capsule renders in AI mode even when the transcript is populated
-- clicking capsule opens overlay
-- overlay autofocuses textarea
-- `Enter` submits through the existing AI submit handler
+Required coverage:
+
+- capsule renders at all times in structured AI mode
+- raw-fallback mode does not render the structured bypass capsule
+- clicking capsule expands the composer
+- expanded composer autofocuses the textarea
+- `Enter` submits
 - `Shift+Enter` does not submit
-- `Escape` closes the overlay
-- successful submit closes and clears the overlay
-- failed submit keeps overlay open and preserves draft
-- structured and raw-fallback AI states both keep the capsule path available
+- `Escape` collapses and preserves draft
+- successful submit collapses and clears draft
+- clicking outside does not collapse the composer
+- disabled session state prevents submit but keeps entry available
 
 ## Risks
 
-- If the overlay directly manipulates terminal IO instead of reusing existing prompt transport, the feature will drift into a second AI input stack and become fragile.
-- If the capsule visually competes with existing AI controls, it will feel noisy instead of helpful.
-- If opening or closing the overlay changes scroll position, the feature will fail its primary reading-context use case.
+- If the new inline composer still behaves like an overlay internally, the UX will feel visually inconsistent even if positioned correctly.
+- If outside clicks collapse the composer despite the requirement, the feature will regress into the same “fragile capture” behavior the bypass path is meant to avoid.
+- If raw-fallback keeps showing the structured capsule, the surface model will become confusing.
 
 ## Recommendation
 
-Implement the bypass capsule as a local AI-mode UI feature with strict transport reuse:
+Implement the bypass input as a right-edge docked expanding composer with adaptive width and explicit collapse semantics:
 
-- UI state in `AiWorkflowSurface`
-- presentation in `AiModePromptOverlay`
-- sending delegated to the existing `submitAiPrompt -> sendAiPrompt` chain
+- right-edge vertical-center anchor
+- leftward inline expansion
+- collapse only on `Escape` or successful submit
+- preserve draft across collapse
+- keep transport reuse exactly as-is
 
-That is the cleanest way to make the feature feel native without creating a second, conflicting Codex input architecture.
+This is the smallest change that materially improves elegance, spatial stability, and perceived polish.
