@@ -6,10 +6,12 @@ import { PaneActionMenu } from "./PaneActionMenu";
 interface PaneHeaderActionClusterProps {
   canSplitRight: boolean;
   canSplitDown: boolean;
+  isFocusedPane: boolean;
   canClose: boolean;
   menuActions: PaneAction[];
   onSplitRight: () => void;
   onSplitDown: () => void;
+  onToggleFocus: () => void;
   onMenuSelect: (actionId: PaneActionId) => void;
   onClose: () => void;
 }
@@ -17,10 +19,12 @@ interface PaneHeaderActionClusterProps {
 export function PaneHeaderActionCluster({
   canSplitRight,
   canSplitDown,
+  isFocusedPane,
   canClose,
   menuActions,
   onSplitRight,
   onSplitDown,
+  onToggleFocus,
   onMenuSelect,
   onClose,
 }: PaneHeaderActionClusterProps) {
@@ -57,6 +61,20 @@ export function PaneHeaderActionCluster({
         }}
       >
         ↓
+      </button>
+      <button
+        className={`pane-header-actions__button pane-header-actions__button--focus${isFocusedPane ? " pane-header-actions__button--active" : ""}`}
+        type="button"
+        aria-label={isFocusedPane ? "Exit Pane Fullscreen" : "Enter Pane Fullscreen"}
+        title={isFocusedPane ? "Exit Pane Fullscreen" : "Enter Pane Fullscreen"}
+        aria-pressed={isFocusedPane}
+        onMouseDown={stop}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleFocus();
+        }}
+      >
+        ⊕
       </button>
       <PaneActionMenu actions={menuActions} onSelect={onMenuSelect} triggerClassName="pane-header-actions__button" />
       <button

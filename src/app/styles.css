@@ -587,6 +587,15 @@ button {
   padding: 0 6px;
 }
 
+.pane-header-actions__button--focus {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.pane-header-actions__button--active {
+  color: var(--history-success);
+}
+
 .pane-header-actions__button:hover:not(:disabled),
 .pane-action-menu__trigger:hover:not(:disabled) {
   background: var(--surface-muted);

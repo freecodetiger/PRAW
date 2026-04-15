@@ -203,16 +203,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const paneActions = resolvePaneActions({
     canClose,
     isFocusModeActive,
-    isFocusedPane,
   });
 
   const runPaneAction = (actionId: PaneActionId) => {
     switch (actionId) {
       case "edit-note":
         startEditingNote();
-        return;
-      case "focus-pane":
-        toggleFocusMode(tabId);
         return;
       case "close-tab":
         void requestClose();
@@ -411,10 +407,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         <PaneHeaderActionCluster
           canSplitRight={canSplitHorizontal}
           canSplitDown={canSplitVertical}
+          isFocusedPane={isFocusedPane}
           canClose={canClosePane}
           menuActions={paneActions}
           onSplitRight={() => runSplitAction("horizontal")}
           onSplitDown={() => runSplitAction("vertical")}
+          onToggleFocus={() => toggleFocusMode(tabId)}
           onMenuSelect={runPaneAction}
           onClose={() => {
             void requestClose();

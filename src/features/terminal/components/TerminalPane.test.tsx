@@ -239,7 +239,7 @@ describe("TerminalPane", () => {
     ]);
   });
 
-  it("offers a focus menu action and toggles focus mode through the pane header action callback", async () => {
+  it("offers a header focus button and toggles focus mode through the pane header callback", async () => {
     useWorkspaceStore.setState((state) => ({
       ...state,
       window: {
@@ -274,12 +274,13 @@ describe("TerminalPane", () => {
       root.render(<TerminalPane tabId="tab:1" />);
     });
 
-    expect(latestPaneHeaderActionClusterProps?.menuActions).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "focus-pane", label: "Focus Pane" })]),
+    expect(latestPaneHeaderActionClusterProps?.menuActions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "focus-pane" })]),
     );
+    expect(latestPaneHeaderActionClusterProps?.isFocusedPane).toBe(false);
 
     await act(async () => {
-      (latestPaneHeaderActionClusterProps?.onMenuSelect as (id: string) => void)("focus-pane");
+      (latestPaneHeaderActionClusterProps?.onToggleFocus as () => void)();
     });
 
     expect(useWorkspaceStore.getState().focusMode?.focusedTabId).toBe("tab:1");

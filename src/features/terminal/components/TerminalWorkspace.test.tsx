@@ -56,4 +56,24 @@ describe("TerminalWorkspace", () => {
 
     expect(host.querySelector(".workspace")?.className).toContain("workspace--focus-mode");
   });
+
+  it("toggles focus mode from the configured fullscreen shortcut", () => {
+    act(() => {
+      root.render(<TerminalWorkspace />);
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          altKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+
+    expect(useWorkspaceStore.getState().focusMode?.focusedTabId).toBe("tab:1");
+    expect(host.querySelector(".workspace")?.className).toContain("workspace--focus-mode");
+  });
 });
