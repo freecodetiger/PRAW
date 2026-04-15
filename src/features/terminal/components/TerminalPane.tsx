@@ -6,24 +6,10 @@ import type { PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { formatTabLabel } from "../../../domain/window/label";
 import { useAppConfigStore } from "../../config/state/app-config-store";
-import type { CodexSessionSummary } from "../../../domain/terminal/types";
-import {
-  attachTerminalAgentSession,
-  listCodexSessions,
-  resetTerminalAgentSession,
-  runTerminalAgentReview,
-  setTerminalAgentModel,
-  submitTerminalAgentPrompt,
-} from "../../../lib/tauri/terminal";
 import { useTerminalSession } from "../hooks/useTerminalSession";
 import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
 import { resolvePaneActions, type PaneActionId } from "../lib/pane-actions";
-import {
-  getAiCommandHelpTextForRuntime,
-  getStructuredAiCommandCapabilities,
-  parseAiComposerInput,
-} from "../lib/ai-command";
 import { sendAiPrompt } from "../lib/ai-prompt-transport";
 import { resolveTerminalRenderFont } from "../lib/terminal-fonts";
 import { selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
@@ -58,16 +44,12 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const tabState = useTerminalViewStore((state) => selectTerminalTabState(state.tabStates, tabId));
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
   const recordAiPrompt = useTerminalViewStore((state) => state.recordAiPrompt);
-  const recordAiSystemMessage = useTerminalViewStore((state) => state.recordAiSystemMessage);
-  const clearAiTranscript = useTerminalViewStore((state) => state.clearAiTranscript);
   const { tab, currentStreamSessionId, write, resize, restart, terminate } = useTerminalSession(tabId);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
-  const [resumePickerSessions, setResumePickerSessions] = useState<CodexSessionSummary[] | null>(null);
-  const [expertDrawerRequestKey, setExpertDrawerRequestKey] = useState(0);
   const [quickPromptRequestKey, setQuickPromptRequestKey] = useState(0);
   const paneRef = useRef<HTMLElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
@@ -79,11 +61,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const previewEdge =
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
   const isAgentWorkflow = tabState?.presentation === "agent-workflow";
-  const quickPromptCapabilities = getStructuredAiCommandCapabilities(
-    tabState?.agentBridge?.provider ?? "codex",
-    tabState?.agentBridge?.capabilities,
-  );
-  const showsQuickPromptTrigger = Boolean(isAgentWorkflow && quickPromptCapabilities.showsBypassCapsule);
+  const showsQuickPromptTrigger = Boolean(isAgentWorkflow);
   const resolvedTerminalFont = resolveTerminalRenderFont("dialog", {
     dialogFontFamily,
     dialogFontSize,
@@ -239,165 +217,17 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     clearNoteEditorRequest(tabId);
   }, [clearNoteEditorRequest, noteEditorTabId, tab, tabId]);
 
-  const openExpertDrawer = () => {
-    setExpertDrawerRequestKey((value) => value + 1);
-  };
-
   const submitAiPrompt = async (prompt: string) => {
     recordAiPrompt(tabId, prompt);
     await sendAiPrompt({
       tabId,
       prompt,
       writeFallback: write,
-      submitStructuredPrompt:
-        tabState?.agentBridge?.mode === "structured" && currentStreamSessionId
-          ? async (nextPrompt) => submitTerminalAgentPrompt(currentStreamSessionId, nextPrompt)
-          : undefined,
     });
   };
 
-  const appendAiCommandMessage = (message: string, tone: "info" | "warning" | "error" = "info") => {
-    recordAiSystemMessage(tabId, message, tone);
-  };
-
-  const handleResumeSelection = async (remoteSessionId: string) => {
-    if (!currentStreamSessionId) {
-      appendAiCommandMessage("No active terminal session is attached to this tab yet.", "error");
-      return;
-    }
-
-    const providerLabel = getStructuredAiCommandCapabilities(
-      tabState?.agentBridge?.provider ?? "codex",
-      tabState?.agentBridge?.capabilities,
-    ).label;
-    await attachTerminalAgentSession(currentStreamSessionId, remoteSessionId);
-    clearAiTranscript(tabId);
-    appendAiCommandMessage(
-      `Attached this tab to ${providerLabel} session ${remoteSessionId}. PRAW starts a fresh local transcript after resume.`,
-    );
-    setResumePickerSessions(null);
-  };
-
   const handleAiComposerInput = async (input: string) => {
-    if (tabState?.agentBridge?.mode === "raw-fallback") {
-      await submitAiPrompt(input);
-      return;
-    }
-
-    const commandCapabilities = getStructuredAiCommandCapabilities(
-      tabState?.agentBridge?.provider ?? "codex",
-      tabState?.agentBridge?.capabilities,
-    );
-    const parsed = parseAiComposerInput(input);
-    if (parsed.kind === "prompt") {
-      await submitAiPrompt(parsed.text);
-      return;
-    }
-
-    switch (parsed.name) {
-      case "help":
-        appendAiCommandMessage(getAiCommandHelpTextForRuntime(commandCapabilities));
-        return;
-      case "new":
-        if (!currentStreamSessionId) {
-          appendAiCommandMessage("No active terminal session is attached to this tab yet.", "error");
-          return;
-        }
-
-        await resetTerminalAgentSession(currentStreamSessionId);
-        clearAiTranscript(tabId);
-        appendAiCommandMessage(`Started a fresh ${commandCapabilities.label} conversation for this tab.`);
-        setResumePickerSessions(null);
-        return;
-      case "resume": {
-        if (!currentStreamSessionId) {
-          appendAiCommandMessage("No active terminal session is attached to this tab yet.", "error");
-          return;
-        }
-
-        if (commandCapabilities.supportsResumePicker) {
-          const sessions = await listCodexSessions();
-          if (sessions.length === 0) {
-            appendAiCommandMessage("No recent Codex sessions were found on this machine.", "warning");
-            return;
-          }
-
-          setResumePickerSessions(sessions);
-          appendAiCommandMessage("Choose a Codex session from the resume picker.");
-          return;
-        }
-
-        if (commandCapabilities.supportsDirectResume) {
-          if (!parsed.args) {
-            appendAiCommandMessage("Usage: /resume <session-id>", "warning");
-            return;
-          }
-
-          await attachTerminalAgentSession(currentStreamSessionId, parsed.args);
-          clearAiTranscript(tabId);
-          appendAiCommandMessage(
-            `Attached this tab to ${commandCapabilities.label} session ${parsed.args}. PRAW starts a fresh local transcript after resume.`,
-          );
-          setResumePickerSessions(null);
-          return;
-        }
-
-        appendAiCommandMessage(
-          `/resume is not supported in the structured composer for ${commandCapabilities.label}. Use the Expert Drawer instead.`,
-          "warning",
-        );
-        openExpertDrawer();
-        return;
-      }
-      case "review": {
-        if (!commandCapabilities.supportsReview) {
-          appendAiCommandMessage(
-            `/review is not supported in the structured composer for ${commandCapabilities.label}. Use the Expert Drawer instead.`,
-            "warning",
-          );
-          openExpertDrawer();
-          return;
-        }
-
-        const review = await runTerminalAgentReview(tab.cwd, parsed.args || undefined);
-        appendAiCommandMessage(review);
-        return;
-      }
-      case "model":
-        if (!currentStreamSessionId) {
-          appendAiCommandMessage("No active terminal session is attached to this tab yet.", "error");
-          return;
-        }
-
-        if (!commandCapabilities.supportsModelOverride) {
-          appendAiCommandMessage(
-            `/model is not supported in the structured composer for ${commandCapabilities.label}. Use the Expert Drawer instead.`,
-            "warning",
-          );
-          openExpertDrawer();
-          return;
-        }
-
-        if (!parsed.args) {
-          appendAiCommandMessage("Usage: /model <name> or /model default", "warning");
-          return;
-        }
-
-        await setTerminalAgentModel(currentStreamSessionId, parsed.args === "default" ? null : parsed.args);
-        appendAiCommandMessage(
-          parsed.args === "default"
-            ? "Model override cleared for future turns in this tab."
-            : `Model override set to ${parsed.args} for future turns in this tab.`,
-        );
-        return;
-      case "unsupported":
-        appendAiCommandMessage(
-          `/${parsed.originalName ?? "command"} is not supported in the structured composer. Use the Expert Drawer for native Codex commands.`,
-          "warning",
-        );
-        openExpertDrawer();
-        return;
-    }
+    await submitAiPrompt(input);
   };
 
   return (
@@ -530,17 +360,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
               void write(`${command}\n`);
             }}
             onSubmitAiInput={handleAiComposerInput}
-            resumePicker={
-              resumePickerSessions
-                ? {
-                    open: true,
-                    sessions: resumePickerSessions,
-                    onSelect: handleResumeSelection,
-                    onClose: () => setResumePickerSessions(null),
-                  }
-                : null
-            }
-            forceOpenExpertDrawerKey={expertDrawerRequestKey}
             quickPromptOpenRequestKey={quickPromptRequestKey}
           />
         ) : (

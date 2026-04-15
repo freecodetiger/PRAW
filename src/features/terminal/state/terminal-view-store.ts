@@ -15,7 +15,6 @@ import {
 import type { TerminalAgentEvent, TerminalSemanticEvent } from "../../../domain/terminal/types";
 import type { StructuredAgentCapabilities } from "../../../domain/terminal/types";
 import { normalizeDialogOutput } from "../lib/dialog-output";
-import { getFallbackStructuredAgentCapabilities } from "../lib/structured-agent-capabilities";
 import {
   consumeShellIntegrationChunk,
   createShellIntegrationParserState,
@@ -282,7 +281,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: "structured",
               state: "connecting",
               fallbackReason: null,
-              capabilities: getFallbackStructuredAgentCapabilities(provider),
+              capabilities: getFallbackAgentCapabilities(provider),
             },
           };
         }
@@ -315,7 +314,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: event.mode,
               state: event.state,
               fallbackReason: event.fallbackReason ?? null,
-              capabilities: event.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
+              capabilities: event.capabilities ?? getFallbackAgentCapabilities(event.provider),
             },
           };
           break;
@@ -332,8 +331,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: nextState.agentBridge?.mode ?? "structured",
               state: "running",
               fallbackReason: null,
-              capabilities:
-                nextState.agentBridge?.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
+              capabilities: nextState.agentBridge?.capabilities ?? getFallbackAgentCapabilities(event.provider),
             },
           };
           break;
@@ -352,8 +350,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: nextState.agentBridge?.mode ?? "structured",
               state: "ready",
               fallbackReason: null,
-              capabilities:
-                nextState.agentBridge?.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
+              capabilities: nextState.agentBridge?.capabilities ?? getFallbackAgentCapabilities(event.provider),
             },
           };
           break;
@@ -542,6 +539,48 @@ function createTranscriptViewportState(): TranscriptViewportState {
 }
 
 const DEFAULT_TRANSCRIPT_VIEWPORT_STATE: TranscriptViewportState = createTranscriptViewportState();
+
+function getFallbackAgentCapabilities(provider: string): StructuredAgentCapabilities {
+  const normalized = provider.trim().toLowerCase();
+
+  if (normalized === "codex") {
+    return {
+      supportsResumePicker: true,
+      supportsDirectResume: false,
+      supportsReview: true,
+      supportsModelOverride: true,
+      showsBypassCapsule: true,
+    };
+  }
+
+  if (normalized === "qwen") {
+    return {
+      supportsResumePicker: false,
+      supportsDirectResume: true,
+      supportsReview: false,
+      supportsModelOverride: true,
+      showsBypassCapsule: true,
+    };
+  }
+
+  if (normalized === "claude") {
+    return {
+      supportsResumePicker: false,
+      supportsDirectResume: true,
+      supportsReview: false,
+      supportsModelOverride: false,
+      showsBypassCapsule: true,
+    };
+  }
+
+  return {
+    supportsResumePicker: false,
+    supportsDirectResume: false,
+    supportsReview: false,
+    supportsModelOverride: false,
+    showsBypassCapsule: true,
+  };
+}
 
 function resolveAgentProvider(commandEntry: string | undefined): string | null {
   const normalized = commandEntry?.trim();

@@ -1,12 +1,8 @@
 import { useEffect, useRef } from "react";
 
-import type { StructuredAiCommandCapabilities } from "../lib/ai-command";
-import { StructuredAiPromptInput } from "./StructuredAiPromptInput";
-
 interface AiModePromptOverlayProps {
   expanded: boolean;
   draft: string;
-  commandCapabilities: StructuredAiCommandCapabilities;
   disabled?: boolean;
   error?: string | null;
   statusMessage?: string | null;
@@ -18,7 +14,6 @@ interface AiModePromptOverlayProps {
 export function AiModePromptOverlay({
   expanded,
   draft,
-  commandCapabilities,
   disabled = false,
   error = null,
   statusMessage = null,
@@ -27,6 +22,7 @@ export function AiModePromptOverlay({
   onSubmit,
 }: AiModePromptOverlayProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!expanded) {
@@ -49,6 +45,16 @@ export function AiModePromptOverlay({
     };
   }, [expanded, draft, onCollapse]);
 
+  useEffect(() => {
+    if (!expanded || disabled) {
+      return;
+    }
+
+    inputRef.current?.focus();
+    const end = inputRef.current?.value.length ?? 0;
+    inputRef.current?.setSelectionRange(end, end);
+  }, [expanded, disabled]);
+
   if (!expanded) {
     return null;
   }
@@ -56,19 +62,30 @@ export function AiModePromptOverlay({
   return (
     <div className="ai-workflow__bypass-dock-shell" aria-label="AI prompt dock" data-expanded="true">
       <div className="ai-workflow__bypass-panel" ref={panelRef}>
-        <StructuredAiPromptInput
-          draft={draft}
-          commandCapabilities={commandCapabilities}
-          ariaLabel="AI prompt input"
+        <textarea
+          ref={inputRef}
           className="dialog-terminal__ai-prompt-input ai-workflow__bypass-input"
+          aria-label="AI prompt input"
           rows={1}
-          autoFocus={true}
-          autoResize={true}
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          value={draft}
           disabled={disabled}
           placeholder=""
-          onChange={onChange}
-          onSubmit={onSubmit}
-          onEscape={onCollapse}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void onSubmit();
+              return;
+            }
+
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCollapse();
+            }
+          }}
         />
         {statusMessage ? <p className="dialog-terminal__ai-prompt-status">{statusMessage}</p> : null}
         {error ? <p className="dialog-terminal__ai-prompt-error">{error}</p> : null}

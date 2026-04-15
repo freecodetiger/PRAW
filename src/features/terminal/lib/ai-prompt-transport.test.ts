@@ -46,7 +46,7 @@ describe("sendAiPrompt", () => {
     expect(writeFallback).toHaveBeenNthCalledWith(2, "\r");
   });
 
-  it("uses the structured bridge submitter before touching the terminal controller", async () => {
+  it("ignores legacy structured submitters and writes through raw terminal transport", async () => {
     const writeFallback = vi.fn(async () => undefined);
     const submitStructuredPrompt = vi.fn(async () => undefined);
     const controller = {
@@ -66,11 +66,11 @@ describe("sendAiPrompt", () => {
       prompt: "refine the previous answer",
       writeFallback,
       submitStructuredPrompt,
-    });
+    } as unknown as Parameters<typeof sendAiPrompt>[0]);
 
-    expect(submitStructuredPrompt).toHaveBeenCalledWith("refine the previous answer");
-    expect(controller.pasteText).not.toHaveBeenCalled();
-    expect(controller.sendEnter).not.toHaveBeenCalled();
+    expect(submitStructuredPrompt).not.toHaveBeenCalled();
+    expect(controller.pasteText).toHaveBeenCalledWith("refine the previous answer");
+    expect(controller.sendEnter).toHaveBeenCalledTimes(1);
     expect(writeFallback).not.toHaveBeenCalled();
   });
 });

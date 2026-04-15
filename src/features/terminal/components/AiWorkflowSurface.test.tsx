@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDialogState } from "../../../domain/terminal/dialog";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
+import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { useTerminalViewStore } from "../state/terminal-view-store";
 import { AiWorkflowSurface } from "./AiWorkflowSurface";
 
@@ -21,7 +22,7 @@ vi.mock("./ClassicTerminalSurface", () => ({
   },
 }));
 
-function createAgentWorkflowPaneState() {
+function createAgentWorkflowPaneState(): TerminalTabViewState {
   return {
     ...createDialogState("/bin/bash", "/workspace"),
     mode: "classic" as const,
@@ -53,7 +54,7 @@ function createAgentWorkflowPaneState() {
   };
 }
 
-function createRawFallbackPaneState() {
+function createRawFallbackPaneState(): TerminalTabViewState {
   return {
     ...createAgentWorkflowPaneState(),
     agentBridge: {
@@ -150,7 +151,7 @@ describe("AiWorkflowSurface", () => {
     expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
   });
 
-  it("collapses an expanded bypass capsule when forceOpenExpertDrawerKey changes so the raw terminal stays unobscured", () => {
+  it("keeps an expanded bypass capsule open when forceOpenExpertDrawerKey changes because quick prompt is independent of expert drawer", () => {
     renderSurface(root, createAgentWorkflowPaneState(), {
       quickPromptOpenRequestKey: 1,
     });
@@ -162,7 +163,7 @@ describe("AiWorkflowSurface", () => {
       forceOpenExpertDrawerKey: 1,
     });
 
-    expect(host.querySelector('[aria-label="AI prompt dock"]')).toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt dock"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
     expect(renderCalls[renderCalls.length - 1]?.inputSuspended).toBe(false);
   });

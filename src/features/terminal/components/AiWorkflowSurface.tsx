@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
-import { getStructuredAiCommandCapabilities } from "../lib/ai-command";
-import { resolveStructuredAgentCapabilities } from "../lib/structured-agent-capabilities";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
@@ -43,7 +41,7 @@ interface AiWorkflowSurfaceProps {
 
 export function AiWorkflowSurface({
   tabId,
-  paneState,
+  paneState: _paneState,
   status,
   sessionId,
   fontFamily,
@@ -54,18 +52,13 @@ export function AiWorkflowSurface({
   resize,
   onSubmitAiInput,
   resumePicker = null,
-  forceOpenExpertDrawerKey = 0,
   quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
   const [bypassError, setBypassError] = useState<string | null>(null);
   const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
-  const bridge = paneState.agentBridge ?? null;
-  const providerId = bridge?.provider ?? "";
-  const bridgeCapabilities = resolveStructuredAgentCapabilities(providerId, bridge?.capabilities);
-  const commandCapabilities = getStructuredAiCommandCapabilities(providerId, bridge?.capabilities);
-  const showsBypassCapsule = bridgeCapabilities.showsBypassCapsule;
+  const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
 
   useEffect(() => {
@@ -76,15 +69,6 @@ export function AiWorkflowSurface({
     setBypassPromptOpen(true);
     setBypassError(null);
   }, [quickPromptOpenRequestKey, showsBypassCapsule]);
-
-  useEffect(() => {
-    if (forceOpenExpertDrawerKey <= 0) {
-      return;
-    }
-
-    setBypassPromptOpen(false);
-    setBypassError(null);
-  }, [forceOpenExpertDrawerKey]);
 
   const closeBypassPrompt = () => {
     if (bypassDraft.trim().length > 0) {
@@ -121,7 +105,6 @@ export function AiWorkflowSurface({
         <AiModePromptOverlay
           expanded={bypassPromptOpen}
           draft={bypassDraft}
-          commandCapabilities={commandCapabilities}
           disabled={composerDisabled || isBypassSubmitting}
           error={bypassError}
           statusMessage={composerDisabled ? "The AI session is not accepting input." : null}

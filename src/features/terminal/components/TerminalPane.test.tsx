@@ -181,7 +181,7 @@ describe("TerminalPane", () => {
     });
   });
 
-  it("handles local slash help inside the AI composer without touching the bridge", async () => {
+  it("forwards slash-prefixed AI input directly to raw transport without local command interception", async () => {
     await act(async () => {
       root.render(<TerminalPane tabId="tab:1" />);
     });
@@ -192,105 +192,32 @@ describe("TerminalPane", () => {
       await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/help");
     });
 
+    expect(aiPromptTransportApi.sendAiPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: "tab:1",
+        prompt: "/help",
+      }),
+    );
+    expect(terminalApi.listCodexSessions).not.toHaveBeenCalled();
+    expect(terminalApi.attachTerminalAgentSession).not.toHaveBeenCalled();
+    expect(terminalApi.resetTerminalAgentSession).not.toHaveBeenCalled();
+    expect(terminalApi.runTerminalAgentReview).not.toHaveBeenCalled();
+    expect(terminalApi.setTerminalAgentModel).not.toHaveBeenCalled();
     expect(terminalApi.submitTerminalAgentPrompt).not.toHaveBeenCalled();
 
     const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
     const entries = tabState.aiTranscript?.entries ?? [];
-    const lastEntry = entries[entries.length - 1];
-    expect(lastEntry).toMatchObject({
-      kind: "system",
-      tone: "info",
-    });
-    expect(lastEntry?.text).toContain("/resume");
+    expect(entries.some((entry) => entry.kind === "system")).toBe(false);
   });
 
-  it("loads Codex sessions for /resume and attaches the selected session through the structured bridge", async () => {
-    terminalApi.listCodexSessions.mockResolvedValue([
-      {
-        id: "codex-session-1",
-        cwd: "/workspace",
-        timestamp: "2026-04-15T00:00:00.000Z",
-        latestPrompt: "investigate flaky tests",
-      },
-    ]);
-
-    await act(async () => {
-      root.render(<TerminalPane tabId="tab:1" />);
-    });
-
-    await act(async () => {
-      await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/resume");
-    });
-
-    expect(terminalApi.listCodexSessions).toHaveBeenCalledTimes(1);
-    expect(latestBlockWorkspaceProps?.resumePicker).toMatchObject({
-      open: true,
-      sessions: [
-        {
-          id: "codex-session-1",
-        },
-      ],
-    });
-
-    await act(async () => {
-      await (latestBlockWorkspaceProps?.resumePicker as { onSelect: (value: string) => Promise<void> }).onSelect(
-        "codex-session-1",
-      );
-    });
-
-    expect(terminalApi.attachTerminalAgentSession).toHaveBeenCalledWith("session-1", "codex-session-1");
-    const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
-    expect(tabState.aiTranscript?.entries).toEqual([
-      expect.objectContaining({
-        kind: "system",
-        text: expect.stringContaining("codex-session-1"),
-      }),
-    ]);
-  });
-
-  it("attaches a qwen session directly from /resume <session-id> without invoking the codex session picker", async () => {
+  it("does not attach a structured bridge submitter when structured mode prompts are sent", async () => {
     useTerminalViewStore.setState((state) => ({
       ...state,
       tabStates: {
         "tab:1": {
           ...state.tabStates["tab:1"],
           agentBridge: {
-            provider: "qwen",
-            mode: "structured",
-            state: "ready",
-            fallbackReason: null,
-          },
-        },
-      },
-    }));
-
-    await act(async () => {
-      root.render(<TerminalPane tabId="tab:1" />);
-    });
-
-    await act(async () => {
-      await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/resume qwen-session-1");
-    });
-
-    expect(terminalApi.listCodexSessions).not.toHaveBeenCalled();
-    expect(terminalApi.attachTerminalAgentSession).toHaveBeenCalledWith("session-1", "qwen-session-1");
-    const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
-    const entries = tabState.aiTranscript?.entries ?? [];
-    const lastEntry = entries[entries.length - 1];
-    expect(lastEntry).toMatchObject({
-      kind: "system",
-      text: expect.stringContaining("qwen-session-1"),
-    });
-  });
-
-  it("rejects qwen /review in the structured composer instead of silently running codex review", async () => {
-    useTerminalViewStore.setState((state) => ({
-      ...state,
-      tabStates: {
-        "tab:1": {
-          ...state.tabStates["tab:1"],
-          agentBridge: {
-            provider: "qwen",
+            provider: "codex",
             mode: "structured",
             state: "ready",
             fallbackReason: null,
@@ -307,16 +234,18 @@ describe("TerminalPane", () => {
       await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/review");
     });
 
+    expect(aiPromptTransportApi.sendAiPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: "tab:1",
+        prompt: "/review",
+      }),
+    );
+    const [[structuredCallArg]] = aiPromptTransportApi.sendAiPrompt.mock.calls as unknown as Array<
+      [Record<string, unknown>]
+    >;
+    expect(structuredCallArg).not.toHaveProperty("submitStructuredPrompt");
     expect(terminalApi.runTerminalAgentReview).not.toHaveBeenCalled();
-    const tabState = useTerminalViewStore.getState().tabStates["tab:1"];
-    const entries = tabState.aiTranscript?.entries ?? [];
-    const lastEntry = entries[entries.length - 1];
-    expect(lastEntry).toMatchObject({
-      kind: "system",
-      tone: "warning",
-    });
-    expect(lastEntry?.text).toContain("/review");
-    expect(lastEntry?.text).toContain("Expert Drawer");
+    expect(terminalApi.submitTerminalAgentPrompt).not.toHaveBeenCalled();
   });
 
   it("routes qwen raw-fallback composer input directly to terminal transport instead of structured slash handling", async () => {
@@ -347,9 +276,12 @@ describe("TerminalPane", () => {
       expect.objectContaining({
         tabId: "tab:1",
         prompt: "/model qwen-plus",
-        submitStructuredPrompt: undefined,
       }),
     );
+    const [[fallbackCallArg]] = aiPromptTransportApi.sendAiPrompt.mock.calls as unknown as Array<
+      [Record<string, unknown>]
+    >;
+    expect(fallbackCallArg).not.toHaveProperty("submitStructuredPrompt");
     expect(terminalApi.setTerminalAgentModel).not.toHaveBeenCalled();
   });
 
