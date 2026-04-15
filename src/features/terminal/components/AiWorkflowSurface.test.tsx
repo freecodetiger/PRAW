@@ -30,11 +30,9 @@ function createAgentWorkflowPaneState(): TerminalTabViewState {
     presentation: "agent-workflow" as const,
     shell: "/bin/bash",
     parserState: createShellIntegrationParserState(),
-    agentBridge: {
+    aiSession: {
       provider: "codex" as const,
-      mode: "structured" as const,
-      state: "ready" as const,
-      fallbackReason: null,
+      rawOnly: true,
     },
     aiTranscript: {
       entries: [
@@ -57,11 +55,9 @@ function createAgentWorkflowPaneState(): TerminalTabViewState {
 function createRawFallbackPaneState(): TerminalTabViewState {
   return {
     ...createAgentWorkflowPaneState(),
-    agentBridge: {
+    aiSession: {
       provider: "qwen" as const,
-      mode: "raw-fallback" as const,
-      state: "fallback" as const,
-      fallbackReason: "structured bridge unavailable for the current command",
+      rawOnly: true,
     },
     aiTranscript: {
       entries: [],

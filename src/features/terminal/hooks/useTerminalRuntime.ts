@@ -4,7 +4,6 @@ import { useAppConfigStore } from "../../config/state/app-config-store";
 import {
   closeTerminalSession,
   createTerminalSession,
-  onTerminalAgent,
   onTerminalExit,
   onTerminalOutput,
   onTerminalSemantic,
@@ -34,7 +33,6 @@ export function useTerminalRuntime() {
   const updateTabCwd = useWorkspaceStore((state) => state.updateTabCwd);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
   const consumeSemantic = useTerminalViewStore((state) => state.consumeSemantic);
-  const consumeAgentEvent = useTerminalViewStore((state) => state.consumeAgentEvent);
   const resetTabBuffer = useTerminalViewStore((state) => state.resetTabBuffer);
   const removeTabBuffer = useTerminalViewStore((state) => state.removeTabBuffer);
   const syncTabState = useTerminalViewStore((state) => state.syncTabState);
@@ -177,32 +175,6 @@ export function useTerminalRuntime() {
       unlistenOutput?.();
     };
   }, [consumeOutput, updateTabCwd]);
-
-  useEffect(() => {
-    let disposed = false;
-    let unlistenAgent: (() => void) | undefined;
-
-    void onTerminalAgent((event) => {
-      const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
-      if (!tabRef) {
-        return;
-      }
-
-      consumeAgentEvent(tabRef.tabId, event);
-    }).then((cleanup) => {
-      if (disposed) {
-        cleanup();
-        return;
-      }
-
-      unlistenAgent = cleanup;
-    });
-
-    return () => {
-      disposed = true;
-      unlistenAgent?.();
-    };
-  }, [consumeAgentEvent]);
 
   useEffect(() => {
     let disposed = false;

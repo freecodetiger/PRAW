@@ -5,13 +5,11 @@ import type {
   CodexSessionSummary,
   CreateTerminalSessionRequest,
   CreateTerminalSessionResponse,
-  TerminalAgentEvent,
   TerminalExitEvent,
   TerminalOutputEvent,
   TerminalSemanticEvent,
 } from "../../domain/terminal/types";
 import {
-  TERMINAL_AGENT_EVENT,
   TERMINAL_EXIT_EVENT,
   TERMINAL_OUTPUT_EVENT,
   TERMINAL_SEMANTIC_EVENT,
@@ -83,8 +81,4 @@ export function onTerminalSemantic(
   handler: (event: TerminalSemanticEvent) => void,
 ): Promise<UnlistenFn> {
   return listen<TerminalSemanticEvent>(TERMINAL_SEMANTIC_EVENT, (event) => handler(event.payload));
-}
-
-export function onTerminalAgent(handler: (event: TerminalAgentEvent) => void): Promise<UnlistenFn> {
-  return listen<TerminalAgentEvent>(TERMINAL_AGENT_EVENT, (event) => handler(event.payload));
 }

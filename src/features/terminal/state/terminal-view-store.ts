@@ -12,8 +12,7 @@ import {
   type PaneRenderMode,
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
-import type { TerminalAgentEvent, TerminalSemanticEvent } from "../../../domain/terminal/types";
-import type { StructuredAgentCapabilities } from "../../../domain/terminal/types";
+import type { TerminalSemanticEvent } from "../../../domain/terminal/types";
 import { normalizeDialogOutput } from "../lib/dialog-output";
 import {
   consumeShellIntegrationChunk,
@@ -21,7 +20,6 @@ import {
   type ShellIntegrationParserState,
 } from "../lib/shell-integration";
 import {
-  appendAiTranscriptOutput,
   appendAiTranscriptPrompt,
   appendAiTranscriptSystem,
   clearAiTranscript,
@@ -46,7 +44,6 @@ interface TerminalViewStore {
   clearAiTranscript: (tabId: string) => void;
   consumeOutput: (tabId: string, data: string) => string | null;
   consumeSemantic: (tabId: string, event: TerminalSemanticEvent) => void;
-  consumeAgentEvent: (tabId: string, event: TerminalAgentEvent) => void;
   updateTranscriptViewport: (tabId: string, viewport: Partial<TranscriptViewportState>) => void;
   setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
   resetTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
@@ -63,16 +60,15 @@ export interface TerminalTabViewState extends DialogState {
   workspaceCwd?: string;
   parserState: ShellIntegrationParserState;
   aiTranscript?: AiTranscriptState;
-  agentBridge?: AgentBridgeState | null;
+  aiSession?: AiSessionState | null;
   transcriptViewport?: TranscriptViewportState;
 }
 
-export interface AgentBridgeState {
-  provider: string;
-  mode: "structured" | "raw-fallback";
-  state: "connecting" | "ready" | "running" | "fallback";
-  fallbackReason: string | null;
-  capabilities?: StructuredAgentCapabilities | null;
+export type AiSessionProvider = "codex" | "claude" | "qwen" | "unknown";
+
+export interface AiSessionState {
+  provider: AiSessionProvider;
+  rawOnly: true;
 }
 
 export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
@@ -271,102 +267,14 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         ...applyTerminalSemanticEvent(tabState, event),
       };
 
-      if (event.kind === "agent-workflow" && !nextState.agentBridge) {
-        const provider = resolveAgentProvider(event.commandEntry);
-        if (provider) {
-          nextState = {
-            ...nextState,
-            agentBridge: {
-              provider,
-              mode: "structured",
-              state: "connecting",
-              fallbackReason: null,
-              capabilities: getFallbackAgentCapabilities(provider),
-            },
-          };
-        }
-      }
-
-      return {
-        tabStates: {
-          ...state.tabStates,
-          [key]: nextState,
-        },
-      };
-    }),
-
-  consumeAgentEvent: (tabId, event) =>
-    set((state) => {
-      const key = getTerminalBufferKey(tabId);
-      const tabState = state.tabStates[key];
-      if (!tabState) {
-        return state;
-      }
-
-      let nextState: TerminalTabViewState = tabState;
-
-      switch (event.type) {
-        case "bridge-state":
-          nextState = {
-            ...nextState,
-            agentBridge: {
-              provider: event.provider,
-              mode: event.mode,
-              state: event.state,
-              fallbackReason: event.fallbackReason ?? null,
-              capabilities: event.capabilities ?? getFallbackAgentCapabilities(event.provider),
-            },
-          };
-          break;
-        case "assistant-message":
-          nextState = {
-            ...nextState,
-            aiTranscript: appendAiTranscriptOutput(
-              nextState.aiTranscript ?? createAiTranscriptState(),
-              event.text,
-              () => crypto.randomUUID(),
-            ),
-            agentBridge: {
-              provider: event.provider,
-              mode: nextState.agentBridge?.mode ?? "structured",
-              state: "running",
-              fallbackReason: null,
-              capabilities: nextState.agentBridge?.capabilities ?? getFallbackAgentCapabilities(event.provider),
-            },
-          };
-          break;
-        case "error":
-          nextState = {
-            ...nextState,
-            aiTranscript: completeAiTranscriptOutput(
-              appendAiTranscriptOutput(
-                nextState.aiTranscript ?? createAiTranscriptState(),
-                event.message,
-                () => crypto.randomUUID(),
-              ),
-            ),
-            agentBridge: {
-              provider: event.provider,
-              mode: nextState.agentBridge?.mode ?? "structured",
-              state: "ready",
-              fallbackReason: null,
-              capabilities: nextState.agentBridge?.capabilities ?? getFallbackAgentCapabilities(event.provider),
-            },
-          };
-          break;
-        case "turn-complete":
-          nextState = {
-            ...nextState,
-            aiTranscript: completeAiTranscriptOutput(nextState.aiTranscript ?? createAiTranscriptState()),
-            agentBridge: nextState.agentBridge
-              ? {
-                  ...nextState.agentBridge,
-                  provider: event.provider,
-                  state: nextState.agentBridge.mode === "raw-fallback" ? "fallback" : "ready",
-                }
-              : nextState.agentBridge,
-          };
-          break;
+      if (event.kind === "agent-workflow") {
+        nextState = {
+          ...nextState,
+          aiSession: {
+            provider: resolveAgentProvider(event.commandEntry),
+            rawOnly: true,
+          },
+        };
       }
 
       return {
@@ -473,7 +381,7 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
     workspaceCwd: cwd,
     parserState: createShellIntegrationParserState(),
     aiTranscript: createAiTranscriptState(),
-    agentBridge: null,
+    aiSession: null,
     transcriptViewport: createTranscriptViewportState(),
   };
 }
@@ -526,7 +434,7 @@ function reconcileShellState(
     captureActiveOutputInTranscript: nextState.captureActiveOutputInTranscript,
     composerHistory: nextState.composerHistory,
     aiTranscript: state.aiTranscript,
-    agentBridge: state.agentBridge,
+    aiSession: state.aiSession,
     transcriptViewport: state.transcriptViewport,
   };
 }
@@ -540,58 +448,16 @@ function createTranscriptViewportState(): TranscriptViewportState {
 
 const DEFAULT_TRANSCRIPT_VIEWPORT_STATE: TranscriptViewportState = createTranscriptViewportState();
 
-function getFallbackAgentCapabilities(provider: string): StructuredAgentCapabilities {
-  const normalized = provider.trim().toLowerCase();
-
-  if (normalized === "codex") {
-    return {
-      supportsResumePicker: true,
-      supportsDirectResume: false,
-      supportsReview: true,
-      supportsModelOverride: true,
-      showsBypassCapsule: true,
-    };
-  }
-
-  if (normalized === "qwen") {
-    return {
-      supportsResumePicker: false,
-      supportsDirectResume: true,
-      supportsReview: false,
-      supportsModelOverride: true,
-      showsBypassCapsule: true,
-    };
-  }
-
-  if (normalized === "claude") {
-    return {
-      supportsResumePicker: false,
-      supportsDirectResume: true,
-      supportsReview: false,
-      supportsModelOverride: false,
-      showsBypassCapsule: true,
-    };
-  }
-
-  return {
-    supportsResumePicker: false,
-    supportsDirectResume: false,
-    supportsReview: false,
-    supportsModelOverride: false,
-    showsBypassCapsule: true,
-  };
-}
-
-function resolveAgentProvider(commandEntry: string | undefined): string | null {
+function resolveAgentProvider(commandEntry: string | undefined): AiSessionProvider {
   const normalized = commandEntry?.trim();
   if (!normalized) {
-    return null;
+    return "unknown";
   }
 
   const tokens = normalized.split(/\s+/u);
   const command = tokens.find((token) => !token.includes("=") && token !== "env" && token !== "command" && token !== "exec");
   if (!command) {
-    return null;
+    return "unknown";
   }
 
   if (command === "codex") {
@@ -606,5 +472,5 @@ function resolveAgentProvider(commandEntry: string | undefined): string | null {
     return "qwen";
   }
 
-  return null;
+  return "unknown";
 }

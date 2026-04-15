@@ -57,11 +57,9 @@ describe("BlockWorkspaceSurface", () => {
       presentation: "agent-workflow" as const,
       mode: "classic" as const,
       modeSource: "auto-interactive" as const,
-      agentBridge: {
+      aiSession: {
         provider: "codex" as const,
-        mode: "structured" as const,
-        state: "ready" as const,
-        fallbackReason: null,
+        rawOnly: true as const,
       },
       aiTranscript: {
         entries: [
@@ -107,11 +105,9 @@ describe("BlockWorkspaceSurface", () => {
       presentation: "agent-workflow" as const,
       mode: "classic" as const,
       modeSource: "auto-interactive" as const,
-      agentBridge: {
+      aiSession: {
         provider: "codex" as const,
-        mode: "structured" as const,
-        state: "ready" as const,
-        fallbackReason: null,
+        rawOnly: true as const,
       },
       aiTranscript: {
         entries: [],
@@ -150,11 +146,9 @@ describe("BlockWorkspaceSurface", () => {
       presentation: "agent-workflow" as const,
       mode: "classic" as const,
       modeSource: "auto-interactive" as const,
-      agentBridge: {
+      aiSession: {
         provider: "codex" as const,
-        mode: "structured" as const,
-        state: "ready" as const,
-        fallbackReason: null,
+        rawOnly: true as const,
       },
       aiTranscript: {
         entries: [],

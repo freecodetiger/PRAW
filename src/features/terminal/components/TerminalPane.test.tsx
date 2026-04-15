@@ -181,11 +181,9 @@ describe("TerminalPane", () => {
       tabStates: {
         "tab:1": {
           ...state.tabStates["tab:1"],
-          agentBridge: {
+          aiSession: {
             provider: "codex",
-            mode: "structured",
-            state: "ready",
-            fallbackReason: null,
+            rawOnly: true,
           },
         },
       },
@@ -217,11 +215,9 @@ describe("TerminalPane", () => {
       tabStates: {
         "tab:1": {
           ...state.tabStates["tab:1"],
-          agentBridge: {
+          aiSession: {
             provider: "qwen",
-            mode: "raw-fallback",
-            state: "fallback",
-            fallbackReason: "structured bridge unavailable for the current command",
+            rawOnly: true,
           },
         },
       },
@@ -253,18 +249,9 @@ describe("TerminalPane", () => {
       tabStates: {
         "tab:1": {
           ...state.tabStates["tab:1"],
-          agentBridge: {
+          aiSession: {
             provider: "codex",
-            mode: "raw-fallback",
-            state: "fallback",
-            fallbackReason: null,
-            capabilities: {
-              supportsResumePicker: true,
-              supportsDirectResume: false,
-              supportsReview: true,
-              supportsModelOverride: true,
-              showsBypassCapsule: true,
-            },
+            rawOnly: true,
           },
         },
       },
@@ -293,18 +280,9 @@ describe("TerminalPane", () => {
       tabStates: {
         "tab:1": {
           ...state.tabStates["tab:1"],
-          agentBridge: {
+          aiSession: {
             provider: "codex",
-            mode: "raw-fallback",
-            state: "fallback",
-            fallbackReason: null,
-            capabilities: {
-              supportsResumePicker: true,
-              supportsDirectResume: false,
-              supportsReview: true,
-              supportsModelOverride: true,
-              showsBypassCapsule: true,
-            },
+            rawOnly: true,
           },
         },
       },

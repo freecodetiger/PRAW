@@ -25,17 +25,6 @@ describe("terminal-view-store AI transcript", () => {
     });
     store.recordAiPrompt("tab:1", "refine the answer");
     store.consumeOutput("tab:1", "STREAMING\nWorking(14s)\n› ping\n");
-    store.consumeAgentEvent("tab:1", {
-      sessionId: "session-1",
-      provider: "codex",
-      type: "assistant-message",
-      text: "pong",
-    });
-    store.consumeAgentEvent("tab:1", {
-      sessionId: "session-1",
-      provider: "codex",
-      type: "turn-complete",
-    });
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
     expect(tabState?.aiTranscript?.entries).toEqual([
@@ -43,12 +32,6 @@ describe("terminal-view-store AI transcript", () => {
         id: expect.any(String),
         kind: "prompt",
         text: "refine the answer",
-      },
-      {
-        id: expect.any(String),
-        kind: "output",
-        text: "pong",
-        status: "completed",
       },
     ]);
   });
@@ -80,7 +63,7 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
-  it("stores structured runtime capabilities from bridge-state events", () => {
+  it("marks AI workflow tabs with raw-only aiSession metadata from semantic command detection", () => {
     const store = useTerminalViewStore.getState();
 
     store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
@@ -91,27 +74,31 @@ describe("terminal-view-store AI transcript", () => {
       confidence: "strong",
       commandEntry: "qwen",
     });
-    store.consumeAgentEvent("tab:1", {
-      sessionId: "session-1",
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.aiSession).toEqual({
       provider: "qwen",
-      type: "bridge-state",
-      mode: "structured",
-      state: "ready",
-      fallbackReason: null,
-      capabilities: {
-        supportsResumePicker: false,
-        supportsDirectResume: true,
-        supportsReview: false,
-        supportsModelOverride: true,
-        showsBypassCapsule: true,
-      },
+      rawOnly: true,
+    });
+    expect(tabState?.presentation).toBe("agent-workflow");
+  });
+
+  it("uses unknown aiSession provider when semantic command detection cannot resolve a known CLI", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "python run_bot.py",
     });
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
-    expect(tabState?.agentBridge?.capabilities).toMatchObject({
-      supportsDirectResume: true,
-      supportsModelOverride: true,
-      showsBypassCapsule: true,
+    expect(tabState?.aiSession).toEqual({
+      provider: "unknown",
+      rawOnly: true,
     });
   });
 

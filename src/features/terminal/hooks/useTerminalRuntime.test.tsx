@@ -37,7 +37,6 @@ const terminalApi = vi.hoisted(() => {
     }),
     onTerminalExit: vi.fn(async () => () => undefined),
     onTerminalSemantic: vi.fn(async () => () => undefined),
-    onTerminalAgent: vi.fn(async () => () => undefined),
   };
 });
 
@@ -47,7 +46,6 @@ vi.mock("../../../lib/tauri/terminal", () => ({
   onTerminalOutput: terminalApi.onTerminalOutput,
   onTerminalExit: terminalApi.onTerminalExit,
   onTerminalSemantic: terminalApi.onTerminalSemantic,
-  onTerminalAgent: terminalApi.onTerminalAgent,
 }));
 
 function RuntimeHarness() {
@@ -68,7 +66,6 @@ describe("useTerminalRuntime", () => {
     terminalApi.onTerminalOutput.mockClear();
     terminalApi.onTerminalExit.mockClear();
     terminalApi.onTerminalSemantic.mockClear();
-    terminalApi.onTerminalAgent.mockClear();
 
     useAppConfigStore.setState((state) => ({
       ...state,
@@ -112,11 +109,9 @@ describe("useTerminalRuntime", () => {
           presentation: "agent-workflow",
           shell: "/bin/bash",
           parserState: createShellIntegrationParserState(),
-          agentBridge: {
+          aiSession: {
             provider: "codex",
-            mode: "structured",
-            state: "ready",
-            fallbackReason: null,
+            rawOnly: true,
           },
         },
       },
@@ -135,7 +130,7 @@ describe("useTerminalRuntime", () => {
     clearRegistry();
   });
 
-  it("mirrors PTY output to the raw terminal snapshot for agent workflow tabs in structured bridge mode", async () => {
+  it("mirrors PTY output to the raw terminal snapshot for agent workflow tabs in raw-only mode", async () => {
     await act(async () => {
       root.render(<RuntimeHarness />);
       await Promise.resolve();
@@ -144,10 +139,10 @@ describe("useTerminalRuntime", () => {
     await act(async () => {
       terminalApi.emitOutput({
         sessionId: "session-1",
-        data: "assistant: hello from structured mode\n",
+        data: "assistant: hello from raw-only mode\n",
       });
     });
 
-    expect(getTerminalSnapshot("tab:1").content).toContain("assistant: hello from structured mode\n");
+    expect(getTerminalSnapshot("tab:1").content).toContain("assistant: hello from raw-only mode\n");
   });
 });
