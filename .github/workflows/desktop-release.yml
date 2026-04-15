@@ -19,8 +19,6 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
     strategy:
@@ -83,6 +81,9 @@ jobs:
       - name: Validate macOS signing prerequisites for tagged releases
         if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           missing=()
           [[ -n "${APPLE_CERTIFICATE}" ]] || missing+=("APPLE_CERTIFICATE")
@@ -99,9 +100,17 @@ jobs:
 
       - name: Import Apple Developer ID certificate
         id: apple_signing
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.KEYCHAIN_PASSWORD != ''
+        if: runner.os == 'macOS'
         shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
+          if [[ -z "${APPLE_CERTIFICATE}" || -z "${APPLE_CERTIFICATE_PASSWORD}" || -z "${KEYCHAIN_PASSWORD}" ]]; then
+            echo "No Apple signing certificate configured; keeping ad-hoc signing identity"
+            exit 0
+          fi
+
           CERT_PATH="$RUNNER_TEMP/apple-certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/praw-signing.keychain-db"
 
@@ -200,7 +209,7 @@ jobs:
           APPLE_ID: ${{ env.APPLE_ID }}
           APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
           APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           args: ${{ matrix.bundle_args }}
@@ -213,7 +222,7 @@ jobs:
           APPLE_ID: ${{ env.APPLE_ID }}
           APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
           APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
@@ -231,7 +240,7 @@ jobs:
           APPLE_ID: ${{ env.APPLE_ID }}
           APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
           APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ github.ref_name }}
