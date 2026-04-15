@@ -9,7 +9,7 @@ import { SettingsPanel } from "../features/config/components/SettingsPanel";
 import { useAppConfigStore } from "../features/config/state/app-config-store";
 import { TerminalWorkspace } from "../features/terminal/components/TerminalWorkspace";
 import { useTerminalRuntime } from "../features/terminal/hooks/useTerminalRuntime";
-import { useWorkspaceStore } from "../features/terminal/state/workspace-store";
+import { selectWindowForPersistence, useWorkspaceStore } from "../features/terminal/state/workspace-store";
 
 function App() {
   const config = useAppConfigStore((state) => state.config);
@@ -17,9 +17,14 @@ function App() {
   const bootstrapWindow = useWorkspaceStore((state) => state.bootstrapWindow);
   const hydrateWindow = useWorkspaceStore((state) => state.hydrateWindow);
   const windowModel = useWorkspaceStore((state) => state.window);
+  const focusMode = useWorkspaceStore((state) => state.focusMode);
   const [bootState, setBootState] = useState<"loading" | "ready" | "error">("loading");
   const [bootMessage, setBootMessage] = useState<string>("");
   const themePreset = useMemo(() => getThemePreset(config.terminal.themePreset), [config.terminal.themePreset]);
+  const persistedWindowModel = useMemo(
+    () => selectWindowForPersistence({ window: windowModel, focusMode }),
+    [focusMode, windowModel],
+  );
 
   useTerminalRuntime();
 
@@ -84,18 +89,18 @@ function App() {
   }, [bootState, config]);
 
   useEffect(() => {
-    if (bootState === "loading" || !windowModel) {
+    if (bootState === "loading" || !persistedWindowModel) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      void saveWindowSnapshot(toWindowSnapshot(windowModel));
+      void saveWindowSnapshot(toWindowSnapshot(persistedWindowModel));
     }, 180);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [bootState, windowModel]);
+  }, [bootState, persistedWindowModel]);
 
   return (
     <div className="app-shell" data-theme={themePreset.id} style={{ colorScheme: themePreset.colorScheme }}>
