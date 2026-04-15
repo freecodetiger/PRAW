@@ -19,6 +19,7 @@ export interface TerminalController {
 export interface TerminalSnapshot {
   content: string;
   viewportY: number;
+  archiveText: string;
 }
 
 const registry = new Map<string, TerminalController>();
@@ -47,6 +48,20 @@ export function getTerminal(tabId: string): TerminalController | undefined {
 
 export function getTerminalSnapshot(tabId: string): TerminalSnapshot {
   return snapshots.get(tabId) ?? EMPTY_TERMINAL_SNAPSHOT;
+}
+
+export function updateArchiveText(tabId: string, archiveText: string): void {
+  const snapshot = ensureSnapshot(tabId);
+  snapshot.archiveText = archiveText;
+}
+
+export function exportTerminalArchive(tabId: string): string | null {
+  const snapshot = snapshots.get(tabId);
+  if (!snapshot) {
+    return null;
+  }
+
+  return snapshot.archiveText;
 }
 
 /**
@@ -117,4 +132,5 @@ function ensureSnapshot(tabId: string): TerminalSnapshot {
 const EMPTY_TERMINAL_SNAPSHOT: TerminalSnapshot = {
   content: "",
   viewportY: 0,
+  archiveText: "",
 };

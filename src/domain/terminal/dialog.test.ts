@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  appendLiveConsoleOutput,
   applyPreferredMode,
   applyTerminalSemanticEvent,
   applyShellLifecycleEvent,
@@ -56,7 +55,6 @@ describe("dialog terminal state", () => {
       expect.objectContaining({
         blockId: "cmd:1",
         compact: false,
-        transcriptCapture: "",
       }),
     );
     expect(next.activeCommandBlockId).toBe("cmd:1");
@@ -287,12 +285,12 @@ describe("dialog terminal state", () => {
     expect(started.dialogPhase).toBe("classic-handoff");
   });
 
-  it("captures running output in the live console and finalizes it into the command block on command end", () => {
+  it("finalizes a running command from exported terminal archive text", () => {
     const state = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "ls", () => "cmd:1");
-    const withOutput = appendLiveConsoleOutput(state, "file-a\nfile-b\n");
-    const finished = applyShellLifecycleEvent(withOutput, {
+    const finished = applyShellLifecycleEvent(state, {
       type: "command-end",
       exitCode: 0,
+      archivedOutput: "file-a\nfile-b",
     });
 
     expect(finished.activeCommandBlockId).toBeNull();
@@ -301,7 +299,39 @@ describe("dialog terminal state", () => {
         id: "cmd:1",
         status: "completed",
         exitCode: 0,
-        output: "file-a\nfile-b\n",
+        output: "file-a\nfile-b",
+      }),
+    ]);
+  });
+
+  it("falls back to the existing block output when no archive text is supplied", () => {
+    const state = {
+      ...submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "pwd", () => "cmd:1"),
+      blocks: [
+        {
+          id: "cmd:1",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "pwd",
+          output: "/workspace\n",
+          status: "running" as const,
+          interactive: false,
+          exitCode: null,
+        },
+      ],
+    };
+
+    const finished = applyShellLifecycleEvent(state, {
+      type: "command-end",
+      exitCode: 0,
+    });
+
+    expect(finished.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:1",
+        status: "completed",
+        exitCode: 0,
+        output: "/workspace\n",
       }),
     ]);
   });

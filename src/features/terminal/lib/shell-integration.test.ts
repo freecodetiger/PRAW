@@ -105,4 +105,25 @@ describe("shell integration parser", () => {
     expect(result.visibleOutput).toBe("echo hello\n");
   });
 
+  it("collapses carriage-return progress updates into the latest visible line", () => {
+    const result = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "处理 delta 中:  14% (238/1697)\r处理 delta 中:  15% (255/1697)\r处理 delta 中:  16% (272/1697)",
+    );
+
+    expect(result.visibleOutput).toBe("处理 delta 中:  16% (272/1697)");
+  });
+
+  it("preserves CRLF line endings while still treating bare carriage returns as line rewrites", () => {
+    const first = consumeShellIntegrationChunk(
+      createShellIntegrationParserState(),
+      "Receiving objects: 10%\r",
+    );
+
+    expect(first.visibleOutput).toBe("Receiving objects: 10%");
+
+    const second = consumeShellIntegrationChunk(first.state, "\nReceiving objects: 11%\rReceiving objects: 12%");
+    expect(second.visibleOutput).toBe("\nReceiving objects: 12%");
+  });
+
 });

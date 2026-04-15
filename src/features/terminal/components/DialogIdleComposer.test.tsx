@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
-import { appendLiveConsoleOutput, applyShellLifecycleEvent, createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
+import { applyShellLifecycleEvent, createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { DialogIdleComposer } from "./DialogIdleComposer";
@@ -46,10 +46,10 @@ function resetConfigStore() {
 
 function createFailedPaneState() {
   const started = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "gti sttaus", () => "cmd:1");
-  const withOutput = appendLiveConsoleOutput(started, "git: 'sttaus' is not a git command\n");
-  const paneState = applyShellLifecycleEvent(withOutput, {
+  const paneState = applyShellLifecycleEvent(started, {
     type: "command-end",
     exitCode: 1,
+    archivedOutput: "git: 'sttaus' is not a git command\n",
   });
 
   return {

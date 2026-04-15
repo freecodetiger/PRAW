@@ -9,6 +9,7 @@ const MARKER_SUFFIX_ST = "\u001b\\";
 export interface ShellIntegrationParserState {
   pending: string;
   pendingControl: string;
+  pendingCarriageReturn: boolean;
   suppressPrompt: boolean;
 }
 
@@ -22,6 +23,7 @@ export function createShellIntegrationParserState(): ShellIntegrationParserState
   return {
     pending: "",
     pendingControl: "",
+    pendingCarriageReturn: false,
     suppressPrompt: false,
   };
 }
@@ -42,7 +44,7 @@ export function consumeShellIntegrationChunk(
       if (!suppressPrompt) {
         rawVisibleOutput += source.slice(cursor);
       }
-      return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+      return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
         pending: "",
         suppressPrompt,
         events,
@@ -55,7 +57,7 @@ export function consumeShellIntegrationChunk(
 
     const markerEnd = findMarkerEnd(source, markerIndex + MARKER_PREFIX.length);
     if (!markerEnd) {
-      return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+      return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
         pending: source.slice(markerIndex),
         suppressPrompt,
         events,
@@ -85,7 +87,7 @@ export function consumeShellIntegrationChunk(
     cursor = markerEnd.index + markerEnd.length;
   }
 
-  return finalizeVisibleOutput(state.pendingControl, rawVisibleOutput, {
+  return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
     pending: "",
     suppressPrompt,
     events,
@@ -94,6 +96,7 @@ export function consumeShellIntegrationChunk(
 
 function finalizeVisibleOutput(
   pendingControl: string,
+  pendingCarriageReturn: boolean,
   rawVisibleOutput: string,
   result: {
     pending: string;
@@ -101,12 +104,13 @@ function finalizeVisibleOutput(
     events: ShellLifecycleEvent[];
   },
 ): ShellIntegrationChunkResult {
-  const sanitized = sanitizeVisibleTerminalOutput(pendingControl, rawVisibleOutput);
+  const sanitized = sanitizeVisibleTerminalOutput(pendingControl, pendingCarriageReturn, rawVisibleOutput);
 
   return {
     state: {
       pending: result.pending,
       pendingControl: sanitized.pendingControl,
+      pendingCarriageReturn: sanitized.pendingCarriageReturn,
       suppressPrompt: result.suppressPrompt,
     },
     visibleOutput: sanitized.visibleOutput,
@@ -116,28 +120,35 @@ function finalizeVisibleOutput(
 
 function sanitizeVisibleTerminalOutput(
   pendingControl: string,
+  pendingCarriageReturn: boolean,
   chunk: string,
-): { visibleOutput: string; pendingControl: string } {
+): { visibleOutput: string; pendingControl: string; pendingCarriageReturn: boolean } {
   const source = `${pendingControl}${chunk}`;
   let cursor = 0;
   let visibleOutput = "";
+  let carry = pendingCarriageReturn;
 
   while (cursor < source.length) {
     const escapeIndex = source.indexOf(ESC, cursor);
     if (escapeIndex === -1) {
-      visibleOutput = appendPlainText(visibleOutput, source.slice(cursor));
+      const appended = appendPlainText(visibleOutput, source.slice(cursor), carry);
+      visibleOutput = appended.output;
       return {
         visibleOutput,
         pendingControl: "",
+        pendingCarriageReturn: appended.pendingCarriageReturn,
       };
     }
 
-    visibleOutput = appendPlainText(visibleOutput, source.slice(cursor, escapeIndex));
+    const appended = appendPlainText(visibleOutput, source.slice(cursor, escapeIndex), carry);
+    visibleOutput = appended.output;
+    carry = appended.pendingCarriageReturn;
     const sequence = consumeEscapeSequence(source, escapeIndex);
     if (!sequence) {
       return {
         visibleOutput,
         pendingControl: source.slice(escapeIndex),
+        pendingCarriageReturn: carry,
       };
     }
 
@@ -151,22 +162,47 @@ function sanitizeVisibleTerminalOutput(
   return {
     visibleOutput,
     pendingControl: "",
+    pendingCarriageReturn: carry,
   };
 }
 
-function appendPlainText(output: string, chunk: string): string {
+function appendPlainText(
+  output: string,
+  chunk: string,
+  pendingCarriageReturn: boolean,
+): { output: string; pendingCarriageReturn: boolean } {
   let next = output;
+  let carry = pendingCarriageReturn;
 
   for (const char of chunk) {
+    if (carry) {
+      if (char === "\n") {
+        next += "\n";
+        carry = false;
+        continue;
+      }
+
+      next = clearCurrentLine(next);
+      carry = false;
+    }
+
     if (char === "\b") {
       next = removeLastVisibleCharacter(next);
+      continue;
+    }
+
+    if (char === "\r") {
+      carry = true;
       continue;
     }
 
     next += char;
   }
 
-  return next;
+  return {
+    output: next,
+    pendingCarriageReturn: carry,
+  };
 }
 
 function removeLastVisibleCharacter(output: string): string {
@@ -181,6 +217,15 @@ function removeLastVisibleCharacter(output: string): string {
 
   codepoints.pop();
   return `${codepoints.join("")}${trailingAnsi}`;
+}
+
+function clearCurrentLine(output: string): string {
+  const lastNewlineIndex = output.lastIndexOf("\n");
+  if (lastNewlineIndex === -1) {
+    return "";
+  }
+
+  return output.slice(0, lastNewlineIndex + 1);
 }
 
 function consumeEscapeSequence(

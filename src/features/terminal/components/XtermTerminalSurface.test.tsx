@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getThemePreset } from "../../../domain/theme/presets";
-import { clearRegistry, resetDirect, writeDirect } from "../lib/terminal-registry";
+import { clearRegistry, exportTerminalArchive, getTerminalSnapshot, resetDirect, writeDirect } from "../lib/terminal-registry";
 import { XtermTerminalSurface } from "./XtermTerminalSurface";
 
 const { MockTerminal, terminalInstances } = vi.hoisted(() => {
@@ -19,10 +19,13 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     scrollToLine: ReturnType<typeof vi.fn>;
     scrollToBottom: ReturnType<typeof vi.fn>;
     triggerScroll: (position: number) => void;
+    triggerWriteParsed: () => void;
+    setRenderedLines: (lines: string[]) => void;
     buffer: {
       active: {
         viewportY: number;
         baseY: number;
+        getLine: (index: number) => { translateToString: (trimRight?: boolean) => string } | undefined;
       };
     };
   }> = [];
@@ -42,17 +45,33 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     open = vi.fn();
     onData = vi.fn(() => ({ dispose: vi.fn() }));
     onResize = vi.fn(() => ({ dispose: vi.fn() }));
+    onWriteParsed = vi.fn((callback: () => void) => {
+      this.writeParsedListener = callback;
+      return { dispose: vi.fn() };
+    });
     onScroll = vi.fn((callback: (position: number) => void) => {
       this.scrollListener = callback;
       return { dispose: vi.fn() };
     });
+    renderedLines: string[] = [];
     buffer = {
       active: {
         viewportY: 0,
         baseY: 200,
+        getLine: (index: number) => {
+          const text = this.renderedLines[index];
+          if (text === undefined) {
+            return undefined;
+          }
+
+          return {
+            translateToString: (trimRight?: boolean) => (trimRight ? text.trimEnd() : text),
+          };
+        },
       },
     };
     private scrollListener: ((position: number) => void) | null = null;
+    private writeParsedListener: (() => void) | null = null;
 
     constructor() {
       instances.push(this);
@@ -61,6 +80,15 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     triggerScroll(position: number) {
       this.buffer.active.viewportY = position;
       this.scrollListener?.(position);
+    }
+
+    triggerWriteParsed() {
+      this.writeParsedListener?.();
+    }
+
+    setRenderedLines(lines: string[]) {
+      this.renderedLines = lines;
+      this.buffer.active.baseY = Math.max(0, lines.length - 1);
     }
   }
 
@@ -240,5 +268,58 @@ describe("XtermTerminalSurface", () => {
     });
 
     expect(terminalInstances[1]?.scrollToLine).toHaveBeenCalledWith(37);
+  });
+
+  it("exports the final terminal archive text for the active tab", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    act(() => {
+      terminalInstances[0]?.setRenderedLines(["Receiving objects: 100%", "Done.", ""]);
+      terminalInstances[0]?.triggerWriteParsed();
+    });
+
+    expect(exportTerminalArchive("tab:1")).toBe("Receiving objects: 100%\nDone.");
+  });
+
+  it("keeps replay snapshot and archive snapshot decoupled", async () => {
+    writeDirect("tab:1", "line 1\nline 2\n");
+
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    act(() => {
+      terminalInstances[0]?.setRenderedLines(["line 2"]);
+      terminalInstances[0]?.triggerWriteParsed();
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toBe("line 1\nline 2\n");
+    expect(exportTerminalArchive("tab:1")).toBe("line 2");
   });
 });

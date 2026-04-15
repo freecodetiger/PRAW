@@ -1,7 +1,6 @@
 import { create } from "zustand";
 
 import {
-  appendLiveConsoleOutput,
   applyTerminalSemanticEvent,
   appendDialogOutput,
   applyPreferredMode,
@@ -31,7 +30,7 @@ import {
   createAiTranscriptState,
   type AiTranscriptState,
 } from "../lib/ai-transcript";
-import { removeDirect, resetDirect } from "../lib/terminal-registry";
+import { exportTerminalArchive, removeDirect, resetDirect } from "../lib/terminal-registry";
 
 interface TerminalViewStore {
   tabStates: Record<string, TerminalTabViewState>;
@@ -212,18 +211,6 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         nextState.captureActiveOutputInTranscript &&
         nextState.presentation !== "agent-workflow";
 
-      const shouldCaptureLiveConsoleOutput =
-        nextState.dialogPhase === "live-console" &&
-        nextState.presentation !== "agent-workflow" &&
-        normalizedOutput.length > 0;
-
-      if (shouldCaptureLiveConsoleOutput) {
-        nextState = {
-          ...nextState,
-          ...appendLiveConsoleOutput(nextState, normalizedOutput),
-        };
-      }
-
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
         nextState = {
           ...nextState,
@@ -236,9 +223,17 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           promptCwd = event.cwd;
         }
 
+        const archivedOutput =
+          event.type === "command-end" && nextState.presentation !== "agent-workflow"
+            ? exportTerminalArchive(tabId) ?? undefined
+            : undefined;
+
         nextState = {
           ...nextState,
-          ...applyShellLifecycleEvent(nextState, event),
+          ...applyShellLifecycleEvent(
+            nextState,
+            event.type === "command-end" ? { ...event, archivedOutput } : event,
+          ),
         };
 
         if (

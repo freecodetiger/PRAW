@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearRegistry, updateArchiveText, writeDirect } from "../lib/terminal-registry";
 import { selectTerminalTabState, useTerminalViewStore } from "./terminal-view-store";
 
 describe("terminal-view-store AI transcript", () => {
   beforeEach(() => {
+    clearRegistry();
     useTerminalViewStore.setState((state) => ({
       ...state,
       tabStates: {},
@@ -145,6 +147,8 @@ describe("terminal-view-store AI transcript", () => {
 
     store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     store.submitCommand("tab:1", "pwd");
+    writeDirect("tab:1", "/workspace\n");
+    updateArchiveText("tab:1", "/workspace\n");
     store.consumeOutput("tab:1", "/workspace\n\x1b]133;D;0\x07");
     store.consumeOutput("tab:1", "\r\n\x1b]133;P;cwd=/workspace\x07");
 
@@ -154,6 +158,54 @@ describe("terminal-view-store AI transcript", () => {
         kind: "command",
         command: "pwd",
         output: "/workspace\n",
+      }),
+    ]);
+  });
+
+  it("finalizes command output from terminal archive instead of live visible output", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "git clone https://example.com/repo.git");
+    store.consumeOutput("tab:1", "Receiving objects: 10%\rReceiving objects: 100%\nDone.\n");
+
+    let tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "git clone https://example.com/repo.git",
+        output: "",
+      }),
+    ]);
+
+    writeDirect("tab:1", "Receiving objects: 10%\rReceiving objects: 100%\nDone.\n");
+    updateArchiveText("tab:1", "Receiving objects: 100%\nDone.");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+
+    tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "git clone https://example.com/repo.git",
+        output: "Receiving objects: 100%\nDone.",
+      }),
+    ]);
+  });
+
+  it("archives only the final visible progress state for git clone style output", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "git clone repo");
+    updateArchiveText("tab:1", "处理 delta 中: 100% (1697/1697)，完成。");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "git clone repo",
+        output: "处理 delta 中: 100% (1697/1697)，完成。",
       }),
     ]);
   });

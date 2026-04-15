@@ -29,7 +29,6 @@ export interface CommandBlock {
 export interface LiveConsoleState {
   blockId: string;
   compact: boolean;
-  transcriptCapture: string;
 }
 
 export interface DialogState {
@@ -51,7 +50,7 @@ export interface DialogState {
 
 export type ShellLifecycleEvent =
   | { type: "command-start"; entry?: string }
-  | { type: "command-end"; exitCode: number }
+  | { type: "command-end"; exitCode: number; archivedOutput?: string }
   | { type: "prompt-state"; cwd: string };
 
 let nextSessionBlockId = 1;
@@ -129,7 +128,6 @@ export function submitDialogCommand(
     liveConsole: {
       blockId: id,
       compact: false,
-      transcriptCapture: "",
     },
     transcriptPolicy: "defer-until-exit",
     composerMode: "pty",
@@ -206,20 +204,6 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
   };
 }
 
-export function appendLiveConsoleOutput(state: DialogState, data: string): DialogState {
-  if (data.length === 0 || !state.liveConsole) {
-    return state;
-  }
-
-  return {
-    ...state,
-    liveConsole: {
-      ...state.liveConsole,
-      transcriptCapture: `${state.liveConsole.transcriptCapture}${data}`,
-    },
-  };
-}
-
 export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecycleEvent): DialogState {
   switch (event.type) {
     case "command-start": {
@@ -246,10 +230,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
                 block.id === state.activeCommandBlockId
                   ? ({
                       ...block,
-                      output:
-                        state.transcriptPolicy === "defer-until-exit" && state.liveConsole?.blockId === block.id
-                          ? state.liveConsole.transcriptCapture
-                          : block.output,
+                      output: typeof event.archivedOutput === "string" ? event.archivedOutput : block.output,
                       status: "completed",
                       exitCode: event.exitCode,
                     } satisfies CommandBlock)
@@ -364,7 +345,6 @@ function restorePreferredPresentation(state: DialogState): DialogState {
         : {
             blockId: state.activeCommandBlockId,
             compact: state.liveConsole?.compact ?? false,
-            transcriptCapture: state.liveConsole?.transcriptCapture ?? "",
           },
     transcriptPolicy: state.activeCommandBlockId === null ? "append-live" : "defer-until-exit",
     composerMode: state.activeCommandBlockId === null ? "command" : "pty",
