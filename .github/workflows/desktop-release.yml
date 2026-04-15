@@ -129,6 +129,7 @@ jobs:
         run: |
           version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")"
           short_sha="${GITHUB_SHA::12}"
+          macos_guide_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/installing-macos.md"
           echo "main_tag=main-build-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "main_name=PRAW main build ${version} (${short_sha})" >> "$GITHUB_OUTPUT"
           {
@@ -140,6 +141,14 @@ jobs:
             echo "- macOS 安装包（\`.dmg\`）"
             echo "- macOS 应用归档（\`.app.tar.gz\`）"
             echo "- Linux 安装包（\`.deb\` / \`.rpm\` / \`.AppImage\`）"
+            echo
+            echo "### macOS 安装（预览版）"
+            echo
+            echo "- Apple Silicon Mac 请优先下载 aarch64 / arm64 资产"
+            echo "- Intel Mac 请优先下载 x64 / x86_64 资产"
+            echo "- 大多数用户直接使用 \`.dmg\` 即可，\`.app.tar.gz\` 更适合手动解包或排障"
+            echo "- 如果首次打开时被 Gatekeeper 拦住，请按系统提示执行“右键打开”或前往“隐私与安全性”点击“仍要打开”"
+            echo "- 详细图文步骤：${macos_guide_url}"
             echo
             echo "### 作者的话"
             echo
