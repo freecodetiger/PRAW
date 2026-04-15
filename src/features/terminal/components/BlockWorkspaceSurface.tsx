@@ -4,22 +4,6 @@ import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiWorkflowSurface } from "./AiWorkflowSurface";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
 
-interface ResumeSessionOption {
-  id: string;
-  cwd: string;
-  timestamp: string;
-  latestPrompt?: string | null;
-}
-
-interface ResumePickerState {
-  open: boolean;
-  sessions: ResumeSessionOption[];
-  onSelect: (sessionId: string) => Promise<void> | void;
-  onClose: () => void;
-  isLoading?: boolean;
-  error?: string | null;
-}
-
 interface BlockWorkspaceSurfaceProps {
   tabId: string;
   paneState: TerminalTabViewState;
@@ -34,8 +18,6 @@ interface BlockWorkspaceSurfaceProps {
   resize: (cols: number, rows: number) => Promise<void>;
   onSubmitCommand: (command: string) => void;
   onSubmitAiInput: (input: string) => Promise<void> | void;
-  resumePicker?: ResumePickerState | null;
-  forceOpenExpertDrawerKey?: number;
   quickPromptOpenRequestKey?: number;
 }
 
@@ -53,8 +35,6 @@ export function BlockWorkspaceSurface({
   resize,
   onSubmitCommand,
   onSubmitAiInput,
-  resumePicker = null,
-  forceOpenExpertDrawerKey = 0,
   quickPromptOpenRequestKey = 0,
 }: BlockWorkspaceSurfaceProps) {
   if (paneState.presentation === "agent-workflow") {
@@ -71,8 +51,6 @@ export function BlockWorkspaceSurface({
         write={write}
         resize={resize}
         onSubmitAiInput={onSubmitAiInput}
-        resumePicker={resumePicker}
-        forceOpenExpertDrawerKey={forceOpenExpertDrawerKey}
         quickPromptOpenRequestKey={quickPromptOpenRequestKey}
       />
     );

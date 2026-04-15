@@ -151,23 +151,6 @@ describe("AiWorkflowSurface", () => {
     expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
   });
 
-  it("keeps an expanded bypass capsule open when forceOpenExpertDrawerKey changes because quick prompt is independent of expert drawer", () => {
-    renderSurface(root, createAgentWorkflowPaneState(), {
-      quickPromptOpenRequestKey: 1,
-    });
-
-    expect(host.querySelector('[aria-label="AI prompt dock"]')).not.toBeNull();
-
-    renderSurface(root, createAgentWorkflowPaneState(), {
-      quickPromptOpenRequestKey: 1,
-      forceOpenExpertDrawerKey: 1,
-    });
-
-    expect(host.querySelector('[aria-label="AI prompt dock"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
-    expect(renderCalls[renderCalls.length - 1]?.inputSuspended).toBe(false);
-  });
-
   it("submits bypass prompts with Enter and collapses the capsule after success", async () => {
     const onSubmitAiInput = vi.fn(async () => undefined);
 
@@ -247,37 +230,11 @@ describe("AiWorkflowSurface", () => {
     expect(host.textContent).toContain("Could not send prompt");
   });
 
-  it("renders the resume picker above the same raw terminal surface when recent sessions are available", () => {
-    const onSelectResumeSession = vi.fn();
-
-    renderSurface(root, createAgentWorkflowPaneState(), {
-      resumePicker: {
-        open: true,
-        sessions: [
-          {
-            id: "session-a",
-            cwd: "/workspace",
-            timestamp: "2026-04-15T00:00:00.000Z",
-            latestPrompt: "review the failing test",
-          },
-        ],
-        onSelect: onSelectResumeSession,
-        onClose: vi.fn(),
-      },
-    });
+  it("does not render resume picker chrome in the raw-only AI surface", () => {
+    renderSurface(root, createAgentWorkflowPaneState());
 
     expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
-    expect(host.textContent).toContain("Resume Codex session");
-
-    const sessionButton = Array.from(host.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("review the failing test"),
-    );
-    expect(sessionButton).not.toBeUndefined();
-
-    act(() => {
-      sessionButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(onSelectResumeSession).toHaveBeenCalledWith("session-a");
+    expect(host.textContent).not.toContain("Resume Codex session");
+    expect(host.querySelector(".ai-workflow__resume-picker")).toBeNull();
   });
 });

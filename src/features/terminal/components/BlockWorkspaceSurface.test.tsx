@@ -144,6 +144,48 @@ describe("BlockWorkspaceSurface", () => {
     expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
   });
 
+  it("does not render legacy resume picker chrome for AI workflow panes", () => {
+    const paneState = {
+      ...createPaneState(),
+      presentation: "agent-workflow" as const,
+      mode: "classic" as const,
+      modeSource: "auto-interactive" as const,
+      agentBridge: {
+        provider: "codex" as const,
+        mode: "structured" as const,
+        state: "ready" as const,
+        fallbackReason: null,
+      },
+      aiTranscript: {
+        entries: [],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <BlockWorkspaceSurface
+          tabId="tab:1"
+          paneState={paneState}
+          status="running"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitCommand={() => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Resume Codex session");
+    expect(host.querySelector(".ai-workflow__resume-picker")).toBeNull();
+  });
+
   it("keeps interactive command tabs inside the same block workspace via a live island instead of a separate classic surface", () => {
     const paneState = {
       ...submitDialogCommand(createPaneState(), "vim README.md", () => "cmd:1"),

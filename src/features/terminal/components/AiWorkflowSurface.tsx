@@ -6,22 +6,6 @@ import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 
-interface ResumeSessionOption {
-  id: string;
-  cwd: string;
-  timestamp: string;
-  latestPrompt?: string | null;
-}
-
-interface ResumePickerState {
-  open: boolean;
-  sessions: ResumeSessionOption[];
-  onSelect: (sessionId: string) => Promise<void> | void;
-  onClose: () => void;
-  isLoading?: boolean;
-  error?: string | null;
-}
-
 interface AiWorkflowSurfaceProps {
   tabId: string;
   paneState: TerminalTabViewState;
@@ -34,8 +18,6 @@ interface AiWorkflowSurfaceProps {
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
   onSubmitAiInput: (input: string) => Promise<void> | void;
-  resumePicker?: ResumePickerState | null;
-  forceOpenExpertDrawerKey?: number;
   quickPromptOpenRequestKey?: number;
 }
 
@@ -51,7 +33,6 @@ export function AiWorkflowSurface({
   write,
   resize,
   onSubmitAiInput,
-  resumePicker = null,
   quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
@@ -130,36 +111,6 @@ export function AiWorkflowSurface({
           resize={resize}
         />
       </div>
-
-      {resumePicker?.open ? (
-        <section className="ai-workflow__resume-picker" aria-label="Resume Codex session">
-          <header className="ai-workflow__resume-picker-header">
-            <strong>Resume Codex session</strong>
-            <button className="button button--ghost" type="button" onClick={resumePicker.onClose}>
-              Close
-            </button>
-          </header>
-          {resumePicker.error ? <p className="ai-workflow__resume-picker-message">{resumePicker.error}</p> : null}
-          {resumePicker.isLoading ? (
-            <p className="ai-workflow__resume-picker-message">Loading recent Codex sessions...</p>
-          ) : (
-            <div className="ai-workflow__resume-picker-list">
-              {resumePicker.sessions.map((session) => (
-                <button
-                  key={session.id}
-                  className="ai-workflow__resume-picker-item"
-                  type="button"
-                  onClick={() => void resumePicker.onSelect(session.id)}
-                >
-                  <strong>{session.latestPrompt?.trim() || session.id}</strong>
-                  <span>{session.cwd}</span>
-                  <span>{session.timestamp}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
     </div>
   );
 }
