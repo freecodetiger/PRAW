@@ -266,4 +266,188 @@ describe("AiWorkflowSurface", () => {
 
     expect(onSelectResumeSession).toHaveBeenCalledWith("session-a");
   });
+
+  it("renders an always-available bypass capsule in structured AI mode", () => {
+    act(() => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={async () => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[aria-label="Open quick AI prompt"]')).not.toBeNull();
+  });
+
+  it("opens the bypass overlay from the capsule and submits with Enter", async () => {
+    const onSubmitAiInput = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    const capsule = host.querySelector('[aria-label="Open quick AI prompt"]');
+    expect(capsule).not.toBeNull();
+
+    await act(async () => {
+      capsule?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "continue from here");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(onSubmitAiInput).toHaveBeenCalledWith("continue from here");
+    expect(host.querySelector('[aria-label="AI prompt overlay"]')).toBeNull();
+  });
+
+  it("keeps the bypass overlay open on Shift+Enter and closes it on Escape", async () => {
+    const onSubmitAiInput = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    });
+
+    expect(onSubmitAiInput).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="AI prompt overlay"]')).not.toBeNull();
+
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt overlay"]')).toBeNull();
+  });
+
+  it("preserves the bypass draft and shows an error when submit fails", async () => {
+    const onSubmitAiInput = vi.fn(async () => {
+      throw new Error("bridge offline");
+    });
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="running"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "retry this prompt");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt overlay"]')).not.toBeNull();
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe("retry this prompt");
+    expect(host.textContent).toContain("Could not send prompt");
+  });
+
+  it("keeps the bypass capsule visible but disables submit when the session is not running", async () => {
+    const onSubmitAiInput = vi.fn(async () => undefined);
+
+    await act(async () => {
+      root.render(
+        <AiWorkflowSurface
+          tabId="tab:1"
+          paneState={createAgentWorkflowPaneState()}
+          status="exited"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+          onSubmitAiInput={onSubmitAiInput}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[aria-label="Open quick AI prompt"]')).not.toBeNull();
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(input?.disabled).toBe(true);
+    expect(host.textContent).toContain("The AI session is not accepting input.");
+  });
 });

@@ -5,6 +5,7 @@ import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { createAiTranscriptState } from "../lib/ai-transcript";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
+import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { AiTranscript } from "./AiTranscript";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 
@@ -58,6 +59,10 @@ export function AiWorkflowSurface({
   const [isPinnedBottom, setIsPinnedBottom] = useState(true);
   const [composerDraft, setComposerDraft] = useState("");
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
+  const [bypassDraft, setBypassDraft] = useState("");
+  const [bypassError, setBypassError] = useState<string | null>(null);
+  const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const manualJumpPendingRef = useRef(false);
@@ -141,8 +146,62 @@ export function AiWorkflowSurface({
     setComposerDraft("");
   };
 
+  const closeBypassPrompt = () => {
+    setBypassPromptOpen(false);
+    setBypassError(null);
+  };
+
+  const submitBypassPrompt = async () => {
+    const normalizedInput = bypassDraft.trim();
+    if (!normalizedInput || composerDisabled || isBypassSubmitting) {
+      return;
+    }
+
+    setIsBypassSubmitting(true);
+    setBypassError(null);
+
+    try {
+      await onSubmitAiInput(normalizedInput);
+      setBypassDraft("");
+      setBypassPromptOpen(false);
+    } catch {
+      setBypassError("Could not send prompt. The draft was kept so you can retry.");
+    } finally {
+      setIsBypassSubmitting(false);
+    }
+  };
+
   return (
     <div className="ai-workflow">
+      <div className="ai-workflow__bypass-capsule-shell">
+        <button
+          className="ai-workflow__bypass-capsule"
+          type="button"
+          aria-label="Open quick AI prompt"
+          onClick={() => {
+            setBypassPromptOpen(true);
+            setBypassError(null);
+          }}
+        >
+          Prompt
+        </button>
+      </div>
+
+      {bypassPromptOpen ? (
+        <AiModePromptOverlay
+          draft={bypassDraft}
+          disabled={composerDisabled || isBypassSubmitting}
+          error={bypassError}
+          statusMessage={composerDisabled ? "The AI session is not accepting input." : null}
+          onChange={(value) => {
+            setBypassDraft(value);
+            setBypassError(null);
+          }}
+          onClose={closeBypassPrompt}
+          onSubmit={submitBypassPrompt}
+        />
+      ) : null}
+
       {isStructuredSurface ? (
         <>
           <header className="ai-workflow__toolbar">
