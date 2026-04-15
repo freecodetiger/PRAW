@@ -18,7 +18,7 @@ import {
   removeLeaf,
   splitLeaf,
 } from "../../../domain/layout/tree";
-import type { FocusDirection, PaneDragPreview, PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
+import type { FocusDirection, LayoutNode, PaneDragPreview, PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { fromWindowSnapshot, type WindowSnapshot } from "../../../domain/window/snapshot";
 import type { TabModel, WindowModel } from "../../../domain/window/types";
 import { selectTerminalTabState, useTerminalViewStore } from "./terminal-view-store";
@@ -28,8 +28,15 @@ interface BootstrapWindowOptions {
   cwd: string;
 }
 
+interface WorkspaceFocusMode {
+  focusedTabId: string;
+  layoutBeforeFocus: LayoutNode;
+  activeTabIdBeforeFocus: string;
+}
+
 interface WorkspaceStore {
   window: WindowModel | null;
+  focusMode: WorkspaceFocusMode | null;
   dragState: { sourceTabId: string } | null;
   dragPreview: PaneDragPreview | null;
   noteEditorTabId: string | null;
@@ -48,6 +55,9 @@ interface WorkspaceStore {
   clearPaneDrag: () => void;
   requestEditNoteForActiveTab: () => void;
   clearNoteEditorRequest: (tabId: string) => void;
+  enterFocusMode: (tabId: string) => void;
+  exitFocusMode: () => void;
+  toggleFocusMode: (tabId: string) => void;
   attachSession: (tabId: string, sessionId: string, shell: string, cwd: string) => void;
   markTabExited: (
     tabId: string,
@@ -61,6 +71,7 @@ interface WorkspaceStore {
 
 export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   window: null,
+  focusMode: null,
   dragState: null,
   dragPreview: null,
   noteEditorTabId: null,
@@ -68,6 +79,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   bootstrapWindow: ({ shell, cwd }) =>
     set(() => ({
       window: createBootstrapWindowModel(shell, cwd),
+      focusMode: null,
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
@@ -76,6 +88,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   hydrateWindow: (snapshot) =>
     set(() => ({
       window: fromWindowSnapshot(snapshot),
+      focusMode: null,
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
@@ -114,7 +127,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   splitTab: (tabId, axis) =>
     set((state) => {
-      if (!state.window?.tabs[tabId]) {
+      if (state.focusMode || !state.window?.tabs[tabId]) {
         return state;
       }
 
@@ -123,7 +136,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   splitActiveTab: (axis) =>
     set((state) => {
-      if (!state.window) {
+      if (!state.window || state.focusMode) {
         return state;
       }
 
@@ -132,7 +145,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   resizeSplit: (containerId, dividerIndex, deltaPx, frame) =>
     set((state) => {
-      if (!state.window || frame.widthPx <= 0 || frame.heightPx <= 0 || deltaPx === 0) {
+      if (!state.window || state.focusMode || frame.widthPx <= 0 || frame.heightPx <= 0 || deltaPx === 0) {
         return state;
       }
 
@@ -155,7 +168,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   focusAdjacentTab: (direction) =>
     set((state) => {
-      if (!state.window) {
+      if (!state.window || state.focusMode) {
         return state;
       }
 
@@ -174,7 +187,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   closeTab: (tabId) =>
     set((state) => {
-      if (!state.window?.tabs[tabId] || countLeaves(state.window.layout) <= 1) {
+      if (state.focusMode || !state.window?.tabs[tabId] || countLeaves(state.window.layout) <= 1) {
         return state;
       }
 
@@ -208,7 +221,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   beginTabDrag: (tabId) =>
     set((state) => {
-      if (!state.window?.tabs[tabId]) {
+      if (state.focusMode || !state.window?.tabs[tabId]) {
         return state;
       }
 
@@ -222,7 +235,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setDragPreview: (targetTabId, edge) =>
     set((state) => {
-      if (!state.window || !state.dragState) {
+      if (!state.window || state.focusMode || !state.dragState) {
         return state;
       }
 
@@ -233,7 +246,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   applyDragPreview: () =>
     set((state) => {
-      if (!state.window || !state.dragPreview) {
+      if (!state.window || state.focusMode || !state.dragPreview) {
         return state;
       }
 
@@ -269,6 +282,85 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     set((state) => ({
       noteEditorTabId: state.noteEditorTabId === tabId ? null : state.noteEditorTabId,
     })),
+
+  enterFocusMode: (tabId) =>
+    set((state) => {
+      if (!state.window?.tabs[tabId] || state.focusMode) {
+        return state;
+      }
+
+      return {
+        window: {
+          ...state.window,
+          layout: createLeafLayout(tabId),
+          activeTabId: tabId,
+        },
+        focusMode: {
+          focusedTabId: tabId,
+          layoutBeforeFocus: state.window.layout,
+          activeTabIdBeforeFocus: state.window.activeTabId,
+        },
+        dragState: null,
+        dragPreview: null,
+      };
+    }),
+
+  exitFocusMode: () =>
+    set((state) => {
+      if (!state.window || !state.focusMode) {
+        return state;
+      }
+
+      return {
+        window: {
+          ...state.window,
+          layout: state.focusMode.layoutBeforeFocus,
+          activeTabId: state.focusMode.activeTabIdBeforeFocus,
+        },
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+      };
+    }),
+
+  toggleFocusMode: (tabId) =>
+    set((state) => {
+      if (!state.window?.tabs[tabId]) {
+        return state;
+      }
+
+      if (!state.focusMode) {
+        return {
+          window: {
+            ...state.window,
+            layout: createLeafLayout(tabId),
+            activeTabId: tabId,
+          },
+          focusMode: {
+            focusedTabId: tabId,
+            layoutBeforeFocus: state.window.layout,
+            activeTabIdBeforeFocus: state.window.activeTabId,
+          },
+          dragState: null,
+          dragPreview: null,
+        };
+      }
+
+      if (state.focusMode.focusedTabId !== tabId) {
+        return state;
+      }
+
+      return {
+        window: {
+          ...state.window,
+          layout: state.focusMode.layoutBeforeFocus,
+          activeTabId: state.focusMode.activeTabIdBeforeFocus,
+        },
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+      };
+    }),
 
   attachSession: (tabId, sessionId, shell, cwd) =>
     set((state) =>
@@ -325,6 +417,22 @@ export function selectActiveTab(state: Pick<WorkspaceStore, "window">): TabModel
   }
 
   return state.window.tabs[state.window.activeTabId] ?? null;
+}
+
+export function selectWindowForPersistence(state: Pick<WorkspaceStore, "window" | "focusMode">): WindowModel | null {
+  if (!state.window) {
+    return null;
+  }
+
+  if (!state.focusMode) {
+    return state.window;
+  }
+
+  return {
+    ...state.window,
+    layout: state.focusMode.layoutBeforeFocus,
+    activeTabId: state.focusMode.activeTabIdBeforeFocus,
+  };
 }
 
 function splitWindowTab(state: WorkspaceStore, tabId: string, axis: SplitAxis): Partial<WorkspaceStore> | WorkspaceStore {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { collectLeafIds } from "../../../domain/layout/tree";
-import { selectActiveTab, useWorkspaceStore } from "./workspace-store";
+import { collectLeafIds, createLeafLayout } from "../../../domain/layout/tree";
+import { selectActiveTab, selectWindowForPersistence, useWorkspaceStore } from "./workspace-store";
 
 describe("workspace-store", () => {
   beforeEach(() => {
@@ -161,5 +161,65 @@ describe("workspace-store", () => {
     useWorkspaceStore.getState().closeTab("tab:3");
     expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:1", "tab:2"]);
     expect(selectActiveTab(useWorkspaceStore.getState())?.tabId).toBe("tab:2");
+  });
+
+  it("enters focus mode with a reversible layout snapshot and restores it on exit", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    const layoutBeforeFocus = useWorkspaceStore.getState().window!.layout;
+
+    useWorkspaceStore.getState().enterFocusMode("tab:2");
+    expect(useWorkspaceStore.getState().focusMode).toMatchObject({
+      focusedTabId: "tab:2",
+      activeTabIdBeforeFocus: "tab:2",
+    });
+    expect(useWorkspaceStore.getState().window?.layout).toEqual(createLeafLayout("tab:2"));
+
+    useWorkspaceStore.getState().exitFocusMode();
+    expect(useWorkspaceStore.getState().window?.layout).toEqual(layoutBeforeFocus);
+    expect(useWorkspaceStore.getState().focusMode).toBeNull();
+  });
+
+  it("blocks split, close, drag preview, resize, and adjacent focus while focus mode is active", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    const layoutBeforeFocus = useWorkspaceStore.getState().window!.layout;
+    useWorkspaceStore.getState().enterFocusMode("tab:2");
+
+    useWorkspaceStore.getState().splitActiveTab("vertical");
+    useWorkspaceStore.getState().focusAdjacentTab("left");
+    useWorkspaceStore.getState().beginTabDrag("tab:2");
+    useWorkspaceStore.getState().setDragPreview("tab:2", "left");
+    useWorkspaceStore.getState().applyDragPreview();
+    useWorkspaceStore.getState().closeTab("tab:2");
+
+    expect(useWorkspaceStore.getState().window?.layout).toEqual(createLeafLayout("tab:2"));
+    expect(useWorkspaceStore.getState().window?.tabs["tab:1"]).toBeDefined();
+    expect(useWorkspaceStore.getState().window?.activeTabId).toBe("tab:2");
+    expect(selectWindowForPersistence(useWorkspaceStore.getState())?.layout).toEqual(layoutBeforeFocus);
+  });
+
+  it("does not overwrite the original focus snapshot on repeated enter attempts", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+    const layoutBeforeFocus = useWorkspaceStore.getState().window!.layout;
+
+    useWorkspaceStore.getState().enterFocusMode("tab:2");
+    useWorkspaceStore.getState().enterFocusMode("tab:1");
+
+    expect(useWorkspaceStore.getState().focusMode?.layoutBeforeFocus).toEqual(layoutBeforeFocus);
+    expect(useWorkspaceStore.getState().window?.layout).toEqual(createLeafLayout("tab:2"));
   });
 });
