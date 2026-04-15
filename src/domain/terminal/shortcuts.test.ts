@@ -58,6 +58,19 @@ describe("workspace shortcuts", () => {
         DEFAULT_TERMINAL_SHORTCUTS,
       ),
     ).toEqual({ type: "edit-note" });
+
+    expect(
+      resolveWorkspaceShortcut(
+        {
+          key: "Enter",
+          ctrlKey: true,
+          altKey: true,
+          shiftKey: false,
+          metaKey: false,
+        },
+        DEFAULT_TERMINAL_SHORTCUTS,
+      ),
+    ).toEqual({ type: "toggle-focus-pane" });
   });
 
   it("ignores legacy tab-management shortcuts in the single-workspace shell", () => {

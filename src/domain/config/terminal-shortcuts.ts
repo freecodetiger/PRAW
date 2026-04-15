@@ -10,6 +10,7 @@ export interface TerminalShortcutConfig {
   splitRight: ShortcutBinding | null;
   splitDown: ShortcutBinding | null;
   editNote: ShortcutBinding | null;
+  toggleFocusPane: ShortcutBinding | null;
 }
 
 export type TerminalShortcutConfigKey = keyof TerminalShortcutConfig;
@@ -27,6 +28,7 @@ export const DEFAULT_TERMINAL_SHORTCUTS: TerminalShortcutConfig = {
   splitRight: { key: "[", ctrl: true, alt: true, shift: false, meta: false },
   splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
   editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
+  toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
 };
 
 export function normalizeTerminalShortcutConfig(
@@ -36,6 +38,7 @@ export function normalizeTerminalShortcutConfig(
     splitRight: normalizeShortcutBinding(value?.splitRight, DEFAULT_TERMINAL_SHORTCUTS.splitRight),
     splitDown: normalizeShortcutBinding(value?.splitDown, DEFAULT_TERMINAL_SHORTCUTS.splitDown),
     editNote: normalizeShortcutBinding(value?.editNote, DEFAULT_TERMINAL_SHORTCUTS.editNote),
+    toggleFocusPane: normalizeShortcutBinding(value?.toggleFocusPane, DEFAULT_TERMINAL_SHORTCUTS.toggleFocusPane),
   };
 
   return hasDuplicateShortcutBindings(normalized) ? cloneShortcutConfig(DEFAULT_TERMINAL_SHORTCUTS) : normalized;
@@ -162,6 +165,7 @@ function cloneShortcutConfig(config: TerminalShortcutConfig): TerminalShortcutCo
     splitRight: cloneShortcutBinding(config.splitRight),
     splitDown: cloneShortcutBinding(config.splitDown),
     editNote: cloneShortcutBinding(config.editNote),
+    toggleFocusPane: cloneShortcutBinding(config.toggleFocusPane),
   };
 }
 

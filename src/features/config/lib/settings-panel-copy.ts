@@ -39,6 +39,7 @@ interface SettingsPanelCopy {
       splitRight: string;
       splitDown: string;
       editNote: string;
+      toggleFocusPane: string;
     };
     shortcutConflictWith: (label: string) => string;
     recorder: {
@@ -119,6 +120,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
         splitRight: "Split Right",
         splitDown: "Split Down",
         editNote: "Edit Note",
+        toggleFocusPane: "Toggle Focus Pane",
       },
       shortcutConflictWith: (label) => `Conflicts with ${label}.`,
       recorder: {
@@ -197,6 +199,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
         splitRight: "向右分屏",
         splitDown: "向下分屏",
         editNote: "Edit Note",
+        toggleFocusPane: "切换聚焦分屏",
       },
       shortcutConflictWith: (label) => `与 ${label} 冲突。`,
       recorder: {

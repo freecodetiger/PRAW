@@ -93,6 +93,7 @@ describe("app-config-store", () => {
         splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
         splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
         editNote: null,
+        toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
       } as never,
     });
 
@@ -100,6 +101,7 @@ describe("app-config-store", () => {
       splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
       splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
       editNote: null,
+      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
     });
   });
 

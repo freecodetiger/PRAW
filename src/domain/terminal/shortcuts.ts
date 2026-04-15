@@ -14,7 +14,8 @@ export type WorkspaceShortcutAction =
   | { type: "focus-pane"; direction: FocusDirection }
   | { type: "split-right" }
   | { type: "split-down" }
-  | { type: "edit-note" };
+  | { type: "edit-note" }
+  | { type: "toggle-focus-pane" };
 
 export type TerminalShortcutAction = { type: "copy-selection" } | { type: "paste" };
 
@@ -97,6 +98,10 @@ function resolvePaneActionShortcut(
 
   if (matchesShortcutBinding(event, shortcuts.editNote)) {
     return { type: "edit-note" };
+  }
+
+  if (matchesShortcutBinding(event, shortcuts.toggleFocusPane)) {
+    return { type: "toggle-focus-pane" };
   }
 
   return null;

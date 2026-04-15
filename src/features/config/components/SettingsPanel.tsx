@@ -19,7 +19,7 @@ import { useAppConfigStore } from "../state/app-config-store";
 import { ShortcutRecorder } from "./ShortcutRecorder";
 
 const CLASSIC_FONT_FAMILY = "CaskaydiaCove Nerd Font Mono";
-const SHORTCUT_KEYS: TerminalShortcutConfigKey[] = ["splitRight", "splitDown", "editNote"];
+const SHORTCUT_KEYS: TerminalShortcutConfigKey[] = ["splitRight", "splitDown", "editNote", "toggleFocusPane"];
 
 function formatRuntimeSummary(template: string, values: Record<string, number | string>) {
   return Object.entries(values).reduce(
