@@ -62,4 +62,27 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("APPLE_TEAM_ID");
     expect(workflow).toContain("Developer ID Application");
   });
+
+  it("keeps unsigned macOS builds on an explicit signing identity path instead of passing raw certificates into tauri-action", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+    const workflowHeader = workflow.split("strategy:")[0] ?? "";
+    const artifactsOnlySection = workflow.split("- name: Build workflow artifacts only")[1]?.split("- name: Build and publish main-branch prerelease")[0] ?? "";
+    const prereleaseSection = workflow.split("- name: Build and publish main-branch prerelease")[1]?.split("- name: Build and publish tagged release")[0] ?? "";
+    const taggedSection = workflow.split("- name: Build and publish tagged release")[1] ?? "";
+
+    expect(workflowHeader).not.toContain("APPLE_ID: ${{ secrets.APPLE_ID }}");
+    expect(workflowHeader).not.toContain("APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}");
+    expect(workflowHeader).not.toContain("APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}");
+    expect(artifactsOnlySection).toContain("APPLE_SIGNING_IDENTITY");
+    expect(prereleaseSection).toContain("APPLE_SIGNING_IDENTITY");
+    expect(taggedSection).toContain("APPLE_SIGNING_IDENTITY");
+
+    expect(artifactsOnlySection).not.toContain("APPLE_CERTIFICATE");
+    expect(artifactsOnlySection).not.toContain("APPLE_ID");
+    expect(artifactsOnlySection).not.toContain("APPLE_PASSWORD");
+    expect(artifactsOnlySection).not.toContain("APPLE_TEAM_ID");
+    expect(prereleaseSection).not.toContain("APPLE_CERTIFICATE");
+    expect(taggedSection).not.toContain("APPLE_CERTIFICATE");
+    expect(workflow).toContain("Build and publish main-branch prerelease without notarization");
+  });
 });

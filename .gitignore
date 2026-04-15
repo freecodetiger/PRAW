@@ -26,5 +26,9 @@ parse.txt
 project-insights/
 .superpowers/
 .worktrees/
-docs/
+docs/*
+!docs/releasing.md
+!docs/installing-macos.md
+!docs/superpowers/
+!docs/superpowers/**
 .web-builder/

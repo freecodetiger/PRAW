@@ -21,6 +21,14 @@ Formal releases are intentionally left as drafts so a human author can review th
 8. Edit the release notes
 9. Click **Publish release**
 
+## Unsigned macOS preview builds
+
+The main prerelease lane can still publish unsigned macOS artifacts when Apple signing credentials are not configured.
+
+That lane is meant for community preview builds, quick handoff, and open-source testing. The Tauri bundle config defaults to ad-hoc signing for this path, and the CI workflow swaps in a real Developer ID identity only when Apple credentials are present. Pair the release with the beginner install guide in [`docs/installing-macos.md`](./installing-macos.md) so users know how to open the app on first launch.
+
+Formal signed/notarized builds still require Apple credentials. The tagged release lane keeps failing early without them so a release does not look officially installable when it is not.
+
 ## macOS Signing And Notarization
 
 Unsigned macOS apps can show up as “damaged” or fail to open under Gatekeeper.

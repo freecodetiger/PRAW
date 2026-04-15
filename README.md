@@ -43,6 +43,19 @@ PRAW is usable, but it is still an actively evolving project.
 
 If you try it today, treat it as a fast-moving experimental product rather than a finished terminal replacement.
 
+## Install The macOS Preview Build
+
+If you just want to try PRAW on a Mac, start from the latest prerelease in [Releases](https://github.com/freecodetiger/PRAW/releases) instead of building from source.
+
+1. Open the latest prerelease in **Releases**
+2. Pick the macOS asset that matches your machine:
+   - **Apple Silicon**: prefer the `aarch64` / `arm64` `.dmg`
+   - **Intel**: prefer the `x64` / `x86_64` `.dmg`
+3. Open the downloaded `.dmg` and drag `PRAW.app` into `Applications`
+4. If macOS blocks the first launch because the preview build is unsigned/unnotarized, follow the beginner guide in [`docs/installing-macos.md`](./docs/installing-macos.md)
+
+The `.app.tar.gz` asset is kept for manual extraction and debugging. Most users should start with the `.dmg`.
+
 ## Getting Started
 
 ### Prerequisites

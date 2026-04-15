@@ -15,14 +15,6 @@ jobs:
   build-desktop:
     name: build-desktop (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
-    env:
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
     strategy:
       fail-fast: false
       matrix:
@@ -83,6 +75,13 @@ jobs:
       - name: Validate macOS signing prerequisites for tagged releases
         if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           missing=()
           [[ -n "${APPLE_CERTIFICATE}" ]] || missing+=("APPLE_CERTIFICATE")
@@ -99,9 +98,18 @@ jobs:
 
       - name: Import Apple Developer ID certificate
         id: apple_signing
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.KEYCHAIN_PASSWORD != ''
+        if: runner.os == 'macOS'
         shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          if [[ -z "${APPLE_CERTIFICATE}" || -z "${APPLE_CERTIFICATE_PASSWORD}" || -z "${KEYCHAIN_PASSWORD}" ]]; then
+            echo "No Apple signing certificate configured; keeping ad-hoc signing identity"
+            exit 0
+          fi
+
           CERT_PATH="$RUNNER_TEMP/apple-certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/praw-signing.keychain-db"
 
@@ -129,6 +137,7 @@ jobs:
         run: |
           version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")"
           short_sha="${GITHUB_SHA::12}"
+          macos_guide_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/installing-macos.md"
           echo "main_tag=main-build-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "main_name=PRAW main build ${version} (${short_sha})" >> "$GITHUB_OUTPUT"
           {
@@ -140,6 +149,14 @@ jobs:
             echo "- macOS 安装包（\`.dmg\`）"
             echo "- macOS 应用归档（\`.app.tar.gz\`）"
             echo "- Linux 安装包（\`.deb\` / \`.rpm\` / \`.AppImage\`）"
+            echo
+            echo "### macOS 安装（预览版）"
+            echo
+            echo "- Apple Silicon Mac 请优先下载 aarch64 / arm64 资产"
+            echo "- Intel Mac 请优先下载 x64 / x86_64 资产"
+            echo "- 大多数用户直接使用 \`.dmg\` 即可，\`.app.tar.gz\` 更适合手动解包或排障"
+            echo "- 如果首次打开时被 Gatekeeper 拦住，请按系统提示执行“右键打开”或前往“隐私与安全性”点击“仍要打开”"
+            echo "- 详细图文步骤：${macos_guide_url}"
             echo
             echo "### 作者的话"
             echo
@@ -183,29 +200,54 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Resolve signing mode
+        id: release_signing
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
+        run: |
+          if [[ -n "${APPLE_ID}" && -n "${APPLE_PASSWORD}" && -n "${APPLE_TEAM_ID}" && -n "${SIGNING_IDENTITY}" ]]; then
+            echo "can_notarize=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_notarize=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build workflow artifacts only
         if: github.event_name == 'workflow_dispatch'
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
         with:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize == 'true'
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
+        with:
+          tagName: ${{ steps.release_meta.outputs.main_tag }}
+          releaseName: ${{ steps.release_meta.outputs.main_name }}
+          releaseBody: ${{ steps.release_meta.outputs.main_body }}
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.bundle_args }}
+
+      - name: Build and publish main-branch prerelease without notarization
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize != 'true'
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
           releaseName: ${{ steps.release_meta.outputs.main_name }}
@@ -219,11 +261,11 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
-          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
