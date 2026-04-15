@@ -493,7 +493,7 @@ function isWrapperOptionToken(token: string): boolean {
 }
 
 function normalizeCommandEntry(token: string): string {
-  const normalized = token.trim();
+  const normalized = token.trim().replace(/^['"`]+|['"`]+$/gu, "").toLowerCase();
   if (!normalized) {
     return "";
   }

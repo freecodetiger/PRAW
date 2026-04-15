@@ -109,6 +109,8 @@ describe("terminal-view-store AI transcript", () => {
     { commandEntry: "uvx qwen code", expectedProvider: "qwen" as const },
     { commandEntry: "env FOO=1 npx --yes codex", expectedProvider: "codex" as const },
     { commandEntry: "/usr/bin/claude-code", expectedProvider: "claude" as const },
+    { commandEntry: "\"/USR/BIN/CODEX\"", expectedProvider: "codex" as const },
+    { commandEntry: "'Claude-Code'", expectedProvider: "claude" as const },
   ])(
     "preserves provider metadata for backend-detected workflow command '$commandEntry'",
     ({ commandEntry, expectedProvider }) => {
