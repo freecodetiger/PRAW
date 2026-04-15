@@ -4,72 +4,84 @@ Date: 2026-04-15
 
 ## Goal
 
-Refine the AI mode bypass prompt so it feels like a compact, always-available side composer instead of a separate floating overlay.
+Refine the AI mode bypass prompt so it behaves like a permanent right-edge side composer instead of a detachable floating prompt surface.
 
 The updated experience should:
 
-- keep a stable prompt entry visible while reading older AI output
-- avoid colliding with the bottom composer area and jump controls
-- feel visually integrated with the AI pane
+- keep a stable prompt affordance always visible in structured AI mode
+- avoid visual disappearance after submit
+- expand into an input surface that feels nearly as wide as the current AI pane
+- support multiline drafting with graceful auto-resizing
 - preserve the existing prompt transport path and failure handling
 
 ## Problem
 
-The current bypass capsule solved prompt accessibility, but two issues remain:
+The original bypass capsule solved one problem, but the interaction still falls short in several ways:
 
-1. The trigger sits in a corner that can overlap with other pane content.
-2. The click target opens a detached overlay, which feels heavier and less elegant than the intended “side-channel” interaction.
+1. The current dock can be visually easy to miss because the collapsed state is too close to the edge and too low-emphasis.
+2. The expanded state is too narrow relative to the available pane width.
+3. The textarea does not grow naturally with the amount of text the user is drafting.
+4. The interaction currently reads too much like a hidden side panel instead of a permanent side-channel composer.
 
-The user wants the bypass entry to behave more like a docked side control:
+The intended experience is:
 
-- fixed at the vertical center of the right edge
-- compact when idle
-- expanding leftward into an input surface when activated
+- a visibly persistent right-edge capsule
+- always present in structured AI mode
+- expanding leftward into a wide inline composer
+- collapsing back to the right edge without disappearing
 
 ## Product Decision
 
-Replace the corner-positioned floating capsule plus detached overlay with a right-edge inline expanding capsule.
+Keep the bypass capsule permanently mounted in structured AI mode and treat collapse as “return to docked capsule”, not “remove the control”.
 
 Interaction model:
 
-- In structured AI mode, a narrow capsule remains docked to the AI pane’s right edge at vertical center.
-- Clicking the capsule expands it leftward into a compact input composer.
-- The expanded composer uses adaptive width rather than a fixed pixel width.
+- In structured AI mode, a docked capsule remains permanently visible at the right edge, vertically centered.
+- Clicking the capsule expands it leftward into a wide input composer.
+- The expanded composer should feel close to the full width of the AI pane, while still leaving a small visual margin.
 - `Enter` submits.
 - `Shift+Enter` inserts a newline.
-- `Escape` collapses the composer.
-- Successful submit collapses the composer.
+- `Escape` collapses the composer back to the docked capsule.
+- Successful submit collapses the composer back to the docked capsule and clears the draft.
 - Clicking elsewhere does not collapse the composer.
-- Draft text persists across collapse and reopen until a successful submit clears it.
+- Failed submit keeps the composer expanded and preserves the draft.
+- Collapsing without submit preserves the draft.
 
 This remains a bypass path, not the canonical AI composer.
 
 ## Non-Goals
 
 - Replacing the main AI composer
-- Making the bypass entry draggable or user-configurable
+- Adding user-configurable positions
 - Adding outside-click dismissal
-- Supporting the old detached overlay and the new inline form at the same time
-- Changing prompt transport or agent bridge behavior
+- Making the bypass input draggable
+- Changing prompt transport or agent bridge semantics
+- Rendering the structured bypass control in raw-fallback/native terminal mode
 
 ## Recommended Approach
 
-Use a docked side-composer component rendered inside the AI pane.
+Use a permanently mounted right-edge dock component that switches between:
+
+- collapsed capsule state
+- expanded inline composer state
 
 Why this is the right tradeoff:
 
-- It matches the desired interaction exactly.
-- It removes the visual discontinuity of the old modal-like overlay.
-- It keeps state local to AI mode and avoids introducing new global UI abstractions.
-- It allows styling and animation to stay scoped to the existing AI workflow surface.
+- It directly matches the user’s mental model of a permanent side-channel entry.
+- It removes the ambiguity of “did the control disappear or just collapse?”
+- It preserves a strong visual anchor in AI mode.
+- It improves compositional elegance without touching transport architecture.
 
-Lower-cost alternatives were considered and rejected:
+Alternatives considered and rejected:
 
-1. Keep the old overlay and only move the trigger to the right edge.
-   This lowers implementation cost but keeps the less elegant detached interaction.
+1. A narrow expanding composer with modest width.
+   Easier to style, but too constrained for real prompt drafting.
 
-2. Add full position customization.
-   This is flexible but unnecessary for the requested outcome and adds avoidable config and testing surface.
+2. A detachable floating overlay.
+   Higher visual discontinuity and weaker sense of permanent availability.
+
+3. User-configurable placement.
+   Too much configuration surface for a problem that now has a preferred default answer.
 
 ## Architecture
 
@@ -82,18 +94,19 @@ Lower-cost alternatives were considered and rejected:
 - transient submit error state
 - submit lifecycle
 
-This keeps the bypass behavior local to AI mode and avoids coupling it to terminal-global state.
+This keeps the bypass feature local to AI mode and avoids coupling it to terminal-global state.
 
 ### 2. Component Boundary
 
-The current [AiModePromptOverlay.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiModePromptOverlay.tsx) should stop behaving like an overlay shell.
+[AiModePromptOverlay.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiModePromptOverlay.tsx) should remain the presentation component for the right-edge docked composer.
 
-It should become a focused presentation component for the docked right-edge composer, responsible only for:
+It should be responsible for:
 
-- rendering collapsed and expanded visual states
-- managing textarea focus when expanded
-- exposing `onChange`, `onSubmit`, and `onCollapse`
-- handling keyboard shortcuts:
+- rendering the docked capsule shell
+- rendering expanded and collapsed visual states
+- focusing the textarea when expanded
+- exposing `onExpand`, `onChange`, `onSubmit`, and `onCollapse`
+- handling keyboard behavior:
   - `Enter` submit
   - `Shift+Enter` newline
   - `Escape` collapse
@@ -102,8 +115,8 @@ It should not:
 
 - understand structured vs raw transport
 - call Tauri directly
-- alter transcript state
-- own persistence outside its current draft value props
+- mutate transcript state
+- own prompt transport or session routing
 
 ### 3. Prompt Transport Boundary
 
@@ -112,11 +125,6 @@ Prompt delivery must continue to reuse the existing AI prompt submission chain:
 - `AiWorkflowSurface` submit handler
 - existing `submitAiPrompt(...)`
 - existing `sendAiPrompt(...)`
-
-This keeps the bypass path transport-agnostic across:
-
-- structured bridge mode
-- raw-fallback/native terminal mode
 
 No second prompt stack should be introduced.
 
@@ -128,45 +136,72 @@ The capsule is anchored to the right edge of the AI pane and vertically centered
 
 Placement rules:
 
-- right: flush or near-flush to the pane edge
+- right edge alignment: visually flush or nearly flush with the pane edge
 - vertical position: centered within the pane body
 - z-index: above transcript content, below modal-level surfaces
 
-This position is preferred over corners because it reduces collisions with:
+This keeps the affordance out of the top toolbar and away from bottom composer conflicts.
 
-- bottom composer controls
-- jump-to-latest affordances
-- top toolbar actions
+### Persistent Presence
 
-### Expanded Direction
+The dock remains mounted in structured AI mode at all times.
 
-The composer expands leftward from the right edge anchor point.
+Collapsed state means:
 
-This preserves the “docked” feeling and avoids overflowing outside the pane.
+- the capsule is still visible
+- the input is hidden or reduced to zero-width
+- the user still has a stable visual target
 
-### Width
+Expanded state means:
 
-Use adaptive width rather than a fixed width.
+- the capsule remains the anchor point on the right edge
+- the composer extends leftward from that anchor
 
-Recommended rule:
+### Expanded Width
 
-- `clamp(280px, 40%, 360px)`
+The expanded width should be close to the current AI pane width, not a narrow side panel.
 
-This gives:
+Preferred rule:
 
-- enough room for practical prompt entry
-- stable behavior in larger panes
-- reasonable containment in smaller panes
+- use left and right visual margins instead of a small width clamp
+- practical target is “nearly full width”, leaving roughly `12px` to `16px` margin per side
+
+Implementation preference:
+
+- anchor the dock to the right edge
+- define the expanded panel using absolute layout or width math derived from pane bounds
+- avoid a small static width such as `320px` or `360px`
+
+The intended result is that the expanded composer reads like a wide writing surface rather than a thin popout.
+
+### Height Behavior
+
+The textarea should auto-resize with the amount of input.
+
+Rules:
+
+- collapsed state: no visible textarea surface
+- expanded state initial height: single-line friendly
+- textarea height grows with content based on `scrollHeight`
+- textarea growth is bounded by a graceful maximum height
+- once maximum height is reached, internal scrolling begins
+
+Recommended range:
+
+- minimum height around `40px`
+- maximum height around `140px` to `160px`
+
+This keeps the field expressive without dominating the pane.
 
 ### Visual Language
 
-The collapsed state should remain subtle and low-attention.
+The dock should feel like one continuous control:
 
-The expanded state should feel like the same object growing into a usable input, not like a separate dialog. That means:
+- collapsed capsule and expanded composer must share material, border, and motion language
+- expansion should read as the capsule unfolding into a larger surface
+- collapse should read as the composer folding back into the dock
 
-- shared border radius language
-- consistent material treatment
-- transform/width transition rather than pop-in overlay behavior
+The interaction should not resemble a detached modal or floating window.
 
 ## Focus and Dismissal Rules
 
@@ -177,32 +212,32 @@ When the composer expands:
 
 When the user presses `Escape`:
 
-- the composer collapses
+- the composer collapses back to the docked capsule
 - draft is preserved
 
 When submit succeeds:
 
-- the composer collapses
+- the composer collapses back to the docked capsule
 - draft clears
 
 When the user clicks elsewhere:
 
 - do nothing
 - keep the composer open
-- preserve focus behavior unless another control explicitly takes focus
+- do not forcibly collapse the dock
 
-This is intentional. The bypass composer is meant to stay available while the user reads and interacts with other content.
+This is intentional. The bypass composer should remain stable during reading and peripheral interaction.
 
 ## Runtime Compatibility
 
-The right-edge composer should only be shown when AI mode is using the structured surface.
+The right-edge dock should only be rendered in structured AI mode.
 
 In raw-fallback/native terminal mode:
 
-- do not render the docked bypass capsule/composer
+- do not render the structured bypass dock
 - rely on the native terminal surface as the active interaction model
 
-This matches the current direction of removing redundant AI-mode status chrome in raw fallback.
+This avoids UI conflicts between the structured side composer and the raw terminal path.
 
 ## Error Handling
 
@@ -214,41 +249,46 @@ If submit fails:
 
 If the terminal session is not accepting input:
 
-- keep the collapsed affordance visible in structured AI mode
-- disable submit while preserving the draft
+- keep the dock visible in structured AI mode
+- disable submit while preserving draft
 - show the existing blocked-state message when expanded
 
 ## Testing
 
-Update and extend tests around [AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) and the bypass composer component.
+Update and extend tests around [AiWorkflowSurface.tsx](/home/zpc/projects/praw/src/features/terminal/components/AiWorkflowSurface.tsx) and the dock composer component.
 
 Required coverage:
 
-- capsule renders at all times in structured AI mode
-- raw-fallback mode does not render the structured bypass capsule
+- dock remains mounted in structured AI mode
+- raw-fallback mode does not render the structured bypass dock
 - clicking capsule expands the composer
 - expanded composer autofocuses the textarea
 - `Enter` submits
 - `Shift+Enter` does not submit
-- `Escape` collapses and preserves draft
+- `Escape` collapses while preserving draft
 - successful submit collapses and clears draft
 - clicking outside does not collapse the composer
-- disabled session state prevents submit but keeps entry available
+- the composer reopens from a visible dock after submit
+- textarea height grows with additional lines
+- textarea height is capped within the allowed visual range
+- disabled session state prevents submit but keeps the dock visible
 
 ## Risks
 
-- If the new inline composer still behaves like an overlay internally, the UX will feel visually inconsistent even if positioned correctly.
-- If outside clicks collapse the composer despite the requirement, the feature will regress into the same “fragile capture” behavior the bypass path is meant to avoid.
-- If raw-fallback keeps showing the structured capsule, the surface model will become confusing.
+- If the dock is technically mounted but visually too close to the edge, users may still perceive it as missing.
+- If expanded width remains too conservative, the interaction will continue to feel cramped.
+- If textarea growth is unbounded, the dock will overtake the pane and reduce usability.
+- If textarea growth is not implemented at all, the interaction will feel unfinished relative to the requested UX.
 
 ## Recommendation
 
-Implement the bypass input as a right-edge docked expanding composer with adaptive width and explicit collapse semantics:
+Implement the bypass input as a permanently mounted, right-edge, vertically centered dock with:
 
-- right-edge vertical-center anchor
-- leftward inline expansion
+- always-visible collapsed capsule in structured AI mode
+- leftward expansion into a near-full-width composer
+- auto-growing textarea with bounded height
 - collapse only on `Escape` or successful submit
-- preserve draft across collapse
-- keep transport reuse exactly as-is
+- draft preservation across collapse
+- unchanged prompt transport reuse
 
-This is the smallest change that materially improves elegance, spatial stability, and perceived polish.
+This is the smallest change that aligns the feature with the intended “elegant, always-there side composer” experience.
