@@ -25,5 +25,6 @@ dist-ssr
 parse.txt
 project-insights/
 .superpowers/
+.worktrees/
 docs/
 .web-builder/
