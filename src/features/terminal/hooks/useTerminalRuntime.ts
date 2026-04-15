@@ -32,6 +32,7 @@ export function useTerminalRuntime() {
   const attachSession = useWorkspaceStore((state) => state.attachSession);
   const markTabExited = useWorkspaceStore((state) => state.markTabExited);
   const markTabError = useWorkspaceStore((state) => state.markTabError);
+  const updateTabCwd = useWorkspaceStore((state) => state.updateTabCwd);
   const consumeOutput = useTerminalViewStore((state) => state.consumeOutput);
   const consumeSemantic = useTerminalViewStore((state) => state.consumeSemantic);
   const consumeAgentEvent = useTerminalViewStore((state) => state.consumeAgentEvent);
@@ -164,7 +165,10 @@ export function useTerminalRuntime() {
         writeDirect(tabRef.tabId, event.data);
       }
 
-      consumeOutput(tabRef.tabId, event.data);
+      const promptCwd = consumeOutput(tabRef.tabId, event.data);
+      if (promptCwd) {
+        updateTabCwd(tabRef.tabId, promptCwd);
+      }
     }).then((cleanup) => {
       if (disposed) {
         cleanup();
@@ -178,7 +182,7 @@ export function useTerminalRuntime() {
       disposed = true;
       unlistenOutput?.();
     };
-  }, [consumeOutput]);
+  }, [consumeOutput, updateTabCwd]);
 
   useEffect(() => {
     let disposed = false;

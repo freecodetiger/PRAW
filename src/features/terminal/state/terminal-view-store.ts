@@ -43,7 +43,7 @@ interface TerminalViewStore {
     tone?: "info" | "warning" | "error",
   ) => void;
   clearAiTranscript: (tabId: string) => void;
-  consumeOutput: (tabId: string, data: string) => void;
+  consumeOutput: (tabId: string, data: string) => string | null;
   consumeSemantic: (tabId: string, event: TerminalSemanticEvent) => void;
   consumeAgentEvent: (tabId: string, event: TerminalAgentEvent) => void;
   setTabMode: (tabId: string, mode: PaneRenderMode, source: PaneRenderModeSource) => void;
@@ -53,6 +53,7 @@ interface TerminalViewStore {
 
 export interface TerminalTabViewState extends DialogState {
   shell: string;
+  workspaceCwd?: string;
   parserState: ShellIntegrationParserState;
   aiTranscript?: AiTranscriptState;
   agentBridge?: AgentBridgeState | null;
@@ -178,7 +179,9 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       };
     }),
 
-  consumeOutput: (tabId, data) =>
+  consumeOutput: (tabId, data) => {
+    let promptCwd: string | null = null;
+
     set((state) => {
       const key = getTerminalBufferKey(tabId);
       const tabState = state.tabStates[key];
@@ -218,6 +221,10 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       }
 
       for (const event of parsed.events) {
+        if (event.type === "prompt-state") {
+          promptCwd = event.cwd;
+        }
+
         nextState = {
           ...nextState,
           ...applyShellLifecycleEvent(nextState, event),
@@ -241,7 +248,10 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           [key]: nextState,
         },
       };
-    }),
+    });
+
+    return promptCwd;
+  },
 
   consumeSemantic: (tabId, event) =>
     set((state) => {
@@ -418,6 +428,7 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
   return {
     ...createDialogState(shell, cwd, preferredMode),
     shell,
+    workspaceCwd: cwd,
     parserState: createShellIntegrationParserState(),
     aiTranscript: createAiTranscriptState(),
     agentBridge: null,
@@ -430,6 +441,10 @@ function reconcileShellState(
   cwd: string,
   preferredMode: PaneRenderMode,
 ): Partial<TerminalTabViewState> {
+  const previousWorkspaceCwd = state.workspaceCwd ?? state.cwd;
+  const shouldApplyWorkspaceCwd = shell !== state.shell || cwd !== previousWorkspaceCwd;
+  const reconciledCwd = shouldApplyWorkspaceCwd ? cwd : state.cwd;
+
   const supported = isDialogShellSupported(shell);
   if (!supported) {
     return {
@@ -439,7 +454,8 @@ function reconcileShellState(
       modeSource: "shell-unsupported",
       presentation: "default",
       composerMode: "command",
-      cwd,
+      cwd: reconciledCwd,
+      workspaceCwd: cwd,
       captureActiveOutputInTranscript: true,
     };
   }
@@ -448,7 +464,7 @@ function reconcileShellState(
     {
       ...state,
       shellIntegration: "supported",
-      cwd,
+      cwd: reconciledCwd,
     },
     preferredMode,
   );
@@ -460,6 +476,7 @@ function reconcileShellState(
     modeSource: nextState.modeSource,
     presentation: nextState.presentation,
     cwd: nextState.cwd,
+    workspaceCwd: cwd,
     blocks: nextState.blocks,
     activeCommandBlockId: nextState.activeCommandBlockId,
     composerMode: nextState.composerMode,

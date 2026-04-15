@@ -58,6 +58,7 @@ interface WorkspaceStore {
   enterFocusMode: (tabId: string) => void;
   exitFocusMode: () => void;
   toggleFocusMode: (tabId: string) => void;
+  updateTabCwd: (tabId: string, cwd: string) => void;
   attachSession: (tabId: string, sessionId: string, shell: string, cwd: string) => void;
   markTabExited: (
     tabId: string,
@@ -361,6 +362,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
         dragPreview: null,
       };
     }),
+
+  updateTabCwd: (tabId, cwd) =>
+    set((state) =>
+      updateTabState(state, tabId, (tab) => {
+        if (!cwd || tab.cwd === cwd) {
+          return tab;
+        }
+
+        return {
+          ...tab,
+          cwd,
+        };
+      }),
+    ),
 
   attachSession: (tabId, sessionId, shell, cwd) =>
     set((state) =>

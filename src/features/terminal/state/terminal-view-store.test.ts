@@ -92,4 +92,34 @@ describe("terminal-view-store AI transcript", () => {
       }),
     ]);
   });
+
+  it("keeps prompt-reported cwd when a stale workspace sync runs after pane focus changes", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/home/zpc", "dialog");
+    const promptCwd = store.consumeOutput("tab:1", "\x1b]133;P;cwd=/home/zpc/projects/praw\x07");
+    store.syncTabState("tab:1", "/bin/bash", "/home/zpc", "dialog");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(promptCwd).toBe("/home/zpc/projects/praw");
+    expect(tabState?.cwd).toBe("/home/zpc/projects/praw");
+  });
+
+  it("does not create a session output block for prompt-only whitespace after a command ends", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "pwd");
+    store.consumeOutput("tab:1", "/workspace\n\x1b]133;D;0\x07");
+    store.consumeOutput("tab:1", "\r\n\x1b]133;P;cwd=/workspace\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "pwd",
+        output: "/workspace\n",
+      }),
+    ]);
+  });
 });

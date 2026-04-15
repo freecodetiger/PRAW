@@ -106,6 +106,19 @@ describe("workspace-store", () => {
     });
   });
 
+  it("updates a running tab cwd so later splits inherit the real shell directory", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "/home/zpc",
+    });
+
+    useWorkspaceStore.getState().updateTabCwd("tab:1", "/home/zpc/projects/praw");
+    useWorkspaceStore.getState().splitTab("tab:1", "horizontal");
+
+    expect(useWorkspaceStore.getState().window?.tabs["tab:1"]?.cwd).toBe("/home/zpc/projects/praw");
+    expect(useWorkspaceStore.getState().window?.tabs["tab:2"]?.cwd).toBe("/home/zpc/projects/praw");
+  });
+
   it("splits the active tab through the dedicated active-pane action", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",
