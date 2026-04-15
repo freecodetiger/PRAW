@@ -55,4 +55,32 @@ describe("DialogTranscript", () => {
     expect(host.textContent).not.toContain("exit 0");
     expect(host.querySelector(".command-block__status")).toBeNull();
   });
+
+  it("renders shell output blocks with the calmer context label", () => {
+    const blocks: CommandBlock[] = [
+      {
+        id: "session:1",
+        kind: "session",
+        cwd: "/workspace",
+        command: null,
+        output: "Welcome back\n",
+        status: "completed",
+        interactive: false,
+        exitCode: null,
+      },
+    ];
+
+    act(() => {
+      root.render(
+        <DialogTranscript
+          blocks={blocks}
+          scrollRef={{ current: null }}
+          onScroll={() => undefined}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("shell output");
+    expect(host.textContent).not.toContain("session output");
+  });
 });

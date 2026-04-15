@@ -269,7 +269,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
         {isAgentWorkflow ? (
           <span className="terminal-pane__mode-indicator" aria-label="AI workflow mode">
-            AI MODE
+            AI
           </span>
         ) : null}
 

@@ -24,8 +24,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     enabled: false,
     smartSuggestionBubble: true,
     apiKey: "",
-    themeColor: "#1f5eff",
-    backgroundColor: "#eef4ff",
+    themeColor: "#8b5cf6",
+    backgroundColor: "#f6f0ff",
   },
   ui: {
     settingsPanelLanguage: DEFAULT_SETTINGS_PANEL_LANGUAGE,
@@ -54,6 +54,8 @@ export interface AppConfigInput {
 
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 32;
+const LEGACY_DEFAULT_AI_THEME_COLOR = "#1f5eff";
+const LEGACY_DEFAULT_AI_BACKGROUND_COLOR = "#eef4ff";
 
 export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
   const terminal = input?.terminal;
@@ -83,8 +85,8 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
           ? ai.smartSuggestionBubble
           : DEFAULT_APP_CONFIG.ai.smartSuggestionBubble,
       apiKey: normalizeOptionalString(ai?.apiKey),
-      themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
-      backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
+      themeColor: normalizeAiThemeColor(ai?.themeColor),
+      backgroundColor: normalizeAiBackgroundColor(ai?.backgroundColor),
     },
     ui: {
       settingsPanelLanguage: normalizeSettingsPanelLanguage(ui?.settingsPanelLanguage),
@@ -148,6 +150,18 @@ function normalizeHexColor(value: string | undefined, fallback: string): string 
 
   const normalized = value.trim();
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized) ? normalized : fallback;
+}
+
+function normalizeAiThemeColor(value: string | undefined): string {
+  const normalized = normalizeHexColor(value, DEFAULT_APP_CONFIG.ai.themeColor);
+  return normalized.toLowerCase() === LEGACY_DEFAULT_AI_THEME_COLOR ? DEFAULT_APP_CONFIG.ai.themeColor : normalized;
+}
+
+function normalizeAiBackgroundColor(value: string | undefined): string {
+  const normalized = normalizeHexColor(value, DEFAULT_APP_CONFIG.ai.backgroundColor);
+  return normalized.toLowerCase() === LEGACY_DEFAULT_AI_BACKGROUND_COLOR
+    ? DEFAULT_APP_CONFIG.ai.backgroundColor
+    : normalized;
 }
 
 function normalizePhraseList(value: string[] | undefined): string[] {

@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::terminal::shell_integration::{
-        build_shell_integration_command, build_shell_integration_script,
-        install_shell_integration,
+        build_shell_integration_command, build_shell_integration_script, install_shell_integration,
     };
     use portable_pty::{native_pty_system, PtySize};
     use std::io::{Read, Write};
@@ -88,7 +87,12 @@ mod tests {
 
     #[test]
     fn unsupported_shells_are_not_wrapped() {
-        assert!(build_shell_integration_command("/opt/homebrew/bin/fish", "session-1", "/home/zpc").is_none());
+        assert!(build_shell_integration_command(
+            "/opt/homebrew/bin/fish",
+            "session-1",
+            "/home/zpc"
+        )
+        .is_none());
         assert!(build_shell_integration_script("/opt/homebrew/bin/fish", "session-1").is_none());
     }
 
@@ -127,7 +131,10 @@ mod tests {
             .expect("zsh should spawn in pty");
         drop(pair.slave);
 
-        let mut writer = pair.master.take_writer().expect("writer should be available");
+        let mut writer = pair
+            .master
+            .take_writer()
+            .expect("writer should be available");
         let mut reader = pair
             .master
             .try_clone_reader()
@@ -165,13 +172,108 @@ mod tests {
         }
 
         assert_eq!(status.exit_code(), 0);
-        assert!(output.contains("133;A"), "expected prompt-start marker in output: {output:?}");
-        assert!(output.contains("133;B"), "expected prompt-end marker in output: {output:?}");
-        assert!(output.contains("133;C;entry=pwd"), "expected command-start marker in output: {output:?}");
-        assert!(output.contains("133;D;0"), "expected command-end marker in output: {output:?}");
+        assert!(
+            output.contains("133;A"),
+            "expected prompt-start marker in output: {output:?}"
+        );
+        assert!(
+            output.contains("133;B"),
+            "expected prompt-end marker in output: {output:?}"
+        );
+        assert!(
+            output.contains("133;C;entry=pwd"),
+            "expected command-start marker in output: {output:?}"
+        );
+        assert!(
+            output.contains("133;D;0"),
+            "expected command-end marker in output: {output:?}"
+        );
         assert!(
             output.contains(&format!("133;P;cwd={expected_cwd}")),
             "expected cwd marker in output: {output:?}"
+        );
+    }
+
+    #[test]
+    fn zsh_runtime_does_not_emit_startup_math_errors_when_hook_arrays_are_unset() {
+        let session_id = format!(
+            "session-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock should be after unix epoch")
+                .as_nanos()
+        );
+        let temp_home = std::env::temp_dir().join(format!("{session_id}-home"));
+        std::fs::create_dir_all(&temp_home).expect("temp home should create");
+
+        let mut command = build_shell_integration_command("/bin/zsh", &session_id, "/tmp")
+            .expect("zsh integration should be supported");
+        let cleanup_paths = install_shell_integration("/bin/zsh", &session_id)
+            .expect("zsh integration files should install");
+        command.env("HOME", &temp_home);
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("pty should open");
+
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("zsh should spawn in pty");
+        drop(pair.slave);
+
+        let mut writer = pair
+            .master
+            .take_writer()
+            .expect("writer should be available");
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("reader should be cloneable");
+
+        let read_handle = thread::spawn(move || {
+            let mut buffer = [0_u8; 4096];
+            let mut output = Vec::new();
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(read) => output.extend_from_slice(&buffer[..read]),
+                    Err(_) => break,
+                }
+            }
+            String::from_utf8_lossy(&output).into_owned()
+        });
+
+        thread::sleep(Duration::from_millis(250));
+        writer
+            .write_all(b"exit\n")
+            .expect("exit should write to zsh");
+        writer.flush().expect("commands should flush");
+        drop(writer);
+
+        let status = child.wait().expect("zsh should exit cleanly");
+        let output = read_handle.join().expect("reader thread should join");
+
+        for path in cleanup_paths {
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            } else {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&temp_home);
+
+        assert_eq!(status.exit_code(), 0);
+        assert!(
+            !output.contains("bad math expression"),
+            "expected startup without zsh hook math errors, got output: {output:?}"
         );
     }
 }

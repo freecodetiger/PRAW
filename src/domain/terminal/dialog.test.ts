@@ -306,6 +306,24 @@ describe("dialog terminal state", () => {
     ]);
   });
 
+  it("strips the echoed command and stray prompt symbol when finalizing deferred command output", () => {
+    const state = submitDialogCommand(createDialogState("/bin/zsh", "/Users/s"), "cd", () => "cmd:cd");
+    const withOutput = appendLiveConsoleOutput(state, "cd\n%\n");
+    const finished = applyShellLifecycleEvent(withOutput, {
+      type: "command-end",
+      exitCode: 0,
+    });
+
+    expect(finished.blocks).toEqual([
+      expect.objectContaining({
+        id: "cmd:cd",
+        output: "",
+        status: "completed",
+        exitCode: 0,
+      }),
+    ]);
+  });
+
   it("returns backend-escalated panes back to the preferred mode after the command completes", () => {
     const state = applyTerminalSemanticEvent(
       submitDialogCommand(createDialogState("/bin/bash", "/workspace", "classic"), "top", () => "cmd:1"),
@@ -372,16 +390,51 @@ describe("dialog terminal state", () => {
     });
   });
 
-  it("captures non-command output in a session output block", () => {
+  it("suppresses startup output before the first user command runs", () => {
     const state = appendDialogOutput(createDialogState("/bin/bash", "/workspace"), "Welcome\n");
 
-    expect(state.blocks).toEqual([
+    expect(state.blocks).toEqual([]);
+  });
+
+  it("captures non-command output in a session output block after the user has run a command", () => {
+    const started = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "pwd", () => "cmd:1");
+    const finished = applyShellLifecycleEvent(started, {
+      type: "command-end",
+      exitCode: 0,
+    });
+    const state = appendDialogOutput(finished, "Welcome\n");
+
+    expect(state.blocks).toHaveLength(2);
+    expect(state.blocks[1]).toEqual(
       expect.objectContaining({
         kind: "session",
         output: "Welcome\n",
         status: "completed",
       }),
-    ]);
+    );
+  });
+
+  it("ignores whitespace-only startup output when no command block is active", () => {
+    const state = appendDialogOutput(createDialogState("/bin/bash", "/workspace"), "\r\n  \r\n");
+
+    expect(state.blocks).toEqual([]);
+  });
+
+  it("ignores visually blank ANSI-only output after the user has already run a command", () => {
+    const started = submitDialogCommand(createDialogState("/bin/zsh", "/workspace"), "pwd", () => "cmd:1");
+    const finished = applyShellLifecycleEvent(started, {
+      type: "command-end",
+      exitCode: 0,
+    });
+    const state = appendDialogOutput(finished, "\u001b[32m  \u001b[39m\r\n");
+
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0]).toEqual(
+      expect.objectContaining({
+        kind: "command",
+        command: "pwd",
+      }),
+    );
   });
 
   it("updates the cwd from shell prompt markers for the next command header", () => {

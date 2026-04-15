@@ -217,6 +217,21 @@ describe("resolveAppConfig", () => {
     });
   });
 
+  it("migrates legacy default ai colors to the newer lavender defaults", () => {
+    expect(
+      resolveAppConfig({
+        ai: {
+          themeColor: "#1f5eff",
+          backgroundColor: "#eef4ff",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
   it("defaults smart suggestion bubble and preserves explicit overrides", () => {
     expect(
       resolveAppConfig({
