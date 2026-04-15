@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { clearRegistry, updateArchiveText, writeDirect } from "../lib/terminal-registry";
-import { selectTerminalTabState, useTerminalViewStore } from "./terminal-view-store";
+import { selectTerminalTabState, selectTranscriptViewportState, useTerminalViewStore } from "./terminal-view-store";
 
 describe("terminal-view-store AI transcript", () => {
   beforeEach(() => {
@@ -208,5 +208,16 @@ describe("terminal-view-store AI transcript", () => {
         output: "处理 delta 中: 100% (1697/1697)，完成。",
       }),
     ]);
+  });
+
+  it("reuses the default transcript viewport snapshot for tabs that are not in the store", () => {
+    const first = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
+    const second = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
+
+    expect(second).toBe(first);
+    expect(second).toEqual({
+      scrollTop: 0,
+      isPinnedBottom: true,
+    });
   });
 });

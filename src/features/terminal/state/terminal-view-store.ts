@@ -466,7 +466,7 @@ export function selectTranscriptViewportState(
   tabStates: Record<string, TerminalTabViewState>,
   tabId: string,
 ): TranscriptViewportState {
-  return selectTerminalTabState(tabStates, tabId)?.transcriptViewport ?? createTranscriptViewportState();
+  return selectTerminalTabState(tabStates, tabId)?.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT_STATE;
 }
 
 function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
@@ -540,6 +540,8 @@ function createTranscriptViewportState(): TranscriptViewportState {
     isPinnedBottom: true,
   };
 }
+
+const DEFAULT_TRANSCRIPT_VIEWPORT_STATE: TranscriptViewportState = createTranscriptViewportState();
 
 function resolveAgentProvider(commandEntry: string | undefined): string | null {
   const normalized = commandEntry?.trim();
