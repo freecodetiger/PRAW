@@ -27,4 +27,13 @@ describe("styles selection contract", () => {
     expect(styles).toContain(".dialog-terminal__history ::selection");
     expect(styles).toContain(".command-block__output::selection");
   });
+
+  it("defines styles for the AI bypass capsule and prompt feedback", () => {
+    const styles = readStyles();
+
+    expect(styles).toContain(".ai-workflow__bypass-capsule-shell");
+    expect(styles).toContain(".ai-workflow__bypass-capsule");
+    expect(styles).toContain(".dialog-terminal__ai-prompt-error");
+    expect(styles).toContain(".dialog-terminal__ai-prompt-status");
+  });
 });

@@ -842,6 +842,36 @@ button {
   flex: 0 0 1px;
 }
 
+.ai-workflow__bypass-capsule-shell {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.ai-workflow__bypass-capsule {
+  pointer-events: auto;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 34%, var(--border-muted));
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--text-muted);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(10px);
+  font: inherit;
+  font-size: 12px;
+  opacity: 0.78;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.ai-workflow__bypass-capsule:hover,
+.ai-workflow__bypass-capsule:focus-visible {
+  border-color: color-mix(in srgb, var(--ai-theme-color) 56%, var(--border));
+  color: var(--text-primary);
+  opacity: 1;
+}
+
 .ai-workflow__inspector {
   flex: 0 0 auto;
   min-width: 0;
@@ -1120,6 +1150,21 @@ button {
 .dialog-terminal__ai-prompt-input:focus {
   outline: none;
   border-color: var(--ai-theme-color);
+}
+
+.dialog-terminal__ai-prompt-status,
+.dialog-terminal__ai-prompt-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dialog-terminal__ai-prompt-status {
+  color: var(--text-muted);
+}
+
+.dialog-terminal__ai-prompt-error {
+  color: var(--history-error);
 }
 
 .dialog-terminal__bottom-sentinel {
