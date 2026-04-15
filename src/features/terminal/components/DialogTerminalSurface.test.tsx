@@ -4,13 +4,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDialogState } from "../../../domain/terminal/dialog";
+import {
+  applyTerminalSemanticEvent,
+  createDialogState,
+  submitDialogCommand,
+} from "../../../domain/terminal/dialog";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { DialogTerminalSurface } from "./DialogTerminalSurface";
 
 const observers: MockIntersectionObserver[] = [];
-
 vi.mock("./DialogIdleComposer", () => ({
   DialogIdleComposer: () => <div data-testid="dialog-idle-composer" />,
 }));
@@ -58,6 +61,14 @@ class MockIntersectionObserver {
   }
 }
 
+function createIdlePaneState() {
+  return {
+    ...createDialogState("/bin/bash", "/workspace"),
+    shell: "/bin/bash",
+    parserState: createShellIntegrationParserState(),
+  };
+}
+
 describe("DialogTerminalSurface", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -90,9 +101,46 @@ describe("DialogTerminalSurface", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not render AI quick prompt affordances because AI workflow uses a dedicated surface", () => {
+    const started = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "codex", () => "cmd:codex");
+    const paneState = {
+      ...applyTerminalSemanticEvent(started, {
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry: "codex",
+      }),
+      shell: "/bin/bash",
+      parserState: createShellIntegrationParserState(),
+    };
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={paneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('button[aria-label="Open AI quick prompt"]')).toBeNull();
+    expect(host.querySelector('[aria-label="AI prompt overlay"]')).toBeNull();
+  });
+
   it("hides the jump button as soon as the bottom sentinel becomes visible", () => {
     const paneState = {
-      ...createDialogState("/bin/bash", "/workspace"),
+      ...createIdlePaneState(),
       blocks: [
         {
           id: "cmd:1",
@@ -105,8 +153,6 @@ describe("DialogTerminalSurface", () => {
           exitCode: 0,
         },
       ],
-      shell: "/bin/bash",
-      parserState: createShellIntegrationParserState(),
     };
 
     act(() => {

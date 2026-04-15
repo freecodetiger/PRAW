@@ -20,6 +20,7 @@ interface XtermTerminalSurfaceProps {
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
   className?: string;
+  inputSuspended?: boolean;
   terminalRef?: MutableRefObject<Terminal | null>;
   installTerminalGuards?: (terminal: Terminal) => (() => void) | void;
 }
@@ -34,12 +35,14 @@ export function XtermTerminalSurface({
   write,
   resize,
   className = "terminal-pane__xterm",
+  inputSuspended = false,
   terminalRef: forwardedTerminalRef,
   installTerminalGuards,
 }: XtermTerminalSurfaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const initialFocusEnabledRef = useRef(isActive && !inputSuspended);
   const { handleShortcutKeyDown } = useTerminalClipboard(terminalRef);
 
   useEffect(() => {
@@ -62,10 +65,30 @@ export function XtermTerminalSurface({
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
     fitAddon.fit();
-    terminal.focus();
+    if (initialFocusEnabledRef.current) {
+      terminal.focus();
+    }
 
     // 注册到全局注册表，让 PTY 输出可以直接写入
-    registerTerminal(tabId, terminal);
+    registerTerminal(tabId, {
+      writeDirect: (data) => {
+        terminal.write(data);
+      },
+      pasteText: (text) => {
+        terminal.paste(text);
+      },
+      sendEnter: async () => {
+        await write("\r");
+      },
+      focus: () => {
+        terminal.focus();
+      },
+      blur: () => {
+        terminal.textarea?.blur();
+      },
+      hasSelection: () => terminal.getSelection().length > 0,
+      getSelectionText: () => terminal.getSelection(),
+    });
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -138,10 +161,15 @@ export function XtermTerminalSurface({
       return;
     }
 
+    if (inputSuspended) {
+      terminalRef.current.textarea?.blur();
+      return;
+    }
+
     queueMicrotask(() => {
       terminalRef.current?.focus();
     });
-  }, [isActive, sessionId]);
+  }, [inputSuspended, isActive, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !terminalRef.current || !fitAddonRef.current) {

@@ -1,6 +1,7 @@
 export const TERMINAL_OUTPUT_EVENT = "terminal/output";
 export const TERMINAL_EXIT_EVENT = "terminal/exit";
 export const TERMINAL_SEMANTIC_EVENT = "terminal/semantic";
+export const TERMINAL_AGENT_EVENT = "terminal/agent";
 
 export type TerminalSessionStatus = "starting" | "running" | "exited" | "error";
 export type TerminalSemanticKind = "interactive" | "classic-required" | "agent-workflow";
@@ -44,3 +45,43 @@ export interface TerminalSemanticEvent {
   confidence: TerminalSemanticConfidence;
   commandEntry?: string;
 }
+
+export type TerminalAgentMode = "structured" | "raw-fallback";
+export type TerminalAgentState = "connecting" | "ready" | "running" | "fallback";
+
+export interface CodexSessionSummary {
+  id: string;
+  timestamp: string;
+  cwd: string;
+  latestPrompt?: string | null;
+  source?: string | null;
+  modelProvider?: string | null;
+  cliVersion?: string | null;
+}
+
+export type TerminalAgentEvent =
+  | {
+      type: "bridge-state";
+      sessionId: string;
+      provider: string;
+      mode: TerminalAgentMode;
+      state: TerminalAgentState;
+      fallbackReason?: string | null;
+    }
+  | {
+      type: "assistant-message";
+      sessionId: string;
+      provider: string;
+      text: string;
+    }
+  | {
+      type: "error";
+      sessionId: string;
+      provider: string;
+      message: string;
+    }
+  | {
+      type: "turn-complete";
+      sessionId: string;
+      provider: string;
+    };

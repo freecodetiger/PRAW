@@ -181,7 +181,7 @@ describe("resolveAppConfig", () => {
     });
   });
 
-  it("accepts the classic terminal preference", () => {
+  it("migrates the legacy classic terminal preference back to the block workspace preference", () => {
     expect(
       resolveAppConfig({
         terminal: {
@@ -191,7 +191,7 @@ describe("resolveAppConfig", () => {
     ).toEqual({
       terminal: {
         ...DEFAULT_APP_CONFIG.terminal,
-        preferredMode: "classic",
+        preferredMode: "dialog",
       },
       ai: DEFAULT_APP_CONFIG.ai,
       ui: DEFAULT_APP_CONFIG.ui,

@@ -85,6 +85,11 @@ export function DialogIdleComposer({
     cursorAtEnd &&
     !isComposing &&
     historyIndex === null;
+  const canNavigateExplicitSuggestionBar =
+    suggestionBarVisible &&
+    showSuggestionBar &&
+    visibleSuggestions.length > 0 &&
+    !isComposing;
   const isDisabled = status !== "running";
 
   useEffect(() => {
@@ -290,6 +295,18 @@ export function DialogIdleComposer({
               if (event.key === "ArrowRight" && suggestion.length > 0 && !isComposing && cursorAtEnd) {
                 event.preventDefault();
                 acceptGhostOverlay();
+                return;
+              }
+
+              if (event.key === "ArrowUp" && canNavigateExplicitSuggestionBar && visibleSuggestions.length > 1) {
+                event.preventDefault();
+                setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "previous"));
+                return;
+              }
+
+              if (event.key === "ArrowDown" && canNavigateExplicitSuggestionBar && visibleSuggestions.length > 1) {
+                event.preventDefault();
+                setSuggestionIndex((index) => getNextPhraseSelection(index, visibleSuggestions.length, "next"));
                 return;
               }
 

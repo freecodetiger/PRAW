@@ -421,6 +421,172 @@ describe("DialogIdleComposer", () => {
     expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git stash");
   });
 
+  it("navigates the explicit suggestion bar with plain ArrowDown", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "git status",
+          source: "local",
+          score: 950,
+          kind: "git",
+        },
+        {
+          text: "git stash",
+          source: "local",
+          score: 940,
+          kind: "git",
+        },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: [],
+        recentHistory: ["git status"],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git st");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+
+    await flush();
+
+    const selectedOptions = host.querySelectorAll('[role="option"][aria-selected="true"]');
+    expect(selectedOptions).toHaveLength(1);
+    expect(selectedOptions[0]?.textContent).toContain("git stash");
+  });
+
+  it("keeps plain ArrowUp bound to history when the suggestion bar is closed", async () => {
+    const paneState = {
+      ...createIdlePaneState(),
+      composerHistory: ["pwd", "git status"],
+    };
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    await flush();
+
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
+  });
+
+  it("keeps plain ArrowUp bound to history when suggestions are only auto-opened", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        { text: "git status", source: "local", score: 950, kind: "git" },
+        { text: "git stash", source: "local", score: 940, kind: "git" },
+        { text: "git stage", source: "local", score: 930, kind: "git" },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: [],
+        recentHistory: ["git status"],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+
+    const paneState = {
+      ...createIdlePaneState(),
+      composerHistory: ["pwd", "git status"],
+    };
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git st");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(3);
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    await flush();
+
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
+  });
+
   it("shows a ghost for the first suggestion whenever the Tab candidate list is available", async () => {
     requestLocalCompletion.mockResolvedValue({
       suggestions: [

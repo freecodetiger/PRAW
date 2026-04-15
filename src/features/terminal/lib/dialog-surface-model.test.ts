@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
+import { applyTerminalSemanticEvent, createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
 import { resolveDialogSurfaceModel } from "./dialog-surface-model";
 
 describe("dialog surface model", () => {
@@ -47,6 +47,27 @@ describe("dialog surface model", () => {
 
     expect(resolveDialogSurfaceModel({ paneHeight: 720, paneState })).toEqual({
       phase: "live-console",
+      idleComposerVisible: false,
+      liveConsole: {
+        blockId: "cmd:vim",
+        compact: false,
+        heightPx: 248,
+      },
+    });
+  });
+
+  it("keeps backend-escalated interactive commands in a live island instead of hiding the terminal", () => {
+    const started = submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "vim notes.txt", () => "cmd:vim");
+    const paneState = applyTerminalSemanticEvent(started, {
+      sessionId: "session-1",
+      kind: "classic-required",
+      reason: "alternate-screen",
+      confidence: "strong",
+      commandEntry: "vim notes.txt",
+    });
+
+    expect(resolveDialogSurfaceModel({ paneHeight: 720, paneState })).toEqual({
+      phase: "classic-handoff",
       idleComposerVisible: false,
       liveConsole: {
         blockId: "cmd:vim",

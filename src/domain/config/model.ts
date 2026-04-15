@@ -134,7 +134,8 @@ function normalizeFontSize(value: number | undefined): number {
 }
 
 function normalizePreferredMode(value: string | undefined): TerminalPreferredMode {
-  return value === "classic" ? "classic" : "dialog";
+  void value;
+  return "dialog";
 }
 
 function normalizeThemePreset(value: string | undefined): TerminalConfig["themePreset"] {

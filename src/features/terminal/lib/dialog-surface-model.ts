@@ -36,11 +36,17 @@ export function resolveDialogSurfaceModel({
     };
   }
 
-  if (paneState.dialogPhase === "classic-handoff") {
+  if (paneState.dialogPhase === "classic-handoff" && paneState.activeCommandBlockId) {
+    const layout = resolveLiveConsoleLayout({ paneHeight });
+
     return {
       phase: "classic-handoff",
       idleComposerVisible: false,
-      liveConsole: null,
+      liveConsole: {
+        blockId: paneState.activeCommandBlockId,
+        compact: layout.compact,
+        heightPx: layout.heightPx,
+      },
     };
   }
 

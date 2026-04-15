@@ -110,6 +110,32 @@ describe("terminal shortcuts", () => {
     });
   });
 
+  it("maps mac-style clipboard shortcuts", () => {
+    expect(
+      resolveTerminalShortcut({
+        key: "c",
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        metaKey: true,
+      }),
+    ).toEqual({
+      type: "copy-selection",
+    });
+
+    expect(
+      resolveTerminalShortcut({
+        key: "v",
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        metaKey: true,
+      }),
+    ).toEqual({
+      type: "paste",
+    });
+  });
+
   it("ignores unrelated keys", () => {
     expect(
       resolveTerminalShortcut({

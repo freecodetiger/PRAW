@@ -15,6 +15,7 @@ interface ClassicTerminalSurfaceProps {
   fontSize: number;
   theme: ThemeTerminalPalette;
   isActive: boolean;
+  inputSuspended?: boolean;
   write: (data: string) => Promise<void>;
   resize: (cols: number, rows: number) => Promise<void>;
 }
@@ -26,6 +27,7 @@ export function ClassicTerminalSurface({
   fontSize,
   theme,
   isActive,
+  inputSuspended = false,
   write,
   resize,
 }: ClassicTerminalSurfaceProps) {
@@ -57,6 +59,7 @@ export function ClassicTerminalSurface({
       fontSize={fontSize}
       theme={theme}
       isActive={isActive}
+      inputSuspended={inputSuspended}
       write={write}
       resize={resize}
       terminalRef={xtermRef}

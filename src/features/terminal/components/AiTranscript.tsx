@@ -1,24 +1,24 @@
 import { useMemo, useState, type RefObject, type UIEventHandler } from "react";
 
-import type { CommandBlock } from "../../../domain/terminal/dialog";
+import type { AiTranscriptEntry } from "../lib/ai-transcript";
+import { writeClipboardText } from "../lib/clipboard";
 import { tokenizeDialogOutput, type DialogOutputToken } from "../lib/dialog-output";
 import { highlightCommandText, type HistoryHighlightToken } from "../lib/history-highlighting";
-import { writeClipboardText } from "../lib/clipboard";
 import { getSelectionTextWithin } from "../lib/selection-clipboard";
 
-interface DialogTranscriptProps {
-  blocks: CommandBlock[];
+interface AiTranscriptProps {
+  entries: AiTranscriptEntry[];
   scrollRef: RefObject<HTMLDivElement | null>;
   bottomRef?: RefObject<HTMLDivElement | null>;
   onScroll: UIEventHandler<HTMLDivElement>;
 }
 
-export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: DialogTranscriptProps) {
+export function AiTranscript({ entries, scrollRef, bottomRef, onScroll }: AiTranscriptProps) {
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; text: string } | null>(null);
 
   return (
     <div
-      className="dialog-terminal__history"
+      className="ai-workflow__transcript"
       ref={scrollRef}
       onScroll={onScroll}
       onClick={() => setSelectionMenu(null)}
@@ -46,28 +46,34 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
         void writeClipboardText(selectedText);
       }}
     >
-      {blocks.map((block, index) => (
-        <article className="command-block" key={block.id}>
-          {index > 0 ? <hr className="command-block__divider" /> : null}
-          <div className="command-block__meta">
-            {block.kind === "command" ? (
-              <CommandTranscriptHeader block={block} />
-            ) : (
-              <p className="command-block__session-label">session output</p>
-            )}
+      {entries.map((entry) => (
+        <article className={`ai-workflow__entry ai-workflow__entry--${entry.kind}`} key={entry.id}>
+          <header className="ai-workflow__entry-header">
+            <div className="ai-workflow__entry-header-main">
+              <span>{entry.kind === "prompt" ? "You" : entry.kind === "output" ? "AI" : "System"}</span>
+              {entry.kind === "output" ? (
+                <span className="ai-workflow__entry-status">
+                  {entry.status === "streaming" ? "Streaming" : "Complete"}
+                </span>
+              ) : entry.kind === "system" ? (
+                <span className={`ai-workflow__entry-status ai-workflow__entry-status--${entry.tone}`}>{entry.tone}</span>
+              ) : null}
+            </div>
             <button
-              className="button button--ghost command-block__copy"
+              className="button button--ghost ai-workflow__copy"
               type="button"
-              aria-label="Copy command block"
-              onClick={() => void writeClipboardText(formatBlockForCopy(block))}
+              aria-label="Copy transcript entry"
+              onClick={() => void writeClipboardText(entry.text)}
             >
               Copy
             </button>
-          </div>
-          <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
+          </header>
+          <pre className="ai-workflow__entry-body">
+            <AiTranscriptTokens entry={entry} />
+          </pre>
         </article>
       ))}
-      <div ref={bottomRef} className="dialog-terminal__bottom-sentinel" aria-hidden="true" />
+      <div ref={bottomRef} className="ai-workflow__bottom-sentinel" aria-hidden="true" />
       {selectionMenu ? (
         <button
           className="selection-menu"
@@ -85,32 +91,17 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
   );
 }
 
-function formatBlockForCopy(block: CommandBlock): string {
-  if (block.kind === "command") {
-    return `$ ${block.command ?? ""}\n${block.output}`;
+function AiTranscriptTokens({ entry }: { entry: AiTranscriptEntry }) {
+  const tokens = useMemo(
+    () => (entry.kind === "prompt" ? highlightCommandText(entry.text) : tokenizeDialogOutput(entry.text)),
+    [entry],
+  );
+
+  if (tokens.length === 0) {
+    return " ";
   }
 
-  return block.output;
-}
-
-function CommandBlockOutput({ output }: { output: string }) {
-  const tokens = useMemo(() => tokenizeDialogOutput(output), [output]);
-
-  return (
-    <pre className="command-block__output">
-      <HighlightedTokens tokens={tokens} />
-    </pre>
-  );
-}
-
-function CommandTranscriptHeader({ block }: { block: CommandBlock }) {
-  return (
-    <p className="command-block__header">
-      <span className="command-block__cwd">{block.cwd}</span>
-      <span className="command-block__sigil">$</span>
-      <HighlightedTokens tokens={highlightCommandText(block.command ?? "")} />
-    </p>
-  );
+  return <HighlightedTokens tokens={tokens} />;
 }
 
 function HighlightedTokens({ tokens }: { tokens: Array<HistoryHighlightToken | DialogOutputToken> }) {

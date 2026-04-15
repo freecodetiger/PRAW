@@ -32,6 +32,8 @@
   --resize-handle-line: #000000;
   --ghost-text: #8b8b8b;
   --ai-badge-text: #ffffff;
+  --selection-background: #cfe2ff;
+  --selection-foreground: #102647;
 }
 
 * {
@@ -97,6 +99,8 @@ button {
   --resize-handle-overlay: rgba(245, 247, 251, 0.08);
   --resize-handle-line: #f5f7fb;
   --ghost-text: #7f8999;
+  --selection-background: #456ca7;
+  --selection-foreground: #f5f7fb;
 }
 
 .app-shell[data-theme="sepia"] {
@@ -120,6 +124,8 @@ button {
   --resize-handle-overlay: rgba(47, 36, 25, 0.06);
   --resize-handle-line: #2f2419;
   --ghost-text: #8a7a66;
+  --selection-background: #d8c19c;
+  --selection-foreground: #2f2419;
 }
 
 .app-header {
@@ -646,6 +652,354 @@ button {
   background: var(--surface);
 }
 
+.ai-workflow {
+  position: relative;
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ai-background-color) 82%, var(--surface)) 0%, var(--surface) 100%);
+  font-family: var(--dialog-terminal-font-family);
+  font-size: var(--dialog-terminal-font-size);
+}
+
+.ai-workflow__history-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-workflow__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ai-theme-color) 20%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface) 94%, var(--ai-background-color));
+}
+
+.ai-workflow__toolbar-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ai-workflow__toolbar-copy strong {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.ai-workflow__toolbar-copy span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ai-workflow__bootstrap-terminal {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-workflow__empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.ai-workflow__empty-state strong {
+  color: var(--text-primary);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+
+.ai-workflow__empty-state p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ai-workflow__fallback-banner {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ai-theme-color) 20%, var(--border-muted));
+  color: var(--text-muted);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--ai-background-color));
+}
+
+.ai-workflow__transcript {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding: 16px 16px 112px;
+  user-select: text;
+}
+
+.ai-workflow__entry {
+  display: grid;
+  gap: 8px;
+  max-width: min(860px, 100%);
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 18%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface) 92%, var(--ai-background-color));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--surface) 76%, transparent);
+}
+
+.ai-workflow__entry--prompt {
+  align-self: flex-end;
+  width: min(560px, 100%);
+  border-color: color-mix(in srgb, var(--ai-theme-color) 36%, var(--border));
+  background: color-mix(in srgb, var(--surface) 72%, var(--ai-background-color));
+}
+
+.ai-workflow__entry--output {
+  align-self: stretch;
+}
+
+.ai-workflow__entry--system {
+  align-self: center;
+  width: min(680px, 100%);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface) 95%, var(--ai-background-color));
+}
+
+.ai-workflow__entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ai-workflow__entry-header-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ai-workflow__entry-status {
+  color: color-mix(in srgb, var(--ai-theme-color) 72%, var(--text-muted));
+}
+
+.ai-workflow__entry-status--warning {
+  color: var(--history-warning);
+}
+
+.ai-workflow__entry-status--error {
+  color: var(--history-error);
+}
+
+.ai-workflow__entry-status--info {
+  color: var(--history-url);
+}
+
+.ai-workflow__entry-body {
+  margin: 0;
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.ai-workflow__transcript ::selection,
+.dialog-terminal__history ::selection,
+.command-block__output::selection {
+  background: var(--selection-background);
+  color: var(--selection-foreground);
+  text-shadow: none;
+}
+
+.ai-workflow__bottom-sentinel {
+  width: 100%;
+  min-height: 1px;
+  flex: 0 0 1px;
+}
+
+.ai-workflow__inspector {
+  flex: 0 0 auto;
+  min-width: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ai-theme-color) 20%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface) 92%, var(--ai-background-color));
+}
+
+.ai-workflow__inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ai-workflow__inspector-body {
+  min-width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: height 160ms ease, opacity 120ms ease;
+}
+
+.ai-workflow__inspector--open .ai-workflow__inspector-body {
+  height: 220px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ai-workflow__inspector-body .terminal-pane__xterm {
+  height: 100%;
+}
+
+.ai-workflow__resume-picker {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  width: min(420px, calc(100% - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 30%, var(--border));
+  background: color-mix(in srgb, var(--surface) 96%, var(--ai-background-color));
+  box-shadow: 0 18px 42px color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.ai-workflow__resume-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-workflow__resume-picker-header strong {
+  font-size: 13px;
+}
+
+.ai-workflow__resume-picker-message {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ai-workflow__resume-picker-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.ai-workflow__resume-picker-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 18%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface) 98%, var(--ai-background-color));
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.ai-workflow__resume-picker-item strong {
+  font-size: 12px;
+}
+
+.ai-workflow__resume-picker-item span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ai-workflow__bootstrap-terminal .terminal-pane__xterm,
+.ai-workflow__inspector-body .terminal-pane__xterm {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ai-workflow__composer-shell {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--ai-theme-color) 20%, var(--border-muted));
+  background: color-mix(in srgb, var(--surface) 95%, var(--ai-background-color));
+}
+
+.ai-workflow__composer-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ai-workflow__composer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.ai-workflow__composer-input {
+  width: 100%;
+  min-height: 78px;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 22%, var(--border));
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface) 99%, var(--ai-background-color));
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.ai-workflow__composer-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .ai-workflow__toolbar {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .ai-workflow__resume-picker {
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+
+  .ai-workflow__composer-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .dialog-terminal__history-shell {
   position: relative;
   display: flex;
@@ -662,6 +1016,7 @@ button {
   gap: 12px;
   overflow: auto;
   padding: 12px;
+  user-select: text;
 }
 
 .dialog-terminal__jump {
@@ -681,6 +1036,90 @@ button {
   box-shadow: 0 10px 24px color-mix(in srgb, var(--surface) 72%, transparent);
   backdrop-filter: blur(10px);
   opacity: 0.92;
+}
+
+.selection-menu {
+  position: fixed;
+  z-index: 30;
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  color: var(--text-primary);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--surface) 70%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.dialog-terminal__ai-prompt-capsule-shell {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  z-index: 4;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.dialog-terminal__ai-prompt-capsule {
+  pointer-events: auto;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 44%, var(--border));
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--surface) 84%, var(--ai-background-color));
+  color: var(--text-primary);
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--surface) 68%, transparent);
+  backdrop-filter: blur(10px);
+  font: inherit;
+}
+
+.dialog-terminal__ai-prompt-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  z-index: 4;
+  width: min(560px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+.dialog-terminal__ai-prompt-shell {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 44%, var(--border));
+  background: color-mix(in srgb, var(--surface) 86%, var(--ai-background-color));
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--surface) 68%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.dialog-terminal__ai-prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dialog-terminal__ai-prompt-header strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.dialog-terminal__ai-prompt-input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+}
+
+.dialog-terminal__ai-prompt-input:focus {
+  outline: none;
+  border-color: var(--ai-theme-color);
 }
 
 .dialog-terminal__bottom-sentinel {
@@ -958,6 +1397,14 @@ button {
 
 .command-block {
   padding: 0;
+  user-select: text;
+}
+
+.command-block__meta {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .command-block__divider {
@@ -992,6 +1439,7 @@ button {
   color: var(--text-primary);
   font-size: var(--dialog-terminal-font-size);
   line-height: 1.45;
+  user-select: text;
 }
 
 .history-token--plain {

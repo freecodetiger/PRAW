@@ -24,6 +24,9 @@ export interface ThemeTerminalPalette {
   background: string;
   foreground: string;
   cursor: string;
+  selectionBackground: string;
+  selectionForeground: string;
+  selectionInactiveBackground: string;
   black: string;
   red: string;
   green: string;
@@ -84,6 +87,9 @@ const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       background: "#ffffff",
       foreground: "#000000",
       cursor: "#000000",
+      selectionBackground: "#cfe2ff",
+      selectionForeground: "#102647",
+      selectionInactiveBackground: "#b8d0f8",
       black: "#000000",
       red: "#8a0000",
       green: "#006400",
@@ -129,6 +135,9 @@ const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       background: "#000000",
       foreground: "#f5f5f5",
       cursor: "#f5f5f5",
+      selectionBackground: "#456ca7",
+      selectionForeground: "#f5f5f5",
+      selectionInactiveBackground: "#324f7a",
       black: "#000000",
       red: "#e06c75",
       green: "#98c379",
@@ -174,6 +183,9 @@ const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
       background: "#f7efe2",
       foreground: "#2f2419",
       cursor: "#2f2419",
+      selectionBackground: "#d8c19c",
+      selectionForeground: "#2f2419",
+      selectionInactiveBackground: "#c1aa86",
       black: "#3b2f22",
       red: "#a1452d",
       green: "#557a2b",
