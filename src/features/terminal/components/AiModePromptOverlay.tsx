@@ -48,7 +48,7 @@ export function AiModePromptOverlay({
           autoCorrect="off"
           value={draft}
           disabled={disabled}
-          placeholder="Send a quick prompt to the running AI session"
+          placeholder=""
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {

@@ -320,6 +320,7 @@ describe("AiWorkflowSurface", () => {
     const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
     expect(input).not.toBeNull();
     expect(document.activeElement).toBe(input);
+    expect(input?.getAttribute("placeholder")).toBe("");
 
     await act(async () => {
       if (input) {
