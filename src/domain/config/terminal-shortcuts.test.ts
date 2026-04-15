@@ -14,6 +14,7 @@ describe("terminal shortcut config", () => {
       splitRight: { key: "[", ctrl: true, alt: true, shift: false, meta: false },
       splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
       editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
+      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
     });
   });
 
