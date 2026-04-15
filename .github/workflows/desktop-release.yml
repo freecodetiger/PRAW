@@ -206,16 +206,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ env.APPLE_ID }}
-          APPLE_PASSWORD: ${{ env.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
-          APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
         with:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.apple_signing.outputs.signing_identity != '' && env.APPLE_ID != '' && env.APPLE_PASSWORD != '' && env.APPLE_TEAM_ID != ''
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -224,6 +220,20 @@ jobs:
           APPLE_TEAM_ID: ${{ env.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
           APPLE_PROVIDER_SHORT_NAME: ${{ env.APPLE_PROVIDER_SHORT_NAME }}
+        with:
+          tagName: ${{ steps.release_meta.outputs.main_tag }}
+          releaseName: ${{ steps.release_meta.outputs.main_name }}
+          releaseBody: ${{ steps.release_meta.outputs.main_body }}
+          releaseDraft: false
+          prerelease: true
+          args: ${{ matrix.bundle_args }}
+
+      - name: Build and publish main-branch prerelease without notarization
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (steps.apple_signing.outputs.signing_identity == '' || env.APPLE_ID == '' || env.APPLE_PASSWORD == '' || env.APPLE_TEAM_ID == '')
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
         with:
           tagName: ${{ steps.release_meta.outputs.main_tag }}
           releaseName: ${{ steps.release_meta.outputs.main_name }}

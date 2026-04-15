@@ -74,7 +74,11 @@ describe("release workflow contract", () => {
     expect(taggedSection).toContain("APPLE_SIGNING_IDENTITY");
 
     expect(artifactsOnlySection).not.toContain("APPLE_CERTIFICATE");
+    expect(artifactsOnlySection).not.toContain("APPLE_ID");
+    expect(artifactsOnlySection).not.toContain("APPLE_PASSWORD");
+    expect(artifactsOnlySection).not.toContain("APPLE_TEAM_ID");
     expect(prereleaseSection).not.toContain("APPLE_CERTIFICATE");
     expect(taggedSection).not.toContain("APPLE_CERTIFICATE");
+    expect(workflow).toContain("Build and publish main-branch prerelease without notarization");
   });
 });
