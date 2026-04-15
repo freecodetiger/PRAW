@@ -49,7 +49,8 @@ describe("styles selection contract", () => {
   it("styles the header quick prompt trigger as a hard rectangle", () => {
     const trigger = readRuleBlock(".terminal-pane__quick-prompt-trigger");
 
-    expect(trigger).toContain("border-radius: 6px;");
+    expect(trigger).toContain("border-radius: 0;");
+    expect(trigger).not.toContain("border-radius: 6px;");
     expect(trigger).not.toContain("border-radius: 999px;");
   });
 

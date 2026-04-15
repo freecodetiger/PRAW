@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { StructuredAiCommandCapabilities } from "../lib/ai-command";
 import { StructuredAiPromptInput } from "./StructuredAiPromptInput";
 
@@ -24,13 +26,36 @@ export function AiModePromptOverlay({
   onCollapse,
   onSubmit,
 }: AiModePromptOverlayProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!expanded) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (draft.trim().length > 0) {
+        return;
+      }
+
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        onCollapse();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [expanded, draft, onCollapse]);
+
   if (!expanded) {
     return null;
   }
 
   return (
     <div className="ai-workflow__bypass-dock-shell" aria-label="AI prompt dock" data-expanded="true">
-      <div className="ai-workflow__bypass-panel">
+      <div className="ai-workflow__bypass-panel" ref={panelRef}>
         <StructuredAiPromptInput
           draft={draft}
           commandCapabilities={commandCapabilities}
