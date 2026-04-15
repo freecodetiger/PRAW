@@ -2,6 +2,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 pub const PRAW_APP_BIN_ENV: &str = "PRAW_APP_BIN";
 
@@ -50,17 +52,43 @@ pub fn run_agent_host_from_args(args: &[String]) -> Result<bool> {
 }
 
 fn exec_raw_provider(provider: ProviderBridgeKind, cwd: &Path, args: &[String]) -> Result<()> {
-    let status = Command::new(provider.as_str())
+    let mut command = build_raw_provider_command(provider, cwd, args);
+
+    #[cfg(unix)]
+    {
+        let error = command.exec();
+        return Err(anyhow::Error::from(error))
+            .with_context(|| format!("failed to exec raw {}", provider.as_str()));
+    }
+
+    #[cfg(not(unix))]
+    {
+        let status = command
+            .status()
+            .with_context(|| format!("failed to spawn raw {}", provider.as_str()))?;
+        let code = status.code().unwrap_or(1);
+        std::process::exit(code);
+    }
+}
+
+fn build_raw_provider_command(provider: ProviderBridgeKind, cwd: &Path, args: &[String]) -> Command {
+    let mut command = Command::new(provider.as_str());
+    command
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .with_context(|| format!("failed to spawn raw {}", provider.as_str()))?;
+        .stderr(Stdio::inherit());
+    command
+}
 
-    let code = status.code().unwrap_or(1);
-    std::process::exit(code);
+#[cfg(test)]
+pub(crate) fn build_raw_provider_command_for_test(
+    provider: ProviderBridgeKind,
+    cwd: &Path,
+    args: &[String],
+) -> Command {
+    build_raw_provider_command(provider, cwd, args)
 }
 
 fn value_after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {

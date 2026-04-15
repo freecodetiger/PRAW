@@ -41,16 +41,6 @@ struct HistoryEntry {
     text: String,
 }
 
-pub fn list_codex_sessions(limit: usize) -> Result<Vec<CodexSessionSummary>> {
-    let home = std::env::var("HOME").context("HOME is not set")?;
-    let codex_root = PathBuf::from(home).join(".codex");
-    list_codex_sessions_from_paths(
-        &codex_root.join("sessions"),
-        &codex_root.join("history.jsonl"),
-        limit,
-    )
-}
-
 pub fn list_codex_sessions_from_paths(
     sessions_root: &Path,
     history_path: &Path,

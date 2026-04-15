@@ -3,7 +3,9 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use crate::terminal::agent_bridge::{run_agent_host_from_args, ProviderBridgeKind};
+    use crate::terminal::agent_bridge::{
+        build_raw_provider_command_for_test, run_agent_host_from_args, ProviderBridgeKind,
+    };
 
     #[test]
     fn provider_cli_aliases_are_supported_for_raw_host() {
@@ -31,6 +33,30 @@ mod tests {
         let args = vec!["codex".to_string(), "exec".to_string(), "status".to_string()];
         let handled = run_agent_host_from_args(&args).expect("non-host invocation should be ignored");
         assert!(!handled);
+    }
+
+    #[test]
+    fn builds_raw_provider_command_with_cwd_and_passthrough_args() {
+        let command = build_raw_provider_command_for_test(
+            ProviderBridgeKind::Qwen,
+            std::path::Path::new("/workspace/project"),
+            &["code".to_string(), "--model".to_string(), "qwen3".to_string()],
+        );
+
+        assert_eq!(command.get_program().to_string_lossy(), "qwen");
+        assert_eq!(
+            command
+                .get_current_dir()
+                .expect("current dir should be set")
+                .to_string_lossy(),
+            "/workspace/project"
+        );
+
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args, vec!["code", "--model", "qwen3"]);
     }
 
     #[test]

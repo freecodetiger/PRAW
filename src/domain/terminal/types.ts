@@ -44,13 +44,3 @@ export interface TerminalSemanticEvent {
   confidence: TerminalSemanticConfidence;
   commandEntry?: string;
 }
-
-export interface CodexSessionSummary {
-  id: string;
-  timestamp: string;
-  cwd: string;
-  latestPrompt?: string | null;
-  source?: string | null;
-  modelProvider?: string | null;
-  cliVersion?: string | null;
-}
