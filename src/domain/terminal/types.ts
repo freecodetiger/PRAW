@@ -49,6 +49,14 @@ export interface TerminalSemanticEvent {
 export type TerminalAgentMode = "structured" | "raw-fallback";
 export type TerminalAgentState = "connecting" | "ready" | "running" | "fallback";
 
+export interface StructuredAgentCapabilities {
+  supportsResumePicker: boolean;
+  supportsDirectResume: boolean;
+  supportsReview: boolean;
+  supportsModelOverride: boolean;
+  showsBypassCapsule: boolean;
+}
+
 export interface CodexSessionSummary {
   id: string;
   timestamp: string;
@@ -67,6 +75,7 @@ export type TerminalAgentEvent =
       mode: TerminalAgentMode;
       state: TerminalAgentState;
       fallbackReason?: string | null;
+      capabilities?: StructuredAgentCapabilities | null;
     }
   | {
       type: "assistant-message";

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::terminal::StructuredAgentCapabilities;
+
 pub const TERMINAL_OUTPUT_EVENT: &str = "terminal/output";
 pub const TERMINAL_EXIT_EVENT: &str = "terminal/exit";
 pub const TERMINAL_SEMANTIC_EVENT: &str = "terminal/semantic";
@@ -90,6 +92,7 @@ pub enum TerminalAgentEvent {
         mode: TerminalAgentMode,
         state: TerminalAgentState,
         fallback_reason: Option<String>,
+        capabilities: Option<StructuredAgentCapabilities>,
     },
     AssistantMessage {
         session_id: String,

@@ -368,6 +368,7 @@ pub fn run_agent_host_from_args(args: &[String]) -> Result<bool> {
             mode: TerminalAgentMode::RawFallback,
             state: TerminalAgentState::Fallback,
             fallback_reason: Some("structured bridge unavailable for the current command".to_string()),
+            capabilities: None,
         };
         let _ = emit_bridge_event(&socket_path, &fallback);
         exec_raw_provider(provider, Path::new(cwd), &passthrough_args)?;
@@ -404,6 +405,7 @@ fn run_structured_agent_host(
             mode: TerminalAgentMode::Structured,
             state: TerminalAgentState::Ready,
             fallback_reason: None,
+            capabilities: None,
         },
     )?;
 
@@ -436,6 +438,7 @@ fn run_structured_agent_host(
                         mode: TerminalAgentMode::Structured,
                         state: TerminalAgentState::Running,
                         fallback_reason: None,
+                        capabilities: None,
                     },
                 )?;
 
@@ -457,6 +460,7 @@ fn run_structured_agent_host(
                         mode: TerminalAgentMode::Structured,
                         state: TerminalAgentState::Ready,
                         fallback_reason: None,
+                        capabilities: None,
                     },
                 )?;
             }
