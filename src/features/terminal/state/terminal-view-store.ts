@@ -454,30 +454,50 @@ function resolveAgentProvider(commandEntry: string | undefined): AiSessionProvid
     return "unknown";
   }
 
-  const tokens = normalized
-    .split(/\s+/u)
-    .filter((token) => !token.includes("=") && token !== "env" && token !== "command" && token !== "exec");
-  if (tokens.length === 0) {
-    return "unknown";
-  }
+  const tokens = normalized.split(/\s+/u).filter((token) => token.length > 0);
 
-  const rawCommand = tokens[0] === "npx" || tokens[0] === "uvx" ? tokens[1] : tokens[0];
-  const command = rawCommand?.split(/[\\/]/u).pop();
-  if (!command) {
-    return "unknown";
-  }
+  for (const token of tokens) {
+    if (isEnvironmentAssignmentToken(token) || isWrapperOptionToken(token)) {
+      continue;
+    }
 
-  if (command === "codex") {
-    return "codex";
-  }
+    const entry = normalizeCommandEntry(token);
+    if (entry.length === 0 || COMMAND_PREFIXES_TO_SKIP.has(entry)) {
+      continue;
+    }
 
-  if (command === "claude" || command === "claude-code") {
-    return "claude";
-  }
+    if (entry === "codex") {
+      return "codex";
+    }
 
-  if (command === "qwen" || command === "qwen-code") {
-    return "qwen";
+    if (entry === "claude" || entry === "claude-code") {
+      return "claude";
+    }
+
+    if (entry === "qwen" || entry === "qwen-code") {
+      return "qwen";
+    }
   }
 
   return "unknown";
+}
+
+const COMMAND_PREFIXES_TO_SKIP = new Set(["env", "command", "exec", "npx", "pnpm", "bunx", "uvx", "dlx"]);
+
+function isEnvironmentAssignmentToken(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/u.test(token);
+}
+
+function isWrapperOptionToken(token: string): boolean {
+  return /^-[A-Za-z0-9]/u.test(token);
+}
+
+function normalizeCommandEntry(token: string): string {
+  const normalized = token.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const bare = normalized.split(/[\\/]/u).pop() ?? normalized;
+  return bare.trim();
 }
