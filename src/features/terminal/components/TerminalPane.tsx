@@ -20,7 +20,7 @@ import { shouldConfirmBeforeClosingTab } from "../lib/close-policy";
 import type { PaneBorderMask } from "../lib/layout-presentation";
 import { resolvePaneActions, type PaneActionId } from "../lib/pane-actions";
 import {
-  getAiCommandHelpText,
+  getAiCommandHelpTextForRuntime,
   getStructuredAiCommandCapabilities,
   parseAiComposerInput,
 } from "../lib/ai-command";
@@ -68,6 +68,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [resumePickerSessions, setResumePickerSessions] = useState<CodexSessionSummary[] | null>(null);
   const [expertDrawerRequestKey, setExpertDrawerRequestKey] = useState(0);
+  const [quickPromptRequestKey, setQuickPromptRequestKey] = useState(0);
   const paneRef = useRef<HTMLElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -78,6 +79,11 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const previewEdge =
     dragPreview?.targetLeafId === tabId ? toPreviewEdge(dragPreview.axis, dragPreview.order) : null;
   const isAgentWorkflow = tabState?.presentation === "agent-workflow";
+  const quickPromptCapabilities = getStructuredAiCommandCapabilities(
+    tabState?.agentBridge?.provider ?? "codex",
+    tabState?.agentBridge?.capabilities,
+  );
+  const showsQuickPromptTrigger = Boolean(isAgentWorkflow && quickPromptCapabilities.showsBypassCapsule);
   const resolvedTerminalFont = resolveTerminalRenderFont("dialog", {
     dialogFontFamily,
     dialogFontSize,
@@ -260,7 +266,10 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
       return;
     }
 
-    const providerLabel = getStructuredAiCommandCapabilities(tabState?.agentBridge?.provider ?? "codex").label;
+    const providerLabel = getStructuredAiCommandCapabilities(
+      tabState?.agentBridge?.provider ?? "codex",
+      tabState?.agentBridge?.capabilities,
+    ).label;
     await attachTerminalAgentSession(currentStreamSessionId, remoteSessionId);
     clearAiTranscript(tabId);
     appendAiCommandMessage(
@@ -270,7 +279,15 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   };
 
   const handleAiComposerInput = async (input: string) => {
-    const commandCapabilities = getStructuredAiCommandCapabilities(tabState?.agentBridge?.provider ?? "codex");
+    if (tabState?.agentBridge?.mode === "raw-fallback") {
+      await submitAiPrompt(input);
+      return;
+    }
+
+    const commandCapabilities = getStructuredAiCommandCapabilities(
+      tabState?.agentBridge?.provider ?? "codex",
+      tabState?.agentBridge?.capabilities,
+    );
     const parsed = parseAiComposerInput(input);
     if (parsed.kind === "prompt") {
       await submitAiPrompt(parsed.text);
@@ -279,7 +296,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
     switch (parsed.name) {
       case "help":
-        appendAiCommandMessage(getAiCommandHelpText(tabState?.agentBridge?.provider ?? "codex"));
+        appendAiCommandMessage(getAiCommandHelpTextForRuntime(commandCapabilities));
         return;
       case "new":
         if (!currentStreamSessionId) {
@@ -445,10 +462,31 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           )}
         </div>
 
-        {isAgentWorkflow ? (
-          <span className="terminal-pane__mode-indicator" aria-label="AI workflow mode">
-            AI MODE
-          </span>
+        {showsQuickPromptTrigger || isAgentWorkflow ? (
+          <div className="terminal-pane__ai-chrome">
+            {isAgentWorkflow ? (
+              <span className="terminal-pane__mode-indicator" aria-label="AI workflow mode">
+                AI MODE
+              </span>
+            ) : null}
+
+            {showsQuickPromptTrigger ? (
+              <button
+                className="terminal-pane__quick-prompt-trigger"
+                type="button"
+                aria-label="Open quick AI prompt"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setQuickPromptRequestKey((value) => value + 1);
+                }}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                Prompt
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {isFocusedPane ? (
@@ -503,6 +541,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
                 : null
             }
             forceOpenExpertDrawerKey={expertDrawerRequestKey}
+            quickPromptOpenRequestKey={quickPromptRequestKey}
           />
         ) : (
           <div className="empty-state">Terminal state not ready.</div>

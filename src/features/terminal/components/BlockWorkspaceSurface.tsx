@@ -36,6 +36,7 @@ interface BlockWorkspaceSurfaceProps {
   onSubmitAiInput: (input: string) => Promise<void> | void;
   resumePicker?: ResumePickerState | null;
   forceOpenExpertDrawerKey?: number;
+  quickPromptOpenRequestKey?: number;
 }
 
 export function BlockWorkspaceSurface({
@@ -54,6 +55,7 @@ export function BlockWorkspaceSurface({
   onSubmitAiInput,
   resumePicker = null,
   forceOpenExpertDrawerKey = 0,
+  quickPromptOpenRequestKey = 0,
 }: BlockWorkspaceSurfaceProps) {
   if (paneState.presentation === "agent-workflow") {
     return (
@@ -71,6 +73,7 @@ export function BlockWorkspaceSurface({
         onSubmitAiInput={onSubmitAiInput}
         resumePicker={resumePicker}
         forceOpenExpertDrawerKey={forceOpenExpertDrawerKey}
+        quickPromptOpenRequestKey={quickPromptOpenRequestKey}
       />
     );
   }

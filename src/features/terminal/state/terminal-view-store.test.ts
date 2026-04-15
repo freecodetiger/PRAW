@@ -78,6 +78,41 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
+  it("stores structured runtime capabilities from bridge-state events", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "qwen",
+    });
+    store.consumeAgentEvent("tab:1", {
+      sessionId: "session-1",
+      provider: "qwen",
+      type: "bridge-state",
+      mode: "structured",
+      state: "ready",
+      fallbackReason: null,
+      capabilities: {
+        supportsResumePicker: false,
+        supportsDirectResume: true,
+        supportsReview: false,
+        supportsModelOverride: true,
+        showsBypassCapsule: true,
+      },
+    });
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.agentBridge?.capabilities).toMatchObject({
+      supportsDirectResume: true,
+      supportsModelOverride: true,
+      showsBypassCapsule: true,
+    });
+  });
+
   it("captures idle output into DOM blocks even when legacy mode state says classic", () => {
     const store = useTerminalViewStore.getState();
 

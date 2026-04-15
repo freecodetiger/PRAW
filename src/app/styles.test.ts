@@ -38,20 +38,31 @@ describe("styles selection contract", () => {
   it("defines styles for the docked AI bypass composer and prompt feedback", () => {
     const styles = readStyles();
 
+    expect(styles).toContain(".terminal-pane__quick-prompt-trigger");
     expect(styles).toContain(".ai-workflow__bypass-dock-shell");
-    expect(styles).toContain('.ai-workflow__bypass-dock-shell[data-expanded="true"]');
-    expect(styles).toContain(".ai-workflow__bypass-dock-panel");
-    expect(styles).toContain(".ai-workflow__bypass-capsule");
+    expect(styles).toContain(".ai-workflow__bypass-panel");
     expect(styles).toContain(".ai-workflow__bypass-input");
     expect(styles).toContain(".dialog-terminal__ai-prompt-error");
     expect(styles).toContain(".dialog-terminal__ai-prompt-status");
   });
 
-  it("anchors the AI bypass dock to the right edge so the panel expands leftward", () => {
-    const dockShell = readRuleBlock(".ai-workflow__bypass-dock-shell");
+  it("styles the header quick prompt trigger as a hard rectangle", () => {
+    const trigger = readRuleBlock(".terminal-pane__quick-prompt-trigger");
 
-    expect(dockShell).toContain("right: 12px;");
-    expect(dockShell).not.toContain("left: 12px;");
+    expect(trigger).toContain("border-radius: 6px;");
+    expect(trigger).not.toContain("border-radius: 999px;");
+  });
+
+  it("centers the expanded quick prompt panel without adding a second outer card shell", () => {
+    const expanded = readRuleBlock('.ai-workflow__bypass-dock-shell[data-expanded="true"] .ai-workflow__bypass-panel');
+
+    expect(expanded).toContain("left: 50%;");
+    expect(expanded).toContain("transform: translate(-50%, -50%);");
+    expect(expanded).toContain("width: min(");
+    expect(expanded).toContain("padding: 0;");
+    expect(expanded).not.toContain("border: 1px solid");
+    expect(expanded).not.toContain("background:");
+    expect(expanded).not.toContain("box-shadow:");
   });
 
   it("defines styles for workspace focus mode chrome", () => {

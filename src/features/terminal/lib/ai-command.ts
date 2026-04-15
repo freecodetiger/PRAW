@@ -1,3 +1,13 @@
+import type { SuggestionItem } from "../../../domain/suggestion/types";
+import type { StructuredAgentCapabilities } from "../../../domain/terminal/types";
+import {
+  buildComposerPlaceholder,
+  buildHelpText,
+  getFallbackStructuredAgentCapabilities,
+  resolveStructuredAgentCapabilities,
+  resolveStructuredAgentLabel,
+} from "./structured-agent-capabilities";
+
 export type SupportedAiCommandName = "help" | "new" | "resume" | "review" | "model";
 export type StructuredAiProvider = "codex" | "qwen" | "claude" | "unknown";
 
@@ -16,13 +26,30 @@ export type AiComposerInput =
 
 const SUPPORTED_COMMANDS = new Set<SupportedAiCommandName>(["help", "new", "resume", "review", "model"]);
 
-interface StructuredAiCommandCapabilities {
+export interface StructuredAiCommandCapabilities {
   provider: StructuredAiProvider;
   label: string;
   supportsResumePicker: boolean;
   supportsDirectResume: boolean;
   supportsReview: boolean;
   supportsModelOverride: boolean;
+  showsBypassCapsule: boolean;
+}
+
+function getSupportedAiCommands(commandCapabilities: StructuredAiCommandCapabilities): SupportedAiCommandName[] {
+  const commands: SupportedAiCommandName[] = ["help", "new"];
+
+  if (commandCapabilities.supportsResumePicker || commandCapabilities.supportsDirectResume) {
+    commands.push("resume");
+  }
+  if (commandCapabilities.supportsReview) {
+    commands.push("review");
+  }
+  if (commandCapabilities.supportsModelOverride) {
+    commands.push("model");
+  }
+
+  return commands;
 }
 
 export function parseAiComposerInput(input: string): AiComposerInput {
@@ -58,90 +85,94 @@ export function parseAiComposerInput(input: string): AiComposerInput {
 }
 
 export function getAiCommandHelpText(provider: string): string {
-  const capabilities = getStructuredAiCommandCapabilities(provider);
-  const lines = [
-    `${capabilities.label} AI mode supports these slash commands:`,
-    "/help Show this command guide.",
-    "/new Start a fresh structured conversation in the current tab.",
-  ];
+  return getAiCommandHelpTextForCapabilities(
+    getFallbackStructuredAgentCapabilities(provider),
+    resolveStructuredAgentLabel(provider),
+  );
+}
 
-  if (capabilities.supportsResumePicker) {
-    lines.push("/resume Reattach this tab to a previous Codex session.");
-  } else if (capabilities.supportsDirectResume) {
-    lines.push("/resume <session-id> Reattach this tab to a previous structured session.");
-  }
+export function getAiCommandHelpTextForCapabilities(
+  capabilities: StructuredAgentCapabilities,
+  label: string,
+): string {
+  return buildHelpText(capabilities, label);
+}
 
-  if (capabilities.supportsReview) {
-    lines.push("/review Run a focused Codex review for the current workspace.");
-  }
-
-  if (capabilities.supportsModelOverride) {
-    lines.push("/model Show or change the preferred model for new turns when supported.");
-  }
-
-  lines.push("Unsupported or expert-only commands open the Expert Drawer instead of pretending to run.");
-  return lines.join("\n");
+export function getAiCommandHelpTextForRuntime(commandCapabilities: StructuredAiCommandCapabilities): string {
+  return buildHelpText(commandCapabilities, commandCapabilities.label);
 }
 
 export function getAiComposerPlaceholder(provider: string): string {
-  const capabilities = getStructuredAiCommandCapabilities(provider);
-  const commands = ["/help", "/new"];
-
-  if (capabilities.supportsResumePicker || capabilities.supportsDirectResume) {
-    commands.push("/resume");
-  }
-  if (capabilities.supportsReview) {
-    commands.push("/review");
-  }
-  if (capabilities.supportsModelOverride) {
-    commands.push("/model");
-  }
-
-  return `Message ${capabilities.label} or use ${commands.join(", ")}`;
+  return getAiComposerPlaceholderForCapabilities(
+    getFallbackStructuredAgentCapabilities(provider),
+    resolveStructuredAgentLabel(provider),
+  );
 }
 
-export function getStructuredAiCommandCapabilities(provider: string): StructuredAiCommandCapabilities {
+export function getAiComposerPlaceholderForCapabilities(
+  capabilities: StructuredAgentCapabilities,
+  label: string,
+): string {
+  return buildComposerPlaceholder(capabilities, label);
+}
+
+export function getStructuredAiCommandCapabilities(
+  provider: string,
+  capabilities?: StructuredAgentCapabilities | null,
+): StructuredAiCommandCapabilities {
   const normalized = provider.trim().toLowerCase();
-
-  if (normalized === "codex") {
-    return {
-      provider: "codex",
-      label: "Codex",
-      supportsResumePicker: true,
-      supportsDirectResume: false,
-      supportsReview: true,
-      supportsModelOverride: true,
-    };
-  }
-
-  if (normalized === "qwen") {
-    return {
-      provider: "qwen",
-      label: "Qwen",
-      supportsResumePicker: false,
-      supportsDirectResume: true,
-      supportsReview: false,
-      supportsModelOverride: true,
-    };
-  }
-
-  if (normalized === "claude") {
-    return {
-      provider: "claude",
-      label: "Claude",
-      supportsResumePicker: false,
-      supportsDirectResume: true,
-      supportsReview: false,
-      supportsModelOverride: false,
-    };
-  }
+  const resolvedCapabilities = resolveStructuredAgentCapabilities(provider, capabilities);
+  const providerId =
+    normalized === "codex" || normalized === "qwen" || normalized === "claude" ? normalized : "unknown";
 
   return {
-    provider: "unknown",
-    label: "AI",
-    supportsResumePicker: false,
-    supportsDirectResume: false,
-    supportsReview: false,
-    supportsModelOverride: false,
+    provider: providerId,
+    label: resolveStructuredAgentLabel(provider),
+    supportsResumePicker: resolvedCapabilities.supportsResumePicker,
+    supportsDirectResume: resolvedCapabilities.supportsDirectResume,
+    supportsReview: resolvedCapabilities.supportsReview,
+    supportsModelOverride: resolvedCapabilities.supportsModelOverride,
+    showsBypassCapsule: resolvedCapabilities.showsBypassCapsule,
   };
+}
+
+export function getAiSlashCommandSuggestions(
+  draft: string,
+  commandCapabilities: StructuredAiCommandCapabilities,
+): SuggestionItem[] {
+  const normalized = draft.trim();
+  if (!normalized.startsWith("/")) {
+    return [];
+  }
+
+  const withoutSlash = normalized.slice(1);
+  const [commandName = "", ...rest] = withoutSlash.split(/\s+/u);
+  if (rest.length > 0) {
+    return [];
+  }
+
+  const loweredPrefix = commandName.toLowerCase();
+  const commands = getSupportedAiCommands(commandCapabilities).filter(
+    (command) => loweredPrefix.length === 0 || (command.startsWith(loweredPrefix) && command !== loweredPrefix),
+  );
+
+  return commands.map((command, index) => ({
+    id: `ai-command:${command}`,
+    text: `/${command}`,
+    kind: "completion",
+    source: "system",
+    score: 1 - index * 0.01,
+    group: "inline",
+    applyMode: "replace",
+    replacement: {
+      type: "replace-all",
+      value: `/${command} `,
+    },
+  }));
+}
+
+export function applyAiSlashCommandSuggestion(draft: string, suggestionText: string): string {
+  const trimmed = draft.trim();
+  const suffix = trimmed.includes(" ") ? trimmed.slice(trimmed.indexOf(" ")) : "";
+  return `${suggestionText}${suffix}`.trimEnd() + " ";
 }

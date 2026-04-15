@@ -24,6 +24,10 @@ const terminalApi = vi.hoisted(() => ({
   runTerminalAgentReview: vi.fn(async () => "review summary"),
 }));
 
+const aiPromptTransportApi = vi.hoisted(() => ({
+  sendAiPrompt: vi.fn(async () => undefined),
+}));
+
 vi.mock("../../../lib/tauri/terminal", () => ({
   submitTerminalAgentPrompt: terminalApi.submitTerminalAgentPrompt,
   listCodexSessions: terminalApi.listCodexSessions,
@@ -31,6 +35,10 @@ vi.mock("../../../lib/tauri/terminal", () => ({
   attachTerminalAgentSession: terminalApi.attachTerminalAgentSession,
   setTerminalAgentModel: terminalApi.setTerminalAgentModel,
   runTerminalAgentReview: terminalApi.runTerminalAgentReview,
+}));
+
+vi.mock("../lib/ai-prompt-transport", () => ({
+  sendAiPrompt: aiPromptTransportApi.sendAiPrompt,
 }));
 
 vi.mock("../hooks/useTerminalSession", () => ({
@@ -81,6 +89,7 @@ describe("TerminalPane", () => {
     terminalApi.attachTerminalAgentSession.mockClear();
     terminalApi.setTerminalAgentModel.mockClear();
     terminalApi.runTerminalAgentReview.mockClear();
+    aiPromptTransportApi.sendAiPrompt.mockClear();
 
     useWorkspaceStore.setState((state) => ({
       ...state,
@@ -308,6 +317,116 @@ describe("TerminalPane", () => {
     });
     expect(lastEntry?.text).toContain("/review");
     expect(lastEntry?.text).toContain("Expert Drawer");
+  });
+
+  it("routes qwen raw-fallback composer input directly to terminal transport instead of structured slash handling", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...state.tabStates["tab:1"],
+          agentBridge: {
+            provider: "qwen",
+            mode: "raw-fallback",
+            state: "fallback",
+            fallbackReason: "structured bridge unavailable for the current command",
+          },
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    await act(async () => {
+      await (latestBlockWorkspaceProps?.onSubmitAiInput as ((value: string) => Promise<void>))("/model qwen-plus");
+    });
+
+    expect(aiPromptTransportApi.sendAiPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: "tab:1",
+        prompt: "/model qwen-plus",
+        submitStructuredPrompt: undefined,
+      }),
+    );
+    expect(terminalApi.setTerminalAgentModel).not.toHaveBeenCalled();
+  });
+
+  it("renders the AI MODE badge immediately before the quick prompt trigger when the runtime supports it", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...state.tabStates["tab:1"],
+          agentBridge: {
+            provider: "codex",
+            mode: "raw-fallback",
+            state: "fallback",
+            fallbackReason: null,
+            capabilities: {
+              supportsResumePicker: true,
+              supportsDirectResume: false,
+              supportsReview: true,
+              supportsModelOverride: true,
+              showsBypassCapsule: true,
+            },
+          },
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    const header = host.querySelector(".terminal-pane__header");
+    const trigger = host.querySelector('[aria-label="Open quick AI prompt"]');
+    const mode = host.querySelector('[aria-label="AI workflow mode"]');
+
+    expect(header).not.toBeNull();
+    expect(trigger).not.toBeNull();
+    expect(mode).not.toBeNull();
+    const isModeBeforeTrigger = Boolean(
+      mode && trigger && (mode.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING),
+    );
+    expect(isModeBeforeTrigger).toBe(true);
+  });
+
+  it("increments the quick prompt request key when the header trigger is clicked", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...state.tabStates["tab:1"],
+          agentBridge: {
+            provider: "codex",
+            mode: "raw-fallback",
+            state: "fallback",
+            fallbackReason: null,
+            capabilities: {
+              supportsResumePicker: true,
+              supportsDirectResume: false,
+              supportsReview: true,
+              supportsModelOverride: true,
+              showsBypassCapsule: true,
+            },
+          },
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestBlockWorkspaceProps?.quickPromptOpenRequestKey).toBe(0);
+
+    await act(async () => {
+      host.querySelector('[aria-label="Open quick AI prompt"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(latestBlockWorkspaceProps?.quickPromptOpenRequestKey).toBe(1);
   });
 
   it("offers a header focus button and toggles focus mode through the pane header callback", async () => {

@@ -3,12 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { createAiTranscriptState } from "../lib/ai-transcript";
-import { getAiComposerPlaceholder } from "../lib/ai-command";
+import { getAiComposerPlaceholder, getStructuredAiCommandCapabilities } from "../lib/ai-command";
 import { resolvePinnedBottomState } from "../lib/scroll-pinning";
+import {
+  resolveStructuredAgentCapabilities,
+  resolveStructuredAgentLabel,
+} from "../lib/structured-agent-capabilities";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { AiTranscript } from "./AiTranscript";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
+import { StructuredAiPromptInput } from "./StructuredAiPromptInput";
 
 interface ResumeSessionOption {
   id: string;
@@ -40,6 +45,7 @@ interface AiWorkflowSurfaceProps {
   onSubmitAiInput: (input: string) => Promise<void> | void;
   resumePicker?: ResumePickerState | null;
   forceOpenExpertDrawerKey?: number;
+  quickPromptOpenRequestKey?: number;
 }
 
 export function AiWorkflowSurface({
@@ -56,6 +62,7 @@ export function AiWorkflowSurface({
   onSubmitAiInput,
   resumePicker = null,
   forceOpenExpertDrawerKey = 0,
+  quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
   const [isPinnedBottom, setIsPinnedBottom] = useState(true);
   const [composerDraft, setComposerDraft] = useState("");
@@ -69,11 +76,15 @@ export function AiWorkflowSurface({
   const manualJumpPendingRef = useRef(false);
   const transcript = paneState.aiTranscript ?? createAiTranscriptState();
   const bridge = paneState.agentBridge ?? null;
+  const providerId = bridge?.provider ?? "";
   const hasTranscriptEntries = transcript.entries.length > 0;
   const isRawFallback = bridge?.mode === "raw-fallback";
   const isStructuredSurface = !isRawFallback;
-  const providerLabel = bridge?.provider ? bridge.provider[0].toUpperCase() + bridge.provider.slice(1) : "AI";
-  const composerPlaceholder = getAiComposerPlaceholder(bridge?.provider ?? "");
+  const providerLabel = resolveStructuredAgentLabel(providerId);
+  const bridgeCapabilities = resolveStructuredAgentCapabilities(providerId, bridge?.capabilities);
+  const commandCapabilities = getStructuredAiCommandCapabilities(providerId, bridge?.capabilities);
+  const composerPlaceholder = getAiComposerPlaceholder(providerId);
+  const showsBypassCapsule = bridgeCapabilities.showsBypassCapsule;
   const composerDisabled = status !== "running";
 
   useEffect(() => {
@@ -83,6 +94,15 @@ export function AiWorkflowSurface({
 
     setIsInspectorOpen(true);
   }, [forceOpenExpertDrawerKey]);
+
+  useEffect(() => {
+    if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
+      return;
+    }
+
+    setBypassPromptOpen(true);
+    setBypassError(null);
+  }, [quickPromptOpenRequestKey, showsBypassCapsule]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -145,6 +165,10 @@ export function AiWorkflowSurface({
   };
 
   const closeBypassPrompt = () => {
+    if (bypassDraft.trim().length > 0) {
+      return;
+    }
+
     setBypassPromptOpen(false);
     setBypassError(null);
   };
@@ -171,17 +195,14 @@ export function AiWorkflowSurface({
 
   return (
     <div className="ai-workflow">
-      {isStructuredSurface ? (
+      {showsBypassCapsule ? (
         <AiModePromptOverlay
           expanded={bypassPromptOpen}
           draft={bypassDraft}
+          commandCapabilities={commandCapabilities}
           disabled={composerDisabled || isBypassSubmitting}
           error={bypassError}
           statusMessage={composerDisabled ? "The AI session is not accepting input." : null}
-          onExpand={() => {
-            setBypassPromptOpen(true);
-            setBypassError(null);
-          }}
           onChange={(value) => {
             setBypassDraft(value);
             setBypassError(null);
@@ -196,7 +217,11 @@ export function AiWorkflowSurface({
           <header className="ai-workflow__toolbar">
             <div className="ai-workflow__toolbar-copy">
               <strong>{providerLabel} workspace chat</strong>
-              <span>{bridge?.state === "connecting" ? "Preparing bridge" : "Slash commands stay in the main composer."}</span>
+              <span>
+                {bridge?.state === "connecting"
+                  ? "Preparing bridge"
+                  : "Use the main composer for prompts and slash commands. The quick prompt capsule stays available as a side input."}
+              </span>
             </div>
             <button className="button button--ghost" type="button" onClick={() => setIsInspectorOpen((value) => !value)}>
               {isInspectorOpen ? "Close Expert Drawer" : "Open Expert Drawer"}
@@ -227,7 +252,7 @@ export function AiWorkflowSurface({
                 <p>
                   {bridge?.state === "connecting"
                     ? "Preparing the structured provider bridge."
-                    : "Use the fixed composer below for prompts, slash commands, or session actions."}
+                    : "Use the main composer for prompts and slash commands. The quick prompt capsule stays available as a side input."}
                 </p>
               </div>
             ) : null}
@@ -288,7 +313,7 @@ export function AiWorkflowSurface({
           <section className={`ai-workflow__inspector${isInspectorOpen ? " ai-workflow__inspector--open" : ""}`}>
             <header className="ai-workflow__inspector-header">
               <span>Expert Drawer</span>
-              <span>Raw terminal for native Codex commands and escape hatches</span>
+              <span>Raw terminal for native provider commands and escape hatches</span>
             </header>
             <div className="ai-workflow__inspector-body">
               <ClassicTerminalSurface
@@ -310,23 +335,17 @@ export function AiWorkflowSurface({
               Prompt or slash command
             </label>
             <div className="ai-workflow__composer-row">
-              <textarea
-                id={`ai-composer-${tabId}`}
+              <StructuredAiPromptInput
+                draft={composerDraft}
+                commandCapabilities={commandCapabilities}
+                inputId={`ai-composer-${tabId}`}
+                ariaLabel="AI composer input"
                 className="ai-workflow__composer-input"
-                aria-label="AI composer input"
-                value={composerDraft}
                 rows={2}
                 disabled={composerDisabled}
                 placeholder={composerPlaceholder}
-                onChange={(event) => setComposerDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" || event.shiftKey) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  void submitComposer();
-                }}
+                onChange={setComposerDraft}
+                onSubmit={submitComposer}
               />
               <button
                 className="button button--primary"

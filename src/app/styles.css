@@ -485,8 +485,36 @@ button {
   outline: none;
 }
 
+.terminal-pane__ai-chrome {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-pane__quick-prompt-trigger {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 2px 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.terminal-pane__quick-prompt-trigger:hover,
+.terminal-pane__quick-prompt-trigger:focus-visible {
+  border-color: var(--text-primary);
+}
+
+.terminal-pane--agent-workflow .terminal-pane__quick-prompt-trigger {
+  border-color: color-mix(in srgb, var(--ai-theme-color) 34%, var(--border));
+  background: color-mix(in srgb, var(--surface) 94%, var(--ai-background-color));
+}
+
 .terminal-pane__mode-indicator {
-  margin-left: auto;
   flex: 0 0 auto;
   white-space: nowrap;
   font-size: 11px;
@@ -870,80 +898,49 @@ button {
 
 .ai-workflow__bypass-dock-shell {
   position: absolute;
-  top: 50%;
-  right: 12px;
-  width: calc(100% - 24px);
-  max-width: calc(100% - 24px);
+  inset: 0;
   z-index: 6;
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  transform: translateY(-50%);
   pointer-events: none;
 }
 
-.ai-workflow__bypass-capsule,
-.ai-workflow__bypass-dock-panel {
+.ai-workflow__bypass-panel {
   pointer-events: auto;
 }
 
-.ai-workflow__bypass-capsule {
-  flex: 0 0 auto;
-  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 34%, var(--border-muted));
-  border-radius: 999px;
-  padding: 8px 14px;
-  background: color-mix(in srgb, var(--surface) 90%, var(--ai-background-color));
-  color: var(--text-primary);
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(10px);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.96;
-  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-
-.ai-workflow__bypass-capsule:hover,
-.ai-workflow__bypass-capsule:focus-visible {
-  border-color: color-mix(in srgb, var(--ai-theme-color) 56%, var(--border));
-  color: var(--text-primary);
-  opacity: 1;
-}
-
-.ai-workflow__bypass-dock-panel {
-  width: 0;
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
+.ai-workflow__bypass-panel {
   display: flex;
-  flex: 0 1 auto;
-  min-width: 0;
   flex-direction: column;
   gap: 8px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-right: 0;
-  border-radius: 18px 0 0 18px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--ai-background-color));
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(10px);
-  transition: width 160ms ease, max-width 160ms ease, opacity 120ms ease, padding 120ms ease, border-color 120ms ease;
+  min-width: 0;
 }
 
-.ai-workflow__bypass-dock-shell[data-expanded="true"] .ai-workflow__bypass-dock-panel {
-  width: calc(100% - 68px);
-  max-width: calc(100% - 68px);
-  opacity: 1;
-  padding: 12px 14px;
-  border-color: color-mix(in srgb, var(--ai-theme-color) 34%, var(--border-muted));
+.ai-workflow__bypass-dock-shell[data-expanded="true"] .ai-workflow__bypass-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(calc(100% - 32px), 720px);
+  padding: 0;
 }
 
 .ai-workflow__bypass-input {
   min-height: 40px;
   max-height: 160px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 24%, var(--border-muted));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 98%, var(--ai-background-color));
   resize: none;
+}
+
+.ai-workflow__bypass-panel .ai-workflow__prompt-input-shell {
+  width: 100%;
+}
+
+.ai-workflow__bypass-panel .dialog-terminal__ai-prompt-status,
+.ai-workflow__bypass-panel .dialog-terminal__ai-prompt-error {
+  margin: 0;
+  padding-inline: 6px;
 }
 
 .ai-workflow__inspector {
@@ -1067,6 +1064,11 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
+}
+
+.ai-workflow__prompt-input-shell {
+  position: relative;
+  min-width: 0;
 }
 
 .ai-workflow__composer-input {

@@ -1,9 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::terminal::agent_bridge::{
-        build_codex_command_for_test, build_qwen_command_for_test, parse_provider_stream_line,
         NormalizedAgentEvent, ProviderBridgeKind,
     };
+    use crate::terminal::structured_codex::build_codex_command_for_test;
+    use crate::terminal::structured_qwen::qwen_adapter_for_test;
+    use crate::terminal::structured_runtime::parse_provider_stream_line;
+    use crate::terminal::StructuredProviderAdapter;
 
     #[test]
     fn parses_codex_agent_messages_without_command_noise() {
@@ -22,7 +25,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_qwen_text_messages_and_drops_thinking_chunks() {
+    fn ignores_qwen_structured_lines_once_qwen_defaults_to_raw_fallback() {
         let thinking = parse_provider_stream_line(
             ProviderBridgeKind::Qwen,
             r#"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"hidden"}]}}"#,
@@ -35,12 +38,7 @@ mod tests {
         .expect("qwen text line should parse");
 
         assert!(thinking.is_empty());
-        assert_eq!(
-            text,
-            vec![NormalizedAgentEvent::AssistantMessage {
-                text: "pong".to_string()
-            }]
-        );
+        assert!(text.is_empty());
     }
 
     #[test]
@@ -66,7 +64,8 @@ mod tests {
             Some("codex-session-1"),
             "continue",
             Some("gpt-5.4"),
-        );
+        )
+        .expect("codex resume command should build");
         let args: Vec<String> = command
             .get_args()
             .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
@@ -94,7 +93,8 @@ mod tests {
             None,
             "start fresh",
             Some("gpt-5.4"),
-        );
+        )
+        .expect("codex new turn command should build");
         let args: Vec<String> = command
             .get_args()
             .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
@@ -116,56 +116,22 @@ mod tests {
     }
 
     #[test]
-    fn qwen_new_turn_command_uses_model_override_without_resume() {
-        let command = build_qwen_command_for_test(
-            std::path::Path::new("/workspace"),
-            None,
-            false,
-            Some("qwen3-coder-plus"),
-        );
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
-            .collect();
+    fn qwen_structured_command_builds_are_disabled_in_favor_of_raw_fallback() {
+        let error = qwen_adapter_for_test()
+            .build_command(
+                std::path::Path::new("/workspace"),
+                Some("generated-session-1"),
+                false,
+                "ignored",
+                Some("qwen3-coder-plus"),
+            )
+            .expect_err("qwen structured command should be disabled");
 
-        assert_eq!(
-            args,
-            vec![
-                "--input-format",
-                "stream-json",
-                "--output-format",
-                "stream-json",
-                "--model",
-                "qwen3-coder-plus",
-            ]
-        );
+        assert!(error.to_string().contains("raw fallback"));
     }
 
     #[test]
-    fn qwen_resume_command_keeps_remote_session_and_model_override() {
-        let command = build_qwen_command_for_test(
-            std::path::Path::new("/workspace"),
-            Some("qwen-session-1"),
-            true,
-            Some("qwen3-coder-plus"),
-        );
-        let args: Vec<String> = command
-            .get_args()
-            .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
-            .collect();
-
-        assert_eq!(
-            args,
-            vec![
-                "--input-format",
-                "stream-json",
-                "--output-format",
-                "stream-json",
-                "--resume",
-                "qwen-session-1",
-                "--model",
-                "qwen3-coder-plus",
-            ]
-        );
+    fn qwen_adapter_requests_raw_fallback_even_for_plain_invocation() {
+        assert!(qwen_adapter_for_test().should_fallback_to_raw(&[]));
     }
 }

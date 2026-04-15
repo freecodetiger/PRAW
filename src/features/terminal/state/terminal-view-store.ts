@@ -14,7 +14,9 @@ import {
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
 import type { TerminalAgentEvent, TerminalSemanticEvent } from "../../../domain/terminal/types";
+import type { StructuredAgentCapabilities } from "../../../domain/terminal/types";
 import { normalizeDialogOutput } from "../lib/dialog-output";
+import { getFallbackStructuredAgentCapabilities } from "../lib/structured-agent-capabilities";
 import {
   consumeShellIntegrationChunk,
   createShellIntegrationParserState,
@@ -64,6 +66,7 @@ export interface AgentBridgeState {
   mode: "structured" | "raw-fallback";
   state: "connecting" | "ready" | "running" | "fallback";
   fallbackReason: string | null;
+  capabilities?: StructuredAgentCapabilities | null;
 }
 
 export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
@@ -276,6 +279,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: "structured",
               state: "connecting",
               fallbackReason: null,
+              capabilities: getFallbackStructuredAgentCapabilities(provider),
             },
           };
         }
@@ -308,6 +312,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: event.mode,
               state: event.state,
               fallbackReason: event.fallbackReason ?? null,
+              capabilities: event.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
             },
           };
           break;
@@ -324,6 +329,8 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: nextState.agentBridge?.mode ?? "structured",
               state: "running",
               fallbackReason: null,
+              capabilities:
+                nextState.agentBridge?.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
             },
           };
           break;
@@ -342,6 +349,8 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
               mode: nextState.agentBridge?.mode ?? "structured",
               state: "ready",
               fallbackReason: null,
+              capabilities:
+                nextState.agentBridge?.capabilities ?? getFallbackStructuredAgentCapabilities(event.provider),
             },
           };
           break;
