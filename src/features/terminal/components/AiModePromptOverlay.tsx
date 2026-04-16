@@ -77,12 +77,14 @@ export function AiModePromptOverlay({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
+              event.stopPropagation();
               void onSubmit();
               return;
             }
 
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               onCollapse();
             }
           }}

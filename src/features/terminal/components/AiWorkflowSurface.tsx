@@ -45,12 +45,10 @@ export function AiWorkflowSurface({
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
 
-  useEffect(() => {
-    if (!clearedTabIds.has(tabId)) {
-      clearedTabIds.add(tabId);
-      resetDirect(tabId);
-    }
-  }, [tabId]);
+  if (!clearedTabIds.has(tabId)) {
+    clearedTabIds.add(tabId);
+    resetDirect(tabId);
+  }
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
