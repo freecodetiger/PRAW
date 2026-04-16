@@ -9,10 +9,12 @@ interface ListenerMap {
 class FakeTextarea {
   value = "";
   listeners: ListenerMap = {};
+  listenerOptions: Record<string, AddEventListenerOptions | boolean | undefined> = {};
 
-  addEventListener(type: string, listener: EventListener) {
+  addEventListener(type: string, listener: EventListener, options?: AddEventListenerOptions | boolean) {
     this.listeners[type] ??= [];
     this.listeners[type].push(listener);
+    this.listenerOptions[type] = options;
   }
 
   removeEventListener(type: string, listener: EventListener) {
@@ -23,6 +25,18 @@ class FakeTextarea {
     for (const listener of this.listeners[type] ?? []) {
       listener(event);
     }
+  }
+}
+
+class FakeClipboardPasteEvent extends Event {
+  readonly clipboardData: DataTransfer;
+  stopImmediatePropagation = vi.fn();
+
+  constructor(text: string) {
+    super("paste", { cancelable: true });
+    this.clipboardData = {
+      getData: (type: string) => (type === "text/plain" ? text : ""),
+    } as DataTransfer;
   }
 }
 
@@ -58,6 +72,62 @@ describe("ime textarea guard", () => {
     vi.runAllTimers();
 
     expect(textarea.value).toBe("abc");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+
+  it("clears pasted textarea content on the next tick when not composing", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const guard = createImeTextareaGuard(textarea);
+
+    textarea.value = "pasted payload";
+    textarea.dispatch("paste", new Event("paste"));
+
+    expect(textarea.value).toBe("pasted payload");
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("captures native paste before xterm can consume the hidden textarea value", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const onPasteText = vi.fn();
+    const guard = createImeTextareaGuard(textarea, { onPasteText });
+    const event = new FakeClipboardPasteEvent("fas");
+
+    textarea.dispatch("paste", event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(onPasteText).toHaveBeenCalledWith("fas");
+    expect(textarea.listenerOptions.paste).toMatchObject({ capture: true });
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("clears residual input value after a non-composing input event", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const guard = createImeTextareaGuard(textarea);
+
+    textarea.value = "stale buffer";
+    textarea.dispatch("input", new Event("input"));
+
+    expect(textarea.value).toBe("stale buffer");
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
     guard.dispose();
     vi.useRealTimers();
   });

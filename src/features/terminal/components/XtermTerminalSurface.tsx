@@ -73,11 +73,14 @@ export function XtermTerminalSurface({
       forwardedTerminalRef.current = terminalRef.current;
     }
 
-    const textarea = terminalRef.current?.textarea;
-    textarea?.addEventListener("keydown", handleShortcutKeyDown, { capture: true });
+    const handleContainerKeyDown = (event: KeyboardEvent) => {
+      void handleShortcutKeyDown(event);
+    };
+
+    containerRef.current.addEventListener("keydown", handleContainerKeyDown);
 
     return () => {
-      textarea?.removeEventListener("keydown", handleShortcutKeyDown, { capture: true });
+      containerRef.current?.removeEventListener("keydown", handleContainerKeyDown);
       runtime.detach();
       terminalRef.current = null;
       if (forwardedTerminalRef) {

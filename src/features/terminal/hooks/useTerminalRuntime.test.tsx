@@ -190,6 +190,97 @@ describe("useTerminalRuntime", () => {
     expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
   });
 
+  it("does not replay the shell prompt prefix from the agent workflow marker chunk after semantic reset", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...createDialogState("/bin/bash", "/workspace"),
+          mode: "dialog",
+          modeSource: "default",
+          presentation: "default",
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      terminalApi.emitSemantic({
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry: "codex",
+      });
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "zpc@zpc:~/projects/praw$ codex\r\n\x1b]133;C;entry=codex\x07OpenAI Codex\n",
+      });
+    });
+
+    const snapshot = getTerminalSnapshot("tab:1").content;
+    expect(snapshot).toBe("OpenAI Codex\n");
+    expect(snapshot).not.toContain("zpc@zpc");
+  });
+
+  it("hard-resets terminal state when the tab first transitions into agent workflow mode", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...createDialogState("/bin/bash", "/workspace"),
+          mode: "dialog",
+          modeSource: "default",
+          presentation: "default",
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "zpc@zpc:~$ z",
+      });
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toContain("z");
+
+    await act(async () => {
+      terminalApi.emitSemantic({
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry: "codex",
+      });
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "OpenAI Codex\n",
+      });
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
+  });
+
   it("mirrors PTY output to the raw terminal snapshot for agent workflow tabs in raw-only mode", async () => {
     await act(async () => {
       root.render(<RuntimeHarness />);

@@ -15,7 +15,74 @@ import {
 } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
-import { resetDirect, writeDirect } from "../lib/terminal-registry";
+import { hardResetTerminalRuntime, writeDirect } from "../lib/terminal-registry";
+
+const SHELL_COMMAND_START_MARKER_PREFIX = "\u001b]133;C";
+const SHELL_MARKER_BEL = "\u0007";
+const SHELL_MARKER_ST = "\u001b\\";
+
+function stripAgentWorkflowEntryPrefix(data: string, commandEntry: string | undefined): { data: string; matched: boolean } {
+  let cursor = 0;
+
+  while (cursor < data.length) {
+    const markerStart = data.indexOf(SHELL_COMMAND_START_MARKER_PREFIX, cursor);
+    if (markerStart === -1) {
+      return { data, matched: false };
+    }
+
+    const markerEnd = findShellMarkerEnd(data, markerStart + SHELL_COMMAND_START_MARKER_PREFIX.length);
+    if (!markerEnd) {
+      return { data, matched: false };
+    }
+
+    const payload = data.slice(markerStart + "\u001b]133;".length, markerEnd.index);
+    if (isMatchingAgentWorkflowCommandMarker(payload, commandEntry)) {
+      return {
+        data: data.slice(markerEnd.index + markerEnd.length),
+        matched: true,
+      };
+    }
+
+    cursor = markerEnd.index + markerEnd.length;
+  }
+
+  return { data, matched: false };
+}
+
+function findShellMarkerEnd(data: string, fromIndex: number): { index: number; length: number } | null {
+  const belIndex = data.indexOf(SHELL_MARKER_BEL, fromIndex);
+  const stIndex = data.indexOf(SHELL_MARKER_ST, fromIndex);
+
+  if (belIndex === -1 && stIndex === -1) {
+    return null;
+  }
+
+  if (belIndex === -1) {
+    return { index: stIndex, length: SHELL_MARKER_ST.length };
+  }
+
+  if (stIndex === -1 || belIndex < stIndex) {
+    return { index: belIndex, length: SHELL_MARKER_BEL.length };
+  }
+
+  return { index: stIndex, length: SHELL_MARKER_ST.length };
+}
+
+function isMatchingAgentWorkflowCommandMarker(payload: string, commandEntry: string | undefined): boolean {
+  if (payload === "C") {
+    return commandEntry === undefined;
+  }
+
+  if (!payload.startsWith("C;entry=")) {
+    return false;
+  }
+
+  if (commandEntry === undefined) {
+    return true;
+  }
+
+  return payload.slice("C;entry=".length) === commandEntry;
+}
 
 function asMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -43,6 +110,7 @@ export function useTerminalRuntime() {
   const pendingSessionRefsRef = useRef(new Map<string, SessionTabRef>());
   const previousSessionIdsRef = useRef(new Set<string>());
   const previousTabKeysRef = useRef(new Set<string>());
+  const pendingAgentWorkflowEntryCutsRef = useRef(new Map<string, string | undefined>());
   const windowRef = useRef(windowModel);
 
   windowRef.current = windowModel;
@@ -156,7 +224,17 @@ export function useTerminalRuntime() {
         return;
       }
 
-      writeDirect(tabRef.tabId, event.data);
+      let directOutput = event.data;
+      if (pendingAgentWorkflowEntryCutsRef.current.has(tabRef.tabId)) {
+        const commandEntry = pendingAgentWorkflowEntryCutsRef.current.get(tabRef.tabId);
+        const stripped = stripAgentWorkflowEntryPrefix(event.data, commandEntry);
+        directOutput = stripped.data;
+        pendingAgentWorkflowEntryCutsRef.current.delete(tabRef.tabId);
+      }
+
+      if (directOutput) {
+        writeDirect(tabRef.tabId, directOutput);
+      }
 
       const promptCwd = consumeOutput(tabRef.tabId, event.data);
       if (promptCwd) {
@@ -189,7 +267,8 @@ export function useTerminalRuntime() {
 
       const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
       if (event.kind === "agent-workflow" && existingTabState?.presentation !== "agent-workflow") {
-        resetDirect(tabRef.tabId);
+        hardResetTerminalRuntime(tabRef.tabId);
+        pendingAgentWorkflowEntryCutsRef.current.set(tabRef.tabId, event.commandEntry);
       }
 
       consumeSemantic(tabRef.tabId, event);

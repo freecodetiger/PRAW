@@ -141,6 +141,19 @@ class PersistentTerminalRuntime {
 
   dispose(): void {
     this.detach();
+    this.disposeTerminalInstance();
+    this.pendingWrites = "";
+  }
+
+  hardReset(): void {
+    this.disposeTerminalInstance();
+    this.pendingWrites = "";
+    this.ensureTerminal();
+    this.refit();
+    this.syncFocus();
+  }
+
+  private disposeTerminalInstance(): void {
     this.guardCleanup?.();
     this.guardCleanup = null;
     this.dataDisposable?.dispose();
@@ -154,7 +167,7 @@ class PersistentTerminalRuntime {
     this.fitAddon = null;
     this.terminal?.dispose();
     this.terminal = null;
-    this.pendingWrites = "";
+    this.host.replaceChildren();
   }
 
   private ensureTerminal(): void {
@@ -185,7 +198,11 @@ class PersistentTerminalRuntime {
     this.scrollDisposable = terminal.onScroll((position) => {
       updateViewport(this.tabId, position);
     });
-    this.imeGuard = terminal.textarea ? createImeTextareaGuard(terminal.textarea) : null;
+    this.imeGuard = terminal.textarea
+      ? createImeTextareaGuard(terminal.textarea, {
+          onPasteText: (text) => terminal.paste(text),
+        })
+      : null;
     this.guardCleanup = (this.config.installTerminalGuards?.(terminal) ?? null) as (() => void) | null;
     this.installedGuardFactory = this.config.installTerminalGuards;
 
@@ -252,6 +269,11 @@ export function disposePersistentTerminalRuntime(tabId: string): void {
 
   runtime.dispose();
   runtimes.delete(tabId);
+}
+
+export function hardResetPersistentTerminalRuntime(tabId: string): void {
+  const runtime = runtimes.get(tabId);
+  runtime?.hardReset();
 }
 
 export function clearPersistentTerminalRuntimes(): void {

@@ -29,6 +29,7 @@ export async function readClipboardText(): Promise<string> {
 }
 
 function copyWithExecCommand(text: string): void {
+  const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.setAttribute("readonly", "true");
@@ -45,5 +46,6 @@ function copyWithExecCommand(text: string): void {
     // no-op: best effort fallback only
   } finally {
     textarea.remove();
+    previousActiveElement?.focus();
   }
 }

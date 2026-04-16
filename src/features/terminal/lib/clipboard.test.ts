@@ -41,4 +41,16 @@ describe("clipboard", () => {
 
     expect(execCommand).toHaveBeenCalledWith("copy");
   });
+
+  it("restores the previous active element after execCommand fallback copy", async () => {
+    const input = document.createElement("textarea");
+    document.body.appendChild(input);
+    input.focus();
+    writeText.mockRejectedValueOnce(new Error("denied"));
+
+    await writeClipboardText("pong");
+
+    expect(document.activeElement).toBe(input);
+    input.remove();
+  });
 });

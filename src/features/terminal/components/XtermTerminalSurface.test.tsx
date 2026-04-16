@@ -13,11 +13,13 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     focus: ReturnType<typeof vi.fn>;
     textarea: HTMLTextAreaElement;
     dispose: ReturnType<typeof vi.fn>;
+    open: ReturnType<typeof vi.fn>;
     options: Record<string, unknown>;
     write: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
     scrollToLine: ReturnType<typeof vi.fn>;
     scrollToBottom: ReturnType<typeof vi.fn>;
+    paste: ReturnType<typeof vi.fn>;
     triggerScroll: (position: number) => void;
     buffer: {
       active: {
@@ -42,7 +44,13 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     paste = vi.fn();
     getSelection = vi.fn(() => "");
     loadAddon = vi.fn();
-    open = vi.fn();
+    instanceId = 0;
+    open = vi.fn((element: HTMLElement) => {
+      const marker = document.createElement("div");
+      marker.dataset.terminalInstanceMarker = String(this.instanceId);
+      marker.textContent = `terminal-${this.instanceId}`;
+      element.appendChild(marker);
+    });
     onData = vi.fn(() => ({ dispose: vi.fn() }));
     onResize = vi.fn(() => ({ dispose: vi.fn() }));
     onWriteParsed = vi.fn(() => ({ dispose: vi.fn() }));
@@ -60,6 +68,7 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     private scrollListener: ((position: number) => void) | null = null;
 
     constructor() {
+      this.instanceId = instances.length + 1;
       instances.push(this);
     }
 
@@ -81,6 +90,19 @@ vi.mock("@xterm/addon-fit", () => ({
     fit = vi.fn();
   },
 }));
+
+
+class FakeClipboardPasteEvent extends Event {
+  readonly clipboardData: DataTransfer;
+  stopImmediatePropagation = vi.fn();
+
+  constructor(text: string) {
+    super("paste", { cancelable: true });
+    this.clipboardData = {
+      getData: (type: string) => (type === "text/plain" ? text : ""),
+    } as DataTransfer;
+  }
+}
 
 class MockResizeObserver {
   observe = vi.fn();
@@ -199,6 +221,122 @@ describe("XtermTerminalSurface", () => {
 
     expect(terminalInstances).toHaveLength(1);
     expect(terminalInstances[0]?.write).toHaveBeenCalledWith("history line 1\nhistory line 2");
+  });
+
+
+  it("routes native textarea paste through terminal.paste before xterm consumes textarea residue", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const event = new FakeClipboardPasteEvent("fas");
+    terminalInstances[0]?.textarea.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.paste).toHaveBeenCalledWith("fas");
+  });
+
+  it("clears stale terminal host DOM when the runtime is hard-reset", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.querySelectorAll("[data-terminal-instance-marker]")).toHaveLength(1);
+
+    const { hardResetTerminalRuntime } = await import("../lib/terminal-registry");
+    hardResetTerminalRuntime("tab:1");
+
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const markers = host.querySelectorAll("[data-terminal-instance-marker]");
+    expect(markers).toHaveLength(1);
+    expect(markers[0]?.textContent).toBe("terminal-2");
+  });
+
+  it("creates a new terminal instance only when the runtime is explicitly hard-reset", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const { hardResetTerminalRuntime } = await import("../lib/terminal-registry");
+    const firstInstance = terminalInstances[0];
+
+    hardResetTerminalRuntime("tab:1");
+
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances).toHaveLength(2);
+    expect(terminalInstances[1]).not.toBe(firstInstance);
   });
 
   it("reuses the same terminal instance when the same tab remounts", async () => {

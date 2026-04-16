@@ -4,21 +4,35 @@ import type { Terminal } from "@xterm/xterm";
 
 import { resolveTerminalShortcut } from "../../../domain/terminal/shortcuts";
 import { readClipboardText, writeClipboardText } from "../lib/clipboard";
+import { createTerminalClipboardBridge } from "../lib/terminal-clipboard-bridge";
+
+const bridge = createTerminalClipboardBridge({
+  getClipboardText: readClipboardText,
+  setClipboardText: writeClipboardText,
+});
 
 export function useTerminalClipboard(terminalRef: RefObject<Terminal | null>) {
   return useMemo(
     () => ({
       copySelection: async () => {
-        const selection = terminalRef.current?.getSelection() ?? "";
-        await writeClipboardText(selection);
-      },
-      pasteFromClipboard: async () => {
-        const text = await readClipboardText();
-        if (!text || !terminalRef.current) {
+        if (!terminalRef.current) {
           return;
         }
 
-        terminalRef.current.paste(text);
+        await bridge.copySelection({
+          getSelectionText: () => terminalRef.current?.getSelection() ?? "",
+          focus: () => terminalRef.current?.focus(),
+        });
+      },
+      pasteFromClipboard: async () => {
+        if (!terminalRef.current) {
+          return;
+        }
+
+        await bridge.pasteClipboard({
+          pasteText: (text) => terminalRef.current?.paste(text),
+          focus: () => terminalRef.current?.focus(),
+        });
       },
       handleShortcutKeyDown: (event: KeyboardEvent) => {
         const action = resolveTerminalShortcut(event);
@@ -30,14 +44,16 @@ export function useTerminalClipboard(terminalRef: RefObject<Terminal | null>) {
         event.stopPropagation();
 
         if (action.type === "copy-selection") {
-          void writeClipboardText(terminalRef.current?.getSelection() ?? "");
+          void bridge.copySelection({
+            getSelectionText: () => terminalRef.current?.getSelection() ?? "",
+            focus: () => terminalRef.current?.focus(),
+          });
           return true;
         }
 
-        void readClipboardText().then((text) => {
-          if (text) {
-            terminalRef.current?.paste(text);
-          }
+        void bridge.pasteClipboard({
+          pasteText: (text) => terminalRef.current?.paste(text),
+          focus: () => terminalRef.current?.focus(),
         });
         return true;
       },
