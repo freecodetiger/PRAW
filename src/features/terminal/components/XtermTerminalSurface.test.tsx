@@ -154,7 +154,7 @@ describe("XtermTerminalSurface", () => {
   });
 
   it("rehydrates buffered output when the same tab remounts", async () => {
-    writeDirect("tab:1", "history line 1\r\nhistory line 2");
+    writeDirect("tab:1", "history line 1\nhistory line 2");
 
     await act(async () => {
       root.render(
@@ -173,7 +173,7 @@ describe("XtermTerminalSurface", () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith("history line 1\r\nhistory line 2");
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith("history line 1\nhistory line 2");
 
     act(() => {
       root.render(<div />);
@@ -196,11 +196,11 @@ describe("XtermTerminalSurface", () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[1]?.write).toHaveBeenCalledWith("history line 1\r\nhistory line 2");
+    expect(terminalInstances[1]?.write).toHaveBeenCalledWith("history line 1\nhistory line 2");
   });
 
   it("restores the previous viewport line when the terminal remounts", async () => {
-    writeDirect("tab:1", "history line 1\r\nhistory line 2");
+    writeDirect("tab:1", "history line 1\nhistory line 2");
 
     await act(async () => {
       root.render(

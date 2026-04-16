@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { clearRegistry, updateArchiveText, writeDirect } from "../lib/terminal-registry";
+import { clearRegistry, writeDirect } from "../lib/terminal-registry";
 import { selectTerminalTabState, selectTranscriptViewportState, useTerminalViewStore } from "./terminal-view-store";
 
 describe("terminal-view-store AI transcript", () => {
@@ -166,7 +166,6 @@ describe("terminal-view-store AI transcript", () => {
     store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     store.submitCommand("tab:1", "pwd");
     writeDirect("tab:1", "/workspace\n");
-    updateArchiveText("tab:1", "/workspace\n");
     store.consumeOutput("tab:1", "/workspace\n\x1b]133;D;0\x07");
     store.consumeOutput("tab:1", "\r\n\x1b]133;P;cwd=/workspace\x07");
 
@@ -175,7 +174,7 @@ describe("terminal-view-store AI transcript", () => {
       expect.objectContaining({
         kind: "command",
         command: "pwd",
-        output: "/workspace\n",
+        output: "/workspace",
       }),
     ]);
   });
@@ -197,7 +196,6 @@ describe("terminal-view-store AI transcript", () => {
     ]);
 
     writeDirect("tab:1", "Receiving objects: 10%\rReceiving objects: 100%\nDone.\n");
-    updateArchiveText("tab:1", "Receiving objects: 100%\nDone.");
     store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
 
     tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
@@ -215,7 +213,7 @@ describe("terminal-view-store AI transcript", () => {
 
     store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
     store.submitCommand("tab:1", "git clone repo");
-    updateArchiveText("tab:1", "处理 delta 中: 100% (1697/1697)，完成。");
+    writeDirect("tab:1", "处理 delta 中:  14% (238/1697)\r处理 delta 中: 100% (1697/1697)，完成。\n");
     store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
@@ -224,6 +222,24 @@ describe("terminal-view-store AI transcript", () => {
         kind: "command",
         command: "git clone repo",
         output: "处理 delta 中: 100% (1697/1697)，完成。",
+      }),
+    ]);
+  });
+
+  it("does not swallow a fast command that ends before mounted xterm callbacks would run", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "file-a\nfile-b\n");
+    store.consumeOutput("tab:1", "file-a\nfile-b\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "file-a\nfile-b",
       }),
     ]);
   });

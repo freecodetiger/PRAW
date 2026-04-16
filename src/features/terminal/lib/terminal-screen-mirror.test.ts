@@ -35,11 +35,18 @@ describe("terminal-screen-mirror", () => {
 
     expect(getMirrorSnapshot("tab:1")).toEqual(
       expect.objectContaining({
-        replayText: "line 1\r\nline 2",
+        replayText: "line 1\nline 2",
         viewportY: 0,
       }),
     );
     expect(exportMirrorText("tab:1")).toBe("line 1\nline 2");
+  });
+
+  it("collapses carriage-return progress updates into the latest visible line", () => {
+    writeToMirror("tab:1", "Receiving objects: 10%\rReceiving objects: 100%\nDone.\n");
+
+    expect(getMirrorSnapshot("tab:1").replayText).toBe("Receiving objects: 100%\nDone.\n");
+    expect(exportMirrorText("tab:1")).toBe("Receiving objects: 100%\nDone.");
   });
 
   it("preserves viewport state independently from replay text", () => {
@@ -77,7 +84,7 @@ describe("terminal-screen-mirror", () => {
 
     expect(getTerminal("tab:1")).toBe(controller);
     expect(getTerminalSnapshot("tab:1")).toEqual({
-      content: "alpha\r\nbeta",
+      content: "alpha\nbeta",
       viewportY: 9,
       archiveText: "alpha\nbeta",
     });
