@@ -8,13 +8,7 @@ import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
 import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
 import { applyTerminalAppearance } from "../lib/terminal-appearance";
-import {
-  getTerminalSnapshot,
-  registerTerminal,
-  unregisterTerminal,
-  updateArchiveText,
-  updateViewport,
-} from "../lib/terminal-registry";
+import { getTerminalSnapshot, registerTerminal, unregisterTerminal, updateViewport } from "../lib/terminal-registry";
 
 interface XtermTerminalSurfaceProps {
   tabId: string;
@@ -76,7 +70,6 @@ export function XtermTerminalSurface({
       terminal.focus();
     }
 
-    // 注册到全局注册表，让 PTY 输出可以直接写入
     registerTerminal(tabId, {
       writeDirect: (data) => {
         terminal.write(data);
@@ -110,24 +103,12 @@ export function XtermTerminalSurface({
       void write(data);
     });
 
-    const publishArchiveSnapshot = () => {
-      updateArchiveText(tabId, readTerminalArchiveText(terminal));
-    };
-
     const scrollDisposable = terminal.onScroll((position) => {
       if (isReplayingRef.current) {
         return;
       }
 
       updateViewport(tabId, position);
-    });
-
-    const writeParsedDisposable = terminal.onWriteParsed(() => {
-      if (isReplayingRef.current) {
-        return;
-      }
-
-      publishArchiveSnapshot();
     });
 
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
@@ -159,7 +140,6 @@ export function XtermTerminalSurface({
         terminal.scrollToLine(targetViewport);
       }
       isReplayingRef.current = false;
-      publishArchiveSnapshot();
       void resize(terminal.cols, terminal.rows);
     });
 
@@ -167,7 +147,6 @@ export function XtermTerminalSurface({
       observer.disconnect();
       dataDisposable.dispose();
       scrollDisposable.dispose();
-      writeParsedDisposable.dispose();
       resizeDisposable.dispose();
       removeTerminalGuards();
       imeGuard?.dispose();
@@ -232,25 +211,4 @@ export function XtermTerminalSurface({
   }, [sessionId, resize]);
 
   return <div ref={containerRef} className={className} />;
-}
-
-function readTerminalArchiveText(terminal: Terminal): string {
-  const lines: string[] = [];
-  const buffer = terminal.buffer.active;
-  const totalLines = Math.max(terminal.rows, buffer.baseY + terminal.rows);
-
-  for (let index = 0; index < totalLines; index += 1) {
-    const line = buffer.getLine(index);
-    if (!line) {
-      continue;
-    }
-
-    lines.push(line.translateToString(true));
-  }
-
-  while (lines.length > 0 && lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-
-  return lines.join("\n");
 }
