@@ -1,10 +1,22 @@
 /**
  * Terminal Registry
- * 
+ *
  * 全局注册表：tabId → terminal controller 映射
- * 
+ *
  * 目的：让 PTY 输出可以直接写入 xterm，绕过 React 状态同步，彻底消除频闪
  */
+import {
+  attachMirrorController,
+  clearMirrors,
+  detachMirrorController,
+  exportMirrorText,
+  getMirrorSnapshot,
+  removeMirror,
+  resetMirror,
+  updateMirrorViewport,
+  writeToMirror,
+} from "./terminal-screen-mirror";
+
 export interface TerminalController {
   writeDirect: (data: string) => void;
   pasteText: (text: string) => void;
@@ -23,114 +35,56 @@ export interface TerminalSnapshot {
 }
 
 const registry = new Map<string, TerminalController>();
-const snapshots = new Map<string, TerminalSnapshot>();
 
-/**
- * 注册终端实例
- */
 export function registerTerminal(tabId: string, terminal: TerminalController): void {
   registry.set(tabId, terminal);
+  attachMirrorController(tabId, terminal);
 }
 
-/**
- * 注销终端实例
- */
 export function unregisterTerminal(tabId: string): void {
   registry.delete(tabId);
+  detachMirrorController(tabId);
 }
 
-/**
- * 获取终端实例
- */
 export function getTerminal(tabId: string): TerminalController | undefined {
   return registry.get(tabId);
 }
 
 export function getTerminalSnapshot(tabId: string): TerminalSnapshot {
-  return snapshots.get(tabId) ?? EMPTY_TERMINAL_SNAPSHOT;
-}
-
-export function updateArchiveText(tabId: string, archiveText: string): void {
-  const snapshot = ensureSnapshot(tabId);
-  snapshot.archiveText = archiveText;
+  const snapshot = getMirrorSnapshot(tabId);
+  return {
+    content: snapshot.replayText,
+    viewportY: snapshot.viewportY,
+    archiveText: snapshot.exportText,
+  };
 }
 
 export function exportTerminalArchive(tabId: string): string | null {
-  const snapshot = snapshots.get(tabId);
-  if (!snapshot) {
-    return null;
-  }
-
-  return snapshot.archiveText;
+  return exportMirrorText(tabId);
 }
 
-/**
- * 检查终端是否已注册
- */
 export function hasTerminal(tabId: string): boolean {
   return registry.has(tabId);
 }
 
-/**
- * 直接向指定终端写入数据
- * 绕过 React 状态，零渲染开销
- */
 export function writeDirect(tabId: string, data: string): void {
-  if (!data) {
-    return;
-  }
-
-  const snapshot = ensureSnapshot(tabId);
-  snapshot.content += data;
-
-  const terminal = registry.get(tabId);
-  if (terminal) {
-    terminal.writeDirect(data);
-  }
+  writeToMirror(tabId, data);
 }
 
 export function updateViewport(tabId: string, viewportY: number): void {
-  const snapshot = ensureSnapshot(tabId);
-  snapshot.viewportY = Math.max(0, Math.floor(viewportY));
+  updateMirrorViewport(tabId, viewportY);
 }
 
-/**
- * 清空指定终端
- */
 export function resetDirect(tabId: string): void {
-  snapshots.set(tabId, {
-    ...EMPTY_TERMINAL_SNAPSHOT,
-  });
-  registry.get(tabId)?.clear?.();
+  resetMirror(tabId);
 }
 
 export function removeDirect(tabId: string): void {
-  snapshots.delete(tabId);
+  registry.delete(tabId);
+  removeMirror(tabId);
 }
 
-/**
- * 清空所有注册（用于热重载或测试）
- */
 export function clearRegistry(): void {
   registry.clear();
-  snapshots.clear();
+  clearMirrors();
 }
-
-function ensureSnapshot(tabId: string): TerminalSnapshot {
-  const existing = snapshots.get(tabId);
-  if (existing) {
-    return existing;
-  }
-
-  const snapshot = {
-    ...EMPTY_TERMINAL_SNAPSHOT,
-  };
-  snapshots.set(tabId, snapshot);
-  return snapshot;
-}
-
-const EMPTY_TERMINAL_SNAPSHOT: TerminalSnapshot = {
-  content: "",
-  viewportY: 0,
-  archiveText: "",
-};

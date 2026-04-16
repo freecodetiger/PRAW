@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { TerminalController } from "./terminal-registry";
+import {
+  clearRegistry,
+  exportTerminalArchive,
+  getTerminal,
+  getTerminalSnapshot,
+  registerTerminal,
+  unregisterTerminal,
+  updateViewport,
+  writeDirect,
+  type TerminalController,
+} from "./terminal-registry";
 import {
   attachMirrorController,
   clearMirrors,
@@ -15,6 +25,7 @@ import {
 
 describe("terminal-screen-mirror", () => {
   beforeEach(() => {
+    clearRegistry();
     clearMirrors();
     removeMirror("tab:1");
   });
@@ -55,6 +66,24 @@ describe("terminal-screen-mirror", () => {
 
     expect(getMirrorSnapshot("tab:1")).toEqual(createMirrorSnapshot());
     expect(exportMirrorText("tab:1")).toBeNull();
+  });
+
+  it("keeps controller lookup working while reading replay and export from the mirror", () => {
+    const controller = createController();
+
+    registerTerminal("tab:1", controller);
+    writeDirect("tab:1", "alpha\r\nbeta");
+    updateViewport("tab:1", 9);
+
+    expect(getTerminal("tab:1")).toBe(controller);
+    expect(getTerminalSnapshot("tab:1")).toEqual({
+      content: "alpha\r\nbeta",
+      viewportY: 9,
+      archiveText: "alpha\nbeta",
+    });
+    expect(exportTerminalArchive("tab:1")).toBe("alpha\nbeta");
+
+    unregisterTerminal("tab:1");
   });
 });
 
