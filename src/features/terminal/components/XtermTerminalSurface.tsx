@@ -1,14 +1,12 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 
-import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import { useTerminalClipboard } from "../hooks/useTerminalClipboard";
-import { createImeTextareaGuard } from "../lib/ime-textarea-guard";
-import { applyTerminalAppearance } from "../lib/terminal-appearance";
-import { getTerminalSnapshot, registerTerminal, resetDirect, unregisterTerminal, updateViewport } from "../lib/terminal-registry";
+import { ensurePersistentTerminalRuntime, type PersistentTerminalRuntimeConfig } from "../lib/persistent-terminal-runtime";
+import { getTerminal, registerTerminal } from "../lib/terminal-registry";
 
 interface XtermTerminalSurfaceProps {
   tabId: string;
@@ -41,9 +39,7 @@ export function XtermTerminalSurface({
 }: XtermTerminalSurfaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const initialFocusEnabledRef = useRef(isActive && !inputSuspended);
-  const isReplayingRef = useRef(false);
+  const runtimeRef = useRef<ReturnType<typeof ensurePersistentTerminalRuntime> | null>(null);
   const { handleShortcutKeyDown } = useTerminalClipboard(terminalRef);
 
   useEffect(() => {
@@ -51,164 +47,86 @@ export function XtermTerminalSurface({
       return;
     }
 
-    const terminal = new Terminal({
-      allowTransparency: false,
-      convertEol: true,
-      cursorBlink: true,
+    const config: PersistentTerminalRuntimeConfig = {
       fontFamily,
       fontSize,
-      lineHeight: 1.3,
       theme,
-    });
+      write,
+      resize,
+      installTerminalGuards,
+    };
+    const runtime = ensurePersistentTerminalRuntime(tabId, config);
+    runtimeRef.current = runtime;
 
-    const removeTerminalGuards = installTerminalGuards?.(terminal) ?? (() => undefined);
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(containerRef.current);
-    fitAddon.fit();
-    if (initialFocusEnabledRef.current) {
-      terminal.focus();
+    if (getTerminal(tabId) !== runtime.controller) {
+      registerTerminal(tabId, runtime.controller);
     }
 
-    registerTerminal(tabId, {
-      writeDirect: (data) => {
-        terminal.write(data);
-      },
-      pasteText: (text) => {
-        terminal.paste(text);
-      },
-      sendEnter: async () => {
-        await write("\r");
-      },
-      clear: () => {
-        terminal.clear();
-      },
-      focus: () => {
-        terminal.focus();
-      },
-      blur: () => {
-        terminal.textarea?.blur();
-      },
-      hasSelection: () => terminal.getSelection().length > 0,
-      getSelectionText: () => terminal.getSelection(),
+    runtime.attach({
+      container: containerRef.current,
+      isActive,
+      inputSuspended,
     });
 
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+    terminalRef.current = runtime.getTerminal();
     if (forwardedTerminalRef) {
-      forwardedTerminalRef.current = terminal;
+      forwardedTerminalRef.current = terminalRef.current;
     }
 
-    const dataDisposable = terminal.onData((data) => {
-      void write(data);
-    });
-
-    const scrollDisposable = terminal.onScroll((position) => {
-      if (isReplayingRef.current) {
-        return;
-      }
-
-      updateViewport(tabId, position);
-    });
-
-    const resizeDisposable = terminal.onResize(({ cols, rows }) => {
-      void resize(cols, rows);
-    });
-
-    const textarea = terminal.textarea;
-    const imeGuard = textarea ? createImeTextareaGuard(textarea) : null;
+    const textarea = terminalRef.current?.textarea;
     textarea?.addEventListener("keydown", handleShortcutKeyDown, { capture: true });
 
-    const observer = new ResizeObserver(() => {
-      fitAddon.fit();
-      void resize(terminal.cols, terminal.rows);
-    });
-
-    observer.observe(containerRef.current);
-
-    queueMicrotask(() => {
-      const snapshot = getTerminalSnapshot(tabId);
-      isReplayingRef.current = true;
-      if (snapshot.content.length > 0) {
-        terminal.write(snapshot.content);
-      }
-      fitAddon.fit();
-      const targetViewport = Math.max(0, Math.min(snapshot.viewportY, terminal.buffer.active.baseY));
-      if (targetViewport >= terminal.buffer.active.baseY) {
-        terminal.scrollToBottom();
-      } else {
-        terminal.scrollToLine(targetViewport);
-      }
-      isReplayingRef.current = false;
-      void resize(terminal.cols, terminal.rows);
-    });
-
     return () => {
-      observer.disconnect();
-      dataDisposable.dispose();
-      scrollDisposable.dispose();
-      resizeDisposable.dispose();
-      removeTerminalGuards();
-      imeGuard?.dispose();
       textarea?.removeEventListener("keydown", handleShortcutKeyDown, { capture: true });
-      unregisterTerminal(tabId);
-      terminal.dispose();
+      runtime.detach();
       terminalRef.current = null;
-      fitAddonRef.current = null;
       if (forwardedTerminalRef) {
         forwardedTerminalRef.current = null;
       }
     };
-  }, [fontFamily, fontSize, forwardedTerminalRef, handleShortcutKeyDown, installTerminalGuards, resize, tabId, theme, write]);
+  }, [forwardedTerminalRef, handleShortcutKeyDown, tabId]);
 
   useEffect(() => {
-    if (!terminalRef.current) {
+    const runtime = runtimeRef.current;
+    if (!runtime || !containerRef.current) {
       return;
     }
 
-    applyTerminalAppearance(terminalRef.current, {
+    runtime.updateConfig({
       fontFamily,
       fontSize,
       theme,
+      write,
+      resize,
+      installTerminalGuards,
+    });
+    runtime.attach({
+      container: containerRef.current,
+      isActive,
+      inputSuspended,
     });
 
-    queueMicrotask(() => {
-      fitAddonRef.current?.fit();
-      if (terminalRef.current) {
-        void resize(terminalRef.current.cols, terminalRef.current.rows);
-      }
-    });
-  }, [fontFamily, fontSize, resize, theme]);
+    terminalRef.current = runtime.getTerminal();
+    if (forwardedTerminalRef) {
+      forwardedTerminalRef.current = terminalRef.current;
+    }
+  }, [fontFamily, fontSize, forwardedTerminalRef, inputSuspended, installTerminalGuards, isActive, resize, theme, write]);
 
   useEffect(() => {
-    if (!isActive || !terminalRef.current) {
+    const runtime = runtimeRef.current;
+    if (!runtime || !sessionId) {
       return;
     }
 
-    if (inputSuspended) {
-      terminalRef.current.textarea?.blur();
-      return;
-    }
-
-    queueMicrotask(() => {
-      terminalRef.current?.focus();
+    runtime.updateConfig({
+      fontFamily,
+      fontSize,
+      theme,
+      write,
+      resize,
+      installTerminalGuards,
     });
-  }, [inputSuspended, isActive, sessionId]);
-
-  useEffect(() => {
-    if (!sessionId || !terminalRef.current || !fitAddonRef.current) {
-      return;
-    }
-
-    queueMicrotask(() => {
-      if (!terminalRef.current || !fitAddonRef.current) {
-        return;
-      }
-
-      fitAddonRef.current.fit();
-      void resize(terminalRef.current.cols, terminalRef.current.rows);
-    });
-  }, [sessionId, resize]);
+  }, [fontFamily, fontSize, installTerminalGuards, resize, sessionId, theme, write]);
 
   return <div ref={containerRef} className={className} />;
 }

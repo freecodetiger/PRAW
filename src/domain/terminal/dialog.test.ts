@@ -357,7 +357,7 @@ describe("dialog terminal state", () => {
     expect(finished.preferredMode).toBe("classic");
   });
 
-  it("preserves agent-workflow presentation after an agent workflow command exits", () => {
+  it("restores the preferred presentation after an agent workflow command exits", () => {
     const started = applyTerminalSemanticEvent(createDialogState("/bin/bash", "/workspace", "classic"), {
       sessionId: "session-1",
       kind: "agent-workflow",
@@ -371,8 +371,8 @@ describe("dialog terminal state", () => {
     });
 
     expect(finished.mode).toBe("classic");
-    expect(finished.modeSource).toBe("auto-interactive");
-    expect(finished.presentation).toBe("agent-workflow");
+    expect(finished.modeSource).toBe("default");
+    expect(finished.presentation).toBe("default");
   });
 
   it("activates agent workflow presentation from backend semantic events in classic mode", () => {
@@ -397,8 +397,8 @@ describe("dialog terminal state", () => {
     expect(finished).toMatchObject({
       preferredMode: "classic",
       mode: "classic",
-      modeSource: "auto-interactive",
-      presentation: "agent-workflow",
+      modeSource: "default",
+      presentation: "default",
     });
   });
 

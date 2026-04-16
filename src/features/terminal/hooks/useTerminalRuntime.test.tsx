@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
 import { createDialogState } from "../../../domain/terminal/dialog";
-import type { TerminalOutputEvent } from "../../../domain/terminal/types";
+import type { TerminalOutputEvent, TerminalSemanticEvent } from "../../../domain/terminal/types";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { clearRegistry, getTerminalSnapshot } from "../lib/terminal-registry";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
@@ -16,10 +16,14 @@ import { useTerminalRuntime } from "./useTerminalRuntime";
 
 const terminalApi = vi.hoisted(() => {
   let outputHandler: ((event: TerminalOutputEvent) => void) | null = null;
+  let semanticHandler: ((event: TerminalSemanticEvent) => void) | null = null;
 
   return {
     emitOutput: (event: TerminalOutputEvent) => {
       outputHandler?.(event);
+    },
+    emitSemantic: (event: TerminalSemanticEvent) => {
+      semanticHandler?.(event);
     },
     createTerminalSession: vi.fn(async () => ({
       sessionId: "session-created",
@@ -36,7 +40,14 @@ const terminalApi = vi.hoisted(() => {
       };
     }),
     onTerminalExit: vi.fn(async () => () => undefined),
-    onTerminalSemantic: vi.fn(async () => () => undefined),
+    onTerminalSemantic: vi.fn(async (handler: (event: TerminalSemanticEvent) => void) => {
+      semanticHandler = handler;
+      return () => {
+        if (semanticHandler === handler) {
+          semanticHandler = null;
+        }
+      };
+    }),
   };
 });
 
@@ -128,6 +139,55 @@ describe("useTerminalRuntime", () => {
     });
     host.remove();
     clearRegistry();
+  });
+
+  it("clears pre-AI shell output when the tab first transitions into agent workflow mode", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...createDialogState("/bin/bash", "/workspace"),
+          mode: "dialog",
+          modeSource: "default",
+          presentation: "default",
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "zpc@zpc:~$ ls\nDesktop\n",
+      });
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toContain("Desktop");
+
+    await act(async () => {
+      terminalApi.emitSemantic({
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry: "codex",
+      });
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "OpenAI Codex\n",
+      });
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
   });
 
   it("mirrors PTY output to the raw terminal snapshot for agent workflow tabs in raw-only mode", async () => {

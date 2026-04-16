@@ -16,6 +16,7 @@ import {
   updateMirrorViewport,
   writeToMirror,
 } from "./terminal-screen-mirror";
+import { clearPersistentTerminalRuntimes, disposePersistentTerminalRuntime } from "./persistent-terminal-runtime";
 
 export interface TerminalController {
   writeDirect: (data: string) => void;
@@ -81,10 +82,12 @@ export function resetDirect(tabId: string): void {
 
 export function removeDirect(tabId: string): void {
   registry.delete(tabId);
+  disposePersistentTerminalRuntime(tabId);
   removeMirror(tabId);
 }
 
 export function clearRegistry(): void {
   registry.clear();
+  clearPersistentTerminalRuntimes();
   clearMirrors();
 }

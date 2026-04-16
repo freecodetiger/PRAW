@@ -10,11 +10,12 @@ import {
 } from "../../../lib/tauri/terminal";
 import {
   getTerminalBufferKey,
+  selectTerminalTabState,
   useTerminalViewStore,
 } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
-import { writeDirect } from "../lib/terminal-registry";
+import { resetDirect, writeDirect } from "../lib/terminal-registry";
 
 function asMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -184,6 +185,11 @@ export function useTerminalRuntime() {
       const tabRef = resolveSessionTabRef(event.sessionId, sessionIndexRef.current, pendingSessionRefsRef.current);
       if (!tabRef) {
         return;
+      }
+
+      const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
+      if (event.kind === "agent-workflow" && existingTabState?.presentation !== "agent-workflow") {
+        resetDirect(tabRef.tabId);
       }
 
       consumeSemantic(tabRef.tabId, event);

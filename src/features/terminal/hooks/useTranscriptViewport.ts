@@ -36,7 +36,6 @@ export function useTranscriptViewport({
       return;
     }
 
-    const prevIsPinnedBottom = prevIsPinnedBottomRef.current;
     prevIsPinnedBottomRef.current = resolvedViewport.isPinnedBottom;
 
     const isInitialMount = isInitialMountRef.current;

@@ -113,8 +113,8 @@ describe("XtermTerminalSurface", () => {
     vi.unstubAllGlobals();
   });
 
-  it("focuses the active terminal when input is not suspended", () => {
-    act(() => {
+  it("focuses the active terminal when input is not suspended", async () => {
+    await act(async () => {
       root.render(
         <XtermTerminalSurface
           tabId="tab:1"
@@ -128,6 +128,7 @@ describe("XtermTerminalSurface", () => {
           resize={resize}
         />,
       );
+      await Promise.resolve();
     });
 
     expect(terminalInstances[0]?.focus).toHaveBeenCalled();
@@ -196,10 +197,106 @@ describe("XtermTerminalSurface", () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[1]?.write).toHaveBeenCalledWith("history line 1\nhistory line 2");
+    expect(terminalInstances).toHaveLength(1);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith("history line 1\nhistory line 2");
   });
 
-  it("restores the previous viewport line when the terminal remounts", async () => {
+  it("reuses the same terminal instance when the same tab remounts", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const firstInstance = terminalInstances[0];
+    expect(firstInstance).toBeDefined();
+
+    act(() => {
+      root.render(<div />);
+    });
+
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances).toHaveLength(1);
+    expect(terminalInstances[0]).toBe(firstInstance);
+  });
+
+  it("keeps receiving PTY output while detached and shows it again after remount without replaying a new instance", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const firstInstance = terminalInstances[0];
+    expect(firstInstance).toBeDefined();
+
+    act(() => {
+      root.render(<div />);
+    });
+
+    writeDirect("tab:1", "detached output");
+
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances).toHaveLength(1);
+    expect(terminalInstances[0]).toBe(firstInstance);
+    expect(firstInstance?.write).toHaveBeenCalledWith("detached output");
+  });
+
+  it("preserves the existing viewport when the terminal remounts", async () => {
     writeDirect("tab:1", "history line 1\nhistory line 2");
 
     await act(async () => {
@@ -219,8 +316,10 @@ describe("XtermTerminalSurface", () => {
       await Promise.resolve();
     });
 
+    const firstInstance = terminalInstances[0];
+
     act(() => {
-      terminalInstances[0]?.triggerScroll(37);
+      firstInstance?.triggerScroll(37);
     });
 
     act(() => {
@@ -244,7 +343,9 @@ describe("XtermTerminalSurface", () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[1]?.scrollToLine).toHaveBeenCalledWith(37);
+    expect(terminalInstances).toHaveLength(1);
+    expect(terminalInstances[0]).toBe(firstInstance);
+    expect(firstInstance?.buffer.active.viewportY).toBe(37);
   });
 
   it("exports mirror-owned terminal text without depending on writeParsed callbacks", async () => {

@@ -3,11 +3,8 @@ import { useEffect, useState } from "react";
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
-import { resetDirect } from "../lib/terminal-registry";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
-
-const clearedTabIds = new Set<string>();
 
 interface AiWorkflowSurfaceProps {
   tabId: string;
@@ -38,17 +35,13 @@ export function AiWorkflowSurface({
   onSubmitAiInput,
   quickPromptOpenRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
+  void paneState;
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
   const [bypassError, setBypassError] = useState<string | null>(null);
   const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
-
-  if (!clearedTabIds.has(tabId)) {
-    clearedTabIds.add(tabId);
-    resetDirect(tabId);
-  }
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {

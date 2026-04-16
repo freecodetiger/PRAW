@@ -99,10 +99,6 @@ export function applyPreferredMode(state: DialogState, preferredMode: PaneRender
     return nextState;
   }
 
-  if (nextState.presentation === "agent-workflow") {
-    return nextState;
-  }
-
   return {
     ...nextState,
     mode: preferredMode,
@@ -329,20 +325,6 @@ function restorePreferredPresentation(state: DialogState): DialogState {
       mode: "classic",
       modeSource: "shell-unsupported",
       presentation: "default",
-      dialogPhase: "idle",
-      liveConsole: null,
-      transcriptPolicy: "append-live",
-      composerMode: "command",
-      captureActiveOutputInTranscript: true,
-    };
-  }
-
-  if (state.presentation === "agent-workflow") {
-    return {
-      ...state,
-      mode: state.preferredMode,
-      modeSource: "auto-interactive",
-      presentation: "agent-workflow",
       dialogPhase: "idle",
       liveConsole: null,
       transcriptPolicy: "append-live",
