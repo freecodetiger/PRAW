@@ -135,6 +135,22 @@ describe("AiWorkflowSurface", () => {
     expect(host.textContent).not.toContain("Open Expert Drawer");
   });
 
+  it("keeps rendering the shared raw terminal even when aiTranscript still contains prior entries", () => {
+    const paneState = createAgentWorkflowPaneState();
+    paneState.aiTranscript = {
+      entries: [
+        { id: "prompt:stale", kind: "prompt", text: "stale prompt" },
+        { id: "output:stale", kind: "output", text: "stale output", status: "completed" },
+      ],
+    };
+
+    renderSurface(root, paneState);
+
+    expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
+    expect(host.querySelector(".ai-workflow__transcript")).toBeNull();
+    expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
+  });
+
   it("opens the bypass capsule on request while keeping the raw terminal surface active", () => {
     renderSurface(root, createAgentWorkflowPaneState(), {
       quickPromptOpenRequestKey: 1,
