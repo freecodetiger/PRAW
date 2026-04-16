@@ -1118,7 +1118,6 @@ button {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 12px;
   overflow: auto;
   padding: 12px;

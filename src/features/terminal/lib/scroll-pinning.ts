@@ -1,4 +1,4 @@
-const PINNED_BOTTOM_THRESHOLD = 48;
+const PINNED_BOTTOM_THRESHOLD = 12;
 
 export function resolvePinnedBottomState(distanceFromBottom: number, manualJumpPending: boolean): boolean {
   if (manualJumpPending) {

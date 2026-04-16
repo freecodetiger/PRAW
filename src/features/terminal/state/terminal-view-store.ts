@@ -62,6 +62,7 @@ export interface TerminalTabViewState extends DialogState {
   aiTranscript?: AiTranscriptState;
   aiSession?: AiSessionState | null;
   transcriptViewport?: TranscriptViewportState;
+  activeArchiveBaseline?: string | null;
 }
 
 export type AiSessionProvider = "codex" | "claude" | "qwen" | "unknown";
@@ -110,6 +111,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       const nextTabState = {
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
+        activeArchiveBaseline: exportTerminalArchive(tabId) ?? "",
       };
 
       return {
@@ -220,7 +222,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
 
         const archivedOutput =
           event.type === "command-end" && nextState.presentation !== "agent-workflow"
-            ? exportTerminalArchive(tabId) ?? undefined
+            ? computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline)
             : undefined;
 
         nextState = {
@@ -229,6 +231,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
             nextState,
             event.type === "command-end" ? { ...event, archivedOutput } : event,
           ),
+          activeArchiveBaseline: event.type === "command-end" ? null : nextState.activeArchiveBaseline,
         };
 
         if (
@@ -383,6 +386,7 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
     aiTranscript: createAiTranscriptState(),
     aiSession: null,
     transcriptViewport: createTranscriptViewportState(),
+    activeArchiveBaseline: null,
   };
 }
 
@@ -436,9 +440,32 @@ function reconcileShellState(
     aiTranscript: state.aiTranscript,
     aiSession: state.aiSession,
     transcriptViewport: state.transcriptViewport,
+    activeArchiveBaseline: state.activeArchiveBaseline,
   };
 }
 
+function computeCommandArchiveDelta(archiveText: string | null, baselineText: string | null | undefined): string | undefined {
+  const nextArchive = archiveText ?? "";
+  if (nextArchive.length === 0) {
+    return undefined;
+  }
+
+  const baseline = baselineText ?? "";
+  if (baseline.length === 0) {
+    return nextArchive;
+  }
+
+  if (!nextArchive.startsWith(baseline)) {
+    return nextArchive;
+  }
+
+  const delta = nextArchive.slice(baseline.length);
+  if (delta.startsWith("\n")) {
+    return delta.slice(1) || undefined;
+  }
+
+  return delta || undefined;
+}
 function createTranscriptViewportState(): TranscriptViewportState {
   return {
     scrollTop: 0,

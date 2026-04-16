@@ -16,6 +16,8 @@ interface TranscriptViewportController {
   jumpToLatest: () => void;
 }
 
+const OBSERVER_ROOT_MARGIN = "0px 0px 12px 0px";
+
 export function useTranscriptViewport({
   tabId,
   contentKey,
@@ -25,6 +27,8 @@ export function useTranscriptViewport({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const manualJumpPendingRef = useRef(false);
+  const isInitialMountRef = useRef(true);
+  const prevIsPinnedBottomRef = useRef(resolvedViewport.isPinnedBottom);
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -32,13 +36,41 @@ export function useTranscriptViewport({
       return;
     }
 
-    if (resolvedViewport.isPinnedBottom) {
+    const prevIsPinnedBottom = prevIsPinnedBottomRef.current;
+    prevIsPinnedBottomRef.current = resolvedViewport.isPinnedBottom;
+
+    const isInitialMount = isInitialMountRef.current;
+
+    if (isInitialMount) {
+      isInitialMountRef.current = false;
+      if (resolvedViewport.isPinnedBottom) {
+        node.scrollTop = node.scrollHeight;
+      } else {
+        node.scrollTop = Math.max(0, resolvedViewport.scrollTop);
+      }
+    } else if (resolvedViewport.isPinnedBottom) {
       node.scrollTop = node.scrollHeight;
+    }
+
+    if (node.clientHeight <= 0) {
       return;
     }
 
-    node.scrollTop = Math.max(0, resolvedViewport.scrollTop);
-  }, [contentKey, resolvedViewport.isPinnedBottom, resolvedViewport.scrollTop, tabId]);
+    const actualScrollTop = node.scrollTop;
+    const distanceFromBottom = node.scrollHeight - actualScrollTop - node.clientHeight;
+    const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
+
+    if (nextPinned) {
+      manualJumpPendingRef.current = false;
+    }
+
+    if (nextPinned !== resolvedViewport.isPinnedBottom) {
+      updateTranscriptViewport(tabId, {
+        scrollTop: actualScrollTop,
+        isPinnedBottom: nextPinned,
+      });
+    }
+  }, [contentKey, resolvedViewport.isPinnedBottom, tabId, updateTranscriptViewport]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -72,25 +104,23 @@ export function useTranscriptViewport({
           return;
         }
 
+        const distanceFromBottom = root.scrollHeight - root.scrollTop - root.clientHeight;
+        const nextPinned = entry.isIntersecting
+          ? resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current)
+          : false;
+
         if (entry.isIntersecting) {
           manualJumpPendingRef.current = false;
-          updateTranscriptViewport(tabId, {
-            isPinnedBottom: true,
-            scrollTop: root.scrollTop,
-          });
-          return;
         }
 
-        if (!manualJumpPendingRef.current) {
-          updateTranscriptViewport(tabId, {
-            isPinnedBottom: false,
-            scrollTop: root.scrollTop,
-          });
-        }
+        updateTranscriptViewport(tabId, {
+          isPinnedBottom: nextPinned,
+          scrollTop: root.scrollTop,
+        });
       },
       {
         root,
-        rootMargin: "0px 0px 48px 0px",
+        rootMargin: OBSERVER_ROOT_MARGIN,
         threshold: 0,
       },
     );
@@ -101,14 +131,6 @@ export function useTranscriptViewport({
 
   const onScroll: UIEventHandler<HTMLDivElement> = (event) => {
     const node = event.currentTarget;
-    updateTranscriptViewport(tabId, {
-      scrollTop: node.scrollTop,
-    });
-
-    if (typeof IntersectionObserver !== "undefined") {
-      return;
-    }
-
     const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
     const nextPinned = resolvePinnedBottomState(distanceFromBottom, manualJumpPendingRef.current);
     manualJumpPendingRef.current = false;

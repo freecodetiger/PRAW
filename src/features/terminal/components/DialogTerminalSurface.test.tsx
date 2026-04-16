@@ -196,6 +196,165 @@ describe("DialogTerminalSurface", () => {
     expect(host.textContent).not.toContain("Jump to latest");
   });
 
+  it("shows the jump button immediately when the user scrolls up even before intersection updates arrive", () => {
+    const paneState = {
+      ...createIdlePaneState(),
+      blocks: [
+        {
+          id: "cmd:1",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "ls",
+          output: Array.from({ length: 80 }, (_, index) => `line-${index}`).join("\n"),
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={paneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    const transcript = host.querySelector(".dialog-terminal__history") as HTMLDivElement | null;
+    expect(transcript).not.toBeNull();
+
+    Object.defineProperty(transcript!, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+    Object.defineProperty(transcript!, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+
+    act(() => {
+      transcript!.scrollTop = 560;
+      transcript?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Jump to latest");
+  });
+
+  it("heals pinned-bottom state after transcript height shrinks and clamps the saved scroll position", () => {
+    const largePaneState = {
+      ...createIdlePaneState(),
+      blocks: [
+        {
+          id: "cmd:1",
+          kind: "command" as const,
+          cwd: "/workspace",
+          command: "ls",
+          output: Array.from({ length: 80 }, (_, index) => `line-${index}`).join("\n"),
+          status: "completed" as const,
+          interactive: false,
+          exitCode: 0,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={largePaneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    const transcript = host.querySelector(".dialog-terminal__history") as HTMLDivElement | null;
+    expect(transcript).not.toBeNull();
+
+    let scrollHeight = 1000;
+    let clientHeight = 400;
+    let scrollTopValue = 0;
+
+    Object.defineProperty(transcript!, "scrollHeight", {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(transcript!, "clientHeight", {
+      configurable: true,
+      get: () => clientHeight,
+    });
+    Object.defineProperty(transcript!, "scrollTop", {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
+        scrollTopValue = Math.max(0, Math.min(value, maxScrollTop));
+      },
+    });
+
+    act(() => {
+      transcript!.scrollTop = 560;
+      transcript?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Jump to latest");
+
+    const compactPaneState = {
+      ...largePaneState,
+      blocks: [
+        {
+          ...largePaneState.blocks[0],
+          output: "file-a\nfile-b",
+        },
+      ],
+    };
+
+    scrollHeight = 430;
+    clientHeight = 400;
+
+    act(() => {
+      root.render(
+        <DialogTerminalSurface
+          paneState={compactPaneState}
+          status="running"
+          tabId="tab:1"
+          sessionId="session-1"
+          paneHeight={720}
+          fontFamily="monospace"
+          fontSize={14}
+          theme={getThemePreset("dark").terminal}
+          onSubmitCommand={() => undefined}
+          isActive={true}
+          write={async () => undefined}
+          resize={async () => undefined}
+        />,
+      );
+    });
+
+    expect(scrollTopValue).toBe(30);
+    expect(host.textContent).not.toContain("Jump to latest");
+  });
+
   it("restores transcript scroll position and jump state after the dialog surface remounts", () => {
     const paneState = {
       ...createIdlePaneState(),

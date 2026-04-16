@@ -244,6 +244,34 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
+  it("archives consecutive commands independently instead of reusing the full mirror export", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "file-a\nfile-b\n");
+    store.consumeOutput("tab:1", "file-a\nfile-b\n\x1b]133;D;0\x07");
+
+    store.submitCommand("tab:1", "pwd");
+    writeDirect("tab:1", "/workspace\n");
+    store.consumeOutput("tab:1", "/workspace\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "file-a\nfile-b",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "pwd",
+        output: "/workspace",
+      }),
+    ]);
+  });
+
   it("reuses the default transcript viewport snapshot for tabs that are not in the store", () => {
     const first = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
     const second = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
