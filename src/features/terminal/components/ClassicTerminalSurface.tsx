@@ -64,7 +64,6 @@ export function ClassicTerminalSurface({
       resize={resize}
       terminalRef={xtermRef}
       installTerminalGuards={installTerminalGuards}
-      clearOnMount={true}
     />
   );
 }

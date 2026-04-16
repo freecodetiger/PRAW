@@ -23,7 +23,6 @@ interface XtermTerminalSurfaceProps {
   inputSuspended?: boolean;
   terminalRef?: MutableRefObject<Terminal | null>;
   installTerminalGuards?: (terminal: Terminal) => (() => void) | void;
-  clearOnMount?: boolean;
 }
 
 export function XtermTerminalSurface({
@@ -39,7 +38,6 @@ export function XtermTerminalSurface({
   inputSuspended = false,
   terminalRef: forwardedTerminalRef,
   installTerminalGuards,
-  clearOnMount = false,
 }: XtermTerminalSurfaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -47,12 +45,6 @@ export function XtermTerminalSurface({
   const initialFocusEnabledRef = useRef(isActive && !inputSuspended);
   const isReplayingRef = useRef(false);
   const { handleShortcutKeyDown } = useTerminalClipboard(terminalRef);
-
-  useEffect(() => {
-    if (clearOnMount) {
-      resetDirect(tabId);
-    }
-  }, [clearOnMount, tabId]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -167,7 +159,7 @@ export function XtermTerminalSurface({
         forwardedTerminalRef.current = null;
       }
     };
-  }, [clearOnMount, fontFamily, fontSize, forwardedTerminalRef, handleShortcutKeyDown, installTerminalGuards, resize, tabId, theme, write]);
+  }, [fontFamily, fontSize, forwardedTerminalRef, handleShortcutKeyDown, installTerminalGuards, resize, tabId, theme, write]);
 
   useEffect(() => {
     if (!terminalRef.current) {
