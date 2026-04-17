@@ -1,86 +1,57 @@
 # PRAW
 
-> A desktop terminal workspace for modern CLI workflows: multi-pane layouts, a Warp-like dialog flow, classic terminal fallback, and AI-assisted command UX built on top of a real shell.
+> A modern desktop terminal workspace for developers who want split panes, readable command history, raw terminal compatibility, and AI-friendly CLI workflows.
 
-PRAW is an experimental terminal application built with `Tauri + React + Rust`. It is not trying to replace the shell. It is trying to make shell-heavy work easier to organize, easier to read, and easier to extend with AI without breaking core terminal semantics.
+[中文](#中文) | [English](#english)
 
-## Why PRAW
+## 中文
 
-Traditional terminals are powerful, but modern developer workflows usually spill across too many windows, too much context switching, and too little structure.
+PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保留真实 shell 和原生 CLI 语义，同时围绕多分屏、Dialog 命令流、Classic/raw terminal 兼容模式，以及 AI CLI 工作流做额外优化。
 
-PRAW explores a different model:
+当前公开版本只发布 Linux 平台安装包。
 
-- A terminal window as a workspace, not a single scrolling buffer
-- Split panes that stay usable under real resize constraints
-- A dialog-style command experience for readability and flow
-- A classic terminal path when full terminal semantics matter
-- AI-aware interactions layered on top of the terminal instead of replacing it
-- Multi-provider AI support through one shared abstraction layer
+### 下载
 
-## What It Can Do Today
+请从官方网站下载最新 Linux 版本：
 
-- Multi-pane terminal workspace with repeatable horizontal and vertical splits
-- Dialog mode for structured command input and transcript-oriented reading
-- Classic mode fallback for compatibility-sensitive terminal behavior
-- Warp-inspired live command console flow for running commands in dialog mode
-- AI workflow presentation states for agent-style CLI sessions
-- Workflow-aware ghost completion and suggestion ranking in dialog mode
-- AI provider profiles for `OpenAI`, `Anthropic`, `Gemini`, `xAI`, `GLM`, `DeepSeek`, `Qwen`, and `Doubao`
-- Phrase completion for repeated command snippets
-- Theme and appearance controls through the settings panel
-- Stable bundled default mono font: `CaskaydiaCove Nerd Font Mono`
-- Per-tab notes, pane actions, resize constraints, and workspace persistence
-- English-first settings UI with in-app language switching support
+- 官网：[praw.top](https://praw.top/)
+- 当前发布平台：Linux
+- 当前安装包类型：`.deb`、`.rpm`、`.AppImage`
 
-## Current Status
+### 主要特性
 
-PRAW is usable, but it is still an actively evolving project.
+- 多分屏终端工作区，支持横向/纵向拆分
+- Dialog 模式：更适合阅读命令历史和普通命令输出
+- Classic/raw terminal 模式：保留真实终端语义，兼容复杂 CLI/TUI
+- AI mode：面向 `codex`、`claude`、`qwen` 等 AI CLI 的 raw-like 交互体验
+- AI mode 旁路输入：在查看历史时快速发送 prompt
+- 可复制、可粘贴的终端交互，针对中文输入法和 AI CLI 场景做了兼容优化
+- 命令补全、短语补全、主题和字体配置
 
-- The architecture is already serious enough to explore long-term terminal UX ideas
-- Core workspace, dialog, completion, and settings systems are in place
-- Ubuntu/Linux is the primary development target right now
-- Interaction details, terminal compatibility, and AI behavior are still being refined
+### Linux 安装
 
-If you try it today, treat it as a fast-moving experimental product rather than a finished terminal replacement.
+根据你的发行版选择安装包：
 
-## Install The macOS Preview Build
+```bash
+# Debian / Ubuntu
+sudo apt install ./PRAW_0.1.0_amd64.deb
 
-If you just want to try PRAW on a Mac, start from the latest prerelease in [Releases](https://github.com/freecodetiger/PRAW/releases) instead of building from source.
+# Fedora / RHEL / openSUSE 等 rpm 系发行版
+sudo rpm -i ./PRAW-0.1.0-1.x86_64.rpm
 
-1. Open the latest prerelease in **Releases**
-2. Pick the macOS asset that matches your machine:
-   - **Apple Silicon**: prefer the `aarch64` / `arm64` `.dmg`
-   - **Intel**: prefer the `x64` / `x86_64` `.dmg`
-3. Open the downloaded `.dmg` and drag `PRAW.app` into `Applications`
-4. If macOS blocks the first launch because the preview build is unsigned/unnotarized, follow the beginner guide in [`docs/installing-macos.md`](./docs/installing-macos.md)
+# AppImage
+chmod +x ./PRAW_0.1.0_amd64.AppImage
+./PRAW_0.1.0_amd64.AppImage
+```
 
-The `.app.tar.gz` asset is kept for manual extraction and debugging. Most users should start with the `.dmg`.
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js
-- npm
-- Rust toolchain
-- Tauri development dependencies for your platform
-
-For Linux, install the standard Tauri system packages first, then continue with the project setup.
-
-### Run In Development
+### 本地开发
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-### Run Frontend Only
-
-```bash
-npm run dev
-```
-
-### Quality Checks
+常用检查：
 
 ```bash
 npm run typecheck
@@ -88,151 +59,91 @@ npm test
 npm run build
 ```
 
-## Release Process
+### 技术栈
 
-PRAW uses two different release lanes:
+- `Tauri`：桌面应用外壳和系统桥接
+- `React 19`：工作区、分屏、设置和交互界面
+- `TypeScript`：前端领域模型和 UI 逻辑
+- `Rust`：终端会话、PTY、系统侧逻辑
+- `xterm.js`：raw terminal 渲染
+- `Zustand`：应用状态管理
 
-- `main` pushes automatically create a **multi-platform prerelease**
-- `v*` tags automatically create a **draft formal release**
+### 状态
 
-This is deliberate:
+PRAW 仍处于快速迭代阶段。Linux 是当前唯一公开发布平台；macOS 和其他平台暂不作为正式发布目标。
 
-- prereleases stay automatic for testing and fast internal handoff
-- formal releases still build and upload assets automatically, but the final public text is expected to be reviewed and edited by a human author
+### 许可证
 
-### Main Prerelease Lane
+PRAW 使用 [Apache License 2.0](./LICENSE) 开源。
 
-Every push to `main` creates one shared prerelease that aggregates:
+## English
 
-- macOS `.dmg`
-- macOS `.app.tar.gz`
-- Linux `.deb`
-- Linux `.rpm`
-- Linux `.AppImage`
+PRAW is a desktop terminal app built with `Tauri + React + Rust`. It keeps a real shell and native CLI semantics, while adding a workspace-oriented interface for split panes, readable command history, raw terminal compatibility, and AI CLI workflows.
 
-These are intended for preview/testing and can use workflow-generated notes.
+The current public release is Linux-only.
 
-### Formal Release Lane
+### Download
 
-To publish an official version:
+Download the latest Linux build from the official website:
 
-1. make sure the target commit is already merged into `main`
-2. update the application version if needed
-3. create a version tag such as `v0.1.2`
-4. push that tag to GitHub
-5. wait for the `desktop-release` workflow to finish
-6. open the generated **Draft Release**
-7. hand-write or edit:
-   - version highlights
-   - author notes
-   - known issues
-   - upgrade notes
-8. verify the attached assets
-9. click **Publish release** manually
+- Website: [praw.top](https://praw.top/)
+- Current release platform: Linux
+- Current package formats: `.deb`, `.rpm`, `.AppImage`
 
-### Release Contract For Humans And Agents
+### Highlights
 
-- do **not** use a `main` prerelease as the final public release
-- do **not** assume the draft release body is final copy
-- tagged releases are expected to remain **drafts** until a human reviews and publishes them
-- if another maintainer adds or adjusts platform bundles, keep using the shared `desktop-release` workflow instead of introducing separate per-platform public releases
+- Multi-pane terminal workspace with horizontal and vertical splits
+- Dialog mode for readable command history and ordinary command output
+- Classic/raw terminal mode for compatibility-sensitive CLI and TUI behavior
+- AI mode optimized for raw-like `codex`, `claude`, `qwen`, and similar AI CLI workflows
+- Quick side-channel prompt input for AI mode
+- Copy/paste behavior tuned for AI CLI sessions and Chinese IME edge cases
+- Command completion, phrase completion, themes, and font controls
 
-For the full release and macOS signing/notarization setup, see:
+### Linux Install
 
-- [docs/releasing.md](./docs/releasing.md)
+Choose the package for your distribution:
 
-## Tech Stack
+```bash
+# Debian / Ubuntu
+sudo apt install ./PRAW_0.1.0_amd64.deb
 
-- `Tauri` for the desktop shell and native bridge
-- `React 19` for interaction-heavy workspace UI
-- `TypeScript` for front-end domain modeling
-- `Rust` for terminal/runtime/system-side logic
-- `xterm.js` for terminal rendering where terminal semantics require it
-- `Zustand` for focused application and workspace state
+# Fedora / RHEL / openSUSE and other rpm-based distributions
+sudo rpm -i ./PRAW-0.1.0-1.x86_64.rpm
 
-## Architecture In One Screen
-
-PRAW is intentionally split into clear layers:
-
-- `React` handles workspace presentation, settings, pane interactions, dialog flows, and UI state
-- `Rust` handles terminal sessions, system integration, persistence, AI/completion bridging, and runtime-sensitive logic
-- `Tauri` keeps the contract between those two layers explicit
-
-This separation matters because PRAW is not just a themed shell. It is a desktop terminal workspace with long-lived sessions, pane geometry, transcript logic, and AI-assisted input behaviors.
-
-## Project Highlights
-
-### 1. Dialog And Classic Are Separate On Purpose
-
-PRAW does not try to fake one input model as the other.
-
-- `dialog` mode is optimized for readability, structured history, suggestions, and command-centric workflows
-- `classic` mode exists for cases where terminal compatibility and raw semantics win
-
-That boundary is deliberate. It keeps advanced UX experiments from corrupting the baseline terminal experience.
-
-### 2. Layout Is Built For Real Pane Work
-
-The workspace model is designed around actual screen geometry and pane constraints, not just naive split history.
-
-That matters for:
-
-- repeated splits on the same axis
-- stable resizing behavior
-- edge constraints near headers and composers
-- long-running usability in dense pane layouts
-
-### 3. AI Is Treated As An Enhancement Layer
-
-PRAW already includes the foundations for smarter command UX:
-
-- ghost completion
-- ranked suggestions
-- recovery suggestions
-- context-aware workflow continuation
-
-The goal is not "chat inside a terminal". The goal is terminal-native assistance that still feels like command execution.
-
-## Repository Structure
-
-```text
-src/                 React app, domain logic, workspace UI, settings, suggestion engine
-src-tauri/           Rust backend, terminal runtime, native commands, persistence
-project-insights/    Short write-ups on architectural choices and implementation ideas
-docs/                Internal specs and implementation plans
+# AppImage
+chmod +x ./PRAW_0.1.0_amd64.AppImage
+./PRAW_0.1.0_amd64.AppImage
 ```
 
-## Design And Engineering Notes
+### Development
 
-If you want the reasoning behind the current architecture, start here:
+```bash
+npm install
+npm run tauri dev
+```
 
-- [Why Tauri + React + Rust](./project-insights/why-tauri-react-rust.md)
-- [Why the workspace moved to a multi-container tree](./project-insights/why-multi-container-tree.md)
-- [Ghost completion highlights](./project-insights/ghost-completion-highlights.md)
-- [UI theme highlights](./project-insights/ui-theme-highlights.md)
+Useful checks:
 
-## Roadmap Direction
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
-The current direction is clear even though the product is still converging:
+### Tech Stack
 
-- Smarter workflow prediction beyond simple prefix history
-- Better AI-assisted command recovery and intent handling
-- Stronger dialog/classic compatibility boundaries
-- More polished cross-platform behavior outside the current Ubuntu-first workflow
-- Better packaging, onboarding, and public-facing project materials
+- `Tauri` for the desktop shell and native bridge
+- `React 19` for workspace UI and interaction-heavy surfaces
+- `TypeScript` for frontend domain modeling
+- `Rust` for terminal sessions, PTY, and system-side logic
+- `xterm.js` for raw terminal rendering
+- `Zustand` for app state
 
-## Contributing
+### Status
 
-The codebase is still moving quickly, but issues and pull requests are welcome if they align with the product direction.
+PRAW is still moving quickly. Linux is the only public release platform right now; macOS and other platforms are not formal release targets yet.
 
-Before making larger changes:
+### License
 
-- read the architecture notes in [`project-insights/`](./project-insights)
-- inspect the current domain boundaries in `src/domain` and `src/features`
-- avoid flattening dialog/classic distinctions unless the change is explicitly about terminal semantics
-
-## Philosophy
-
-PRAW is built around a simple idea:
-
-the terminal should stay powerful, but it does not need to stay primitive.
+PRAW is open source under the [Apache License 2.0](./LICENSE).
