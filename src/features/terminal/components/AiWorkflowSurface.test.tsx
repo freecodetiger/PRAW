@@ -18,6 +18,7 @@ const renderCalls: Array<{ inputSuspended?: boolean }> = [];
 const voiceApi = vi.hoisted(() => {
   let startedHandler: ((event: { sessionId: string }) => void) | null = null;
   let statusHandler: ((event: { sessionId: string; message: string }) => void) | null = null;
+  let liveHandler: ((event: { sessionId: string; text: string }) => void) | null = null;
   let completedHandler: ((event: { sessionId: string; text: string }) => void) | null = null;
   let failedHandler: ((event: { sessionId: string; message: string }) => void) | null = null;
 
@@ -35,6 +36,12 @@ const voiceApi = vi.hoisted(() => {
       statusHandler = handler as typeof statusHandler;
       return () => {
         statusHandler = null;
+      };
+    }),
+    onVoiceTranscriptionLive: vi.fn(async (handler: typeof liveHandler extends infer T ? T : never) => {
+      liveHandler = handler as typeof liveHandler;
+      return () => {
+        liveHandler = null;
       };
     }),
     onVoiceTranscriptionCompleted: vi.fn(async (handler: typeof completedHandler extends infer T ? T : never) => {
@@ -55,6 +62,9 @@ const voiceApi = vi.hoisted(() => {
     emitStatus(payload: { sessionId: string; message: string }) {
       statusHandler?.(payload);
     },
+    emitLive(payload: { sessionId: string; text: string }) {
+      liveHandler?.(payload);
+    },
     emitCompleted(payload: { sessionId: string; text: string }) {
       completedHandler?.(payload);
     },
@@ -67,10 +77,12 @@ const voiceApi = vi.hoisted(() => {
       this.cancelVoiceTranscription.mockClear();
       this.onVoiceTranscriptionStarted.mockClear();
       this.onVoiceTranscriptionStatus.mockClear();
+      this.onVoiceTranscriptionLive.mockClear();
       this.onVoiceTranscriptionCompleted.mockClear();
       this.onVoiceTranscriptionFailed.mockClear();
       startedHandler = null;
       statusHandler = null;
+      liveHandler = null;
       completedHandler = null;
       failedHandler = null;
     },
@@ -317,21 +329,18 @@ describe("AiWorkflowSurface", () => {
     expect(host.textContent).toContain("Could not send prompt");
   });
 
-  it("renders a hold-to-talk voice control when speech input is configured", () => {
-    useAppConfigStore.getState().patchSpeechConfig({
-      enabled: true,
-      apiKey: "speech-key",
-      language: "auto",
-    });
-
+  it("keeps the voice button visible but disabled when speech is not configured", () => {
     renderSurface(root, createAgentWorkflowPaneState(), {
       quickPromptOpenRequestKey: 1,
     });
 
-    expect(host.querySelector('[aria-label="Start voice input"]')).not.toBeNull();
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+    expect(voiceButton).not.toBeNull();
+    expect(voiceButton?.disabled).toBe(true);
+    expect(host.textContent).toContain("Speech input is not configured");
   });
 
-  it("starts on press, stops on release, and inserts the transcript into the bypass draft", async () => {
+  it("starts on first click, shows live transcript separately, and stops on second click", async () => {
     useAppConfigStore.getState().patchSpeechConfig({
       enabled: true,
       apiKey: "speech-key",
@@ -342,11 +351,12 @@ describe("AiWorkflowSurface", () => {
       quickPromptOpenRequestKey: 1,
     });
 
-    const voiceButton = host.querySelector('[aria-label="Start voice input"]');
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
     expect(voiceButton).not.toBeNull();
 
     await act(async () => {
-      voiceButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      voiceButton?.click();
     });
 
     expect(voiceApi.startVoiceTranscription).toHaveBeenCalledWith({
@@ -357,8 +367,14 @@ describe("AiWorkflowSurface", () => {
 
     await act(async () => {
       voiceApi.emitStarted({ sessionId: "voice-session-1" });
-      voiceApi.emitStatus({ sessionId: "voice-session-1", message: "Listening…" });
-      voiceButton?.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      voiceApi.emitLive({ sessionId: "voice-session-1", text: "你好" });
+    });
+
+    expect(host.querySelector('[aria-label="Live transcript preview"]')?.textContent).toContain("你好");
+    expect(input?.value).toBe("");
+
+    await act(async () => {
+      voiceButton?.click();
     });
 
     expect(voiceApi.stopVoiceTranscription).toHaveBeenCalledWith("voice-session-1");
@@ -367,10 +383,40 @@ describe("AiWorkflowSurface", () => {
       voiceApi.emitCompleted({ sessionId: "voice-session-1", text: "你好 codex" });
     });
 
-    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe(
-      "你好 codex",
-    );
-    expect(host.textContent).not.toContain("Listening…");
+    expect(input?.value).toBe("你好 codex");
+  });
+
+  it("cancels active recording on escape and preserves any existing typed draft", async () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+    expect(input).not.toBeNull();
+    expect(voiceButton).not.toBeNull();
+
+    await act(async () => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "existing draft");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      voiceButton?.click();
+    });
+
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(voiceApi.cancelVoiceTranscription).toHaveBeenCalledWith("voice-session-1");
+    expect(input?.value).toBe("existing draft");
   });
 
   it("does not render resume picker chrome in the raw-only AI surface", () => {
