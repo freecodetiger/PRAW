@@ -19,6 +19,7 @@ interface BlockWorkspaceSurfaceProps {
   onSubmitCommand: (command: string) => void;
   onSubmitAiInput: (input: string) => Promise<void> | void;
   quickPromptOpenRequestKey?: number;
+  voiceBypassToggleRequestKey?: number;
 }
 
 export function BlockWorkspaceSurface({
@@ -36,6 +37,7 @@ export function BlockWorkspaceSurface({
   onSubmitCommand,
   onSubmitAiInput,
   quickPromptOpenRequestKey = 0,
+  voiceBypassToggleRequestKey = 0,
 }: BlockWorkspaceSurfaceProps) {
   if (paneState.presentation === "agent-workflow") {
     return (
@@ -52,6 +54,7 @@ export function BlockWorkspaceSurface({
         resize={resize}
         onSubmitAiInput={onSubmitAiInput}
         quickPromptOpenRequestKey={quickPromptOpenRequestKey}
+        voiceBypassToggleRequestKey={voiceBypassToggleRequestKey}
       />
     );
   }

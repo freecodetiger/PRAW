@@ -8,6 +8,7 @@ interface UseWorkspaceShortcutsOptions {
   splitActiveTab: (axis: "horizontal" | "vertical") => void;
   requestEditNoteForActiveTab: () => void;
   toggleFocusPane: () => void;
+  toggleAiVoiceBypass: () => void;
   shortcuts: TerminalShortcutConfig;
 }
 
@@ -16,6 +17,7 @@ export function useWorkspaceShortcuts({
   splitActiveTab,
   requestEditNoteForActiveTab,
   toggleFocusPane,
+  toggleAiVoiceBypass,
   shortcuts,
 }: UseWorkspaceShortcutsOptions) {
   useEffect(() => {
@@ -52,6 +54,9 @@ export function useWorkspaceShortcuts({
         case "toggle-focus-pane":
           toggleFocusPane();
           return;
+        case "toggle-ai-voice-bypass":
+          toggleAiVoiceBypass();
+          return;
       }
     };
 
@@ -59,5 +64,5 @@ export function useWorkspaceShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab, toggleFocusPane]);
+  }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab, toggleAiVoiceBypass, toggleFocusPane]);
 }

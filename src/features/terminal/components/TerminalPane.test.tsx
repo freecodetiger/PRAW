@@ -86,6 +86,7 @@ describe("TerminalPane", () => {
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
+      voiceBypassTabId: null,
     }));
 
     useTerminalViewStore.setState((state) => ({
@@ -272,6 +273,48 @@ describe("TerminalPane", () => {
       mode && trigger && (mode.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING),
     );
     expect(isModeBeforeTrigger).toBe(true);
+  });
+
+  it("increments the voice bypass request key when the active AI pane receives a voice bypass request", async () => {
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
+
+    await act(async () => {
+      useWorkspaceStore.getState().requestAiVoiceBypassForActiveTab();
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(1);
+  });
+
+  it("does not increment the voice bypass request key for non-AI panes", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...createDialogState("/bin/bash", "/workspace"),
+          mode: "classic",
+          modeSource: "auto-interactive",
+          presentation: "default",
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
+
+    await act(async () => {
+      useWorkspaceStore.getState().requestAiVoiceBypassForActiveTab();
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
   });
 
   it("increments the quick prompt request key when the header trigger is clicked", async () => {

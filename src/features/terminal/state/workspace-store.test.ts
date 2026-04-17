@@ -11,6 +11,7 @@ describe("workspace-store", () => {
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
+      voiceBypassTabId: null,
     }));
   });
 
@@ -142,6 +143,19 @@ describe("workspace-store", () => {
 
     useWorkspaceStore.getState().clearNoteEditorRequest("tab:1");
     expect(useWorkspaceStore.getState().noteEditorTabId).toBeNull();
+  });
+
+  it("requests AI voice bypass for the active pane and clears that request after consumption", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "~",
+    });
+
+    useWorkspaceStore.getState().requestAiVoiceBypassForActiveTab();
+    expect(useWorkspaceStore.getState().voiceBypassTabId).toBe("tab:1");
+
+    useWorkspaceStore.getState().clearAiVoiceBypassRequest("tab:1");
+    expect(useWorkspaceStore.getState().voiceBypassTabId).toBeNull();
   });
 
   it("applies the drag preview by reordering the window layout", () => {
