@@ -7,13 +7,16 @@ interface AiModePromptOverlayProps {
   error?: string | null;
   statusMessage?: string | null;
   voiceAvailable?: boolean;
+  voiceConfigured?: boolean;
   voiceActive?: boolean;
+  voicePendingFinal?: boolean;
   voiceDisabled?: boolean;
+  liveTranscript?: string;
   onChange: (value: string) => void;
   onCollapse: () => void;
   onSubmit: () => Promise<void> | void;
-  onVoicePressStart?: () => Promise<void> | void;
-  onVoicePressEnd?: () => Promise<void> | void;
+  onVoiceToggle?: () => Promise<void> | void;
+  onVoiceCancel?: () => Promise<void> | void;
 }
 
 export function AiModePromptOverlay({
@@ -23,13 +26,16 @@ export function AiModePromptOverlay({
   error = null,
   statusMessage = null,
   voiceAvailable = false,
+  voiceConfigured = false,
   voiceActive = false,
+  voicePendingFinal = false,
   voiceDisabled = false,
+  liveTranscript = "",
   onChange,
   onCollapse,
   onSubmit,
-  onVoicePressStart,
-  onVoicePressEnd,
+  onVoiceToggle,
+  onVoiceCancel,
 }: AiModePromptOverlayProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -106,6 +112,10 @@ export function AiModePromptOverlay({
               if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
+                if (voiceActive || voicePendingFinal) {
+                  void onVoiceCancel?.();
+                  return;
+                }
                 onCollapse();
               }
             }}
@@ -113,26 +123,24 @@ export function AiModePromptOverlay({
 
           {voiceAvailable ? (
             <button
-              className={`button button--ghost ai-workflow__bypass-voice${voiceActive ? " ai-workflow__bypass-voice--active" : ""}`}
+              className={`button button--ghost ai-workflow__bypass-voice${voiceActive ? " ai-workflow__bypass-voice--active" : ""}${voicePendingFinal ? " ai-workflow__bypass-voice--pending" : ""}`}
               type="button"
-              aria-label="Start voice input"
-              disabled={voiceDisabled}
-              onMouseDown={() => {
-                void onVoicePressStart?.();
-              }}
-              onMouseUp={() => {
-                void onVoicePressEnd?.();
-              }}
-              onMouseLeave={() => {
-                if (voiceActive) {
-                  void onVoicePressEnd?.();
-                }
+              aria-label="Toggle voice input"
+              disabled={disabled || voiceDisabled || voicePendingFinal || !voiceConfigured}
+              onClick={() => {
+                void onVoiceToggle?.();
               }}
             >
-              {voiceActive ? "Stop" : "Mic"}
+              {voicePendingFinal ? "Transcribing…" : voiceActive ? "Stop" : "Mic"}
             </button>
           ) : null}
         </div>
+
+        {liveTranscript.trim().length > 0 ? (
+          <div className="ai-workflow__bypass-live" aria-label="Live transcript preview">
+            {liveTranscript}
+          </div>
+        ) : null}
 
         {statusMessage ? <p className="dialog-terminal__ai-prompt-status">{statusMessage}</p> : null}
         {error ? <p className="dialog-terminal__ai-prompt-error">{error}</p> : null}

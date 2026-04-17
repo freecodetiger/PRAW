@@ -952,6 +952,23 @@ button {
   color: var(--text-primary);
 }
 
+.ai-workflow__bypass-voice--pending {
+  opacity: 0.8;
+  cursor: progress;
+}
+
+.ai-workflow__bypass-live {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 14%, var(--border-muted));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--ai-background-color));
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .ai-workflow__bypass-panel .ai-workflow__prompt-input-shell {
   width: 100%;
 }

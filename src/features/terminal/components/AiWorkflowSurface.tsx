@@ -6,6 +6,7 @@ import {
   cancelVoiceTranscription,
   onVoiceTranscriptionCompleted,
   onVoiceTranscriptionFailed,
+  onVoiceTranscriptionLive,
   onVoiceTranscriptionStarted,
   onVoiceTranscriptionStatus,
   startVoiceTranscription,
@@ -53,11 +54,12 @@ export function AiWorkflowSurface({
   const [isBypassSubmitting, setIsBypassSubmitting] = useState(false);
   const [voiceSessionId, setVoiceSessionId] = useState<string | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
-  const [isVoiceStopping, setIsVoiceStopping] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [isVoiceFinalizing, setIsVoiceFinalizing] = useState(false);
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
-  const voiceEnabled = speechConfig.enabled && speechConfig.apiKey.trim().length > 0;
+  const voiceConfigured = speechConfig.enabled && speechConfig.apiKey.trim().length > 0;
 
   useEffect(() => {
     voiceSessionIdRef.current = voiceSessionId;
@@ -98,6 +100,16 @@ export function AiWorkflowSurface({
       );
 
       cleanup.push(
+        await onVoiceTranscriptionLive((event) => {
+          if (event.sessionId !== voiceSessionIdRef.current) {
+            return;
+          }
+
+          setLiveTranscript(event.text);
+        }),
+      );
+
+      cleanup.push(
         await onVoiceTranscriptionCompleted((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
@@ -109,10 +121,7 @@ export function AiWorkflowSurface({
 ${transcript}` : transcript));
           }
 
-          voiceSessionIdRef.current = null;
-          setVoiceSessionId(null);
-          setVoiceStatus(null);
-          setIsVoiceStopping(false);
+          resetVoiceState();
         }),
       );
 
@@ -122,10 +131,7 @@ ${transcript}` : transcript));
             return;
           }
 
-          voiceSessionIdRef.current = null;
-          setVoiceSessionId(null);
-          setVoiceStatus(null);
-          setIsVoiceStopping(false);
+          resetVoiceState();
           setBypassError(event.message || "Voice input failed.");
         }),
       );
@@ -152,7 +158,21 @@ ${transcript}` : transcript));
     voiceSessionIdRef.current = null;
     setVoiceSessionId(null);
     setVoiceStatus(null);
-    setIsVoiceStopping(false);
+    setLiveTranscript("");
+    setIsVoiceFinalizing(false);
+  };
+
+  const cancelVoiceCapture = async () => {
+    const currentSessionId = voiceSessionIdRef.current;
+    if (!currentSessionId) {
+      return;
+    }
+
+    try {
+      await cancelVoiceTranscription(currentSessionId);
+    } finally {
+      resetVoiceState();
+    }
   };
 
   const closeBypassPrompt = () => {
@@ -161,8 +181,8 @@ ${transcript}` : transcript));
     }
 
     if (voiceSessionIdRef.current) {
-      void cancelVoiceTranscription(voiceSessionIdRef.current);
-      resetVoiceState();
+      void cancelVoiceCapture();
+      return;
     }
 
     setBypassPromptOpen(false);
@@ -190,11 +210,13 @@ ${transcript}` : transcript));
   };
 
   const startVoiceCapture = async () => {
-    if (!voiceEnabled || composerDisabled || isBypassSubmitting || voiceSessionIdRef.current) {
+    if (!voiceConfigured || composerDisabled || isBypassSubmitting || voiceSessionIdRef.current) {
       return;
     }
 
     setBypassError(null);
+    setLiveTranscript("");
+    setIsVoiceFinalizing(false);
     setVoiceStatus("Starting microphone…");
 
     try {
@@ -205,7 +227,6 @@ ${transcript}` : transcript));
       });
       voiceSessionIdRef.current = session.sessionId;
       setVoiceSessionId(session.sessionId);
-      setVoiceStatus("Listening…");
     } catch {
       resetVoiceState();
       setBypassError("Voice input could not start.");
@@ -214,19 +235,28 @@ ${transcript}` : transcript));
 
   const stopVoiceCapture = async () => {
     const currentSessionId = voiceSessionIdRef.current;
-    if (!currentSessionId || isVoiceStopping) {
+    if (!currentSessionId || isVoiceFinalizing) {
       return;
     }
 
-    setIsVoiceStopping(true);
+    setIsVoiceFinalizing(true);
     setVoiceStatus("Transcribing…");
 
     try {
       await stopVoiceTranscription(currentSessionId);
     } catch {
-      setIsVoiceStopping(false);
+      setIsVoiceFinalizing(false);
       setBypassError("Voice input could not stop cleanly.");
     }
+  };
+
+  const toggleVoiceCapture = async () => {
+    if (voiceSessionIdRef.current) {
+      await stopVoiceCapture();
+      return;
+    }
+
+    await startVoiceCapture();
   };
 
   return (
@@ -237,18 +267,23 @@ ${transcript}` : transcript));
           draft={bypassDraft}
           disabled={composerDisabled || isBypassSubmitting}
           error={bypassError}
-          statusMessage={voiceStatus ?? (composerDisabled ? "The AI session is not accepting input." : null)}
-          voiceAvailable={voiceEnabled}
-          voiceActive={voiceSessionId !== null && !isVoiceStopping}
+          statusMessage={
+            voiceStatus ?? (!voiceConfigured ? "Speech input is not configured." : composerDisabled ? "The AI session is not accepting input." : null)
+          }
+          voiceAvailable={true}
+          voiceConfigured={voiceConfigured}
+          voiceActive={voiceSessionId !== null && !isVoiceFinalizing}
+          voicePendingFinal={isVoiceFinalizing}
           voiceDisabled={composerDisabled || isBypassSubmitting}
+          liveTranscript={liveTranscript}
           onChange={(value) => {
             setBypassDraft(value);
             setBypassError(null);
           }}
           onCollapse={closeBypassPrompt}
           onSubmit={submitBypassPrompt}
-          onVoicePressStart={startVoiceCapture}
-          onVoicePressEnd={stopVoiceCapture}
+          onVoiceToggle={toggleVoiceCapture}
+          onVoiceCancel={cancelVoiceCapture}
         />
       ) : null}
 
