@@ -15,6 +15,7 @@ describe("terminal shortcut config", () => {
       splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
       editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
       toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleAiVoiceBypass: { key: "/", ctrl: true, alt: true, shift: true, meta: false },
     });
   });
 
@@ -48,6 +49,16 @@ describe("terminal shortcut config", () => {
         "splitRight",
       ),
     ).toBe("splitDown");
+  });
+
+  it("finds conflicts involving the AI voice bypass shortcut", () => {
+    expect(
+      findShortcutConflict(
+        DEFAULT_TERMINAL_SHORTCUTS,
+        { key: "/", ctrl: true, alt: true, shift: true, meta: false },
+        "splitRight",
+      ),
+    ).toBe("toggleAiVoiceBypass");
   });
 
   it("ignores modifier-only and ime keys when recording a shortcut", () => {

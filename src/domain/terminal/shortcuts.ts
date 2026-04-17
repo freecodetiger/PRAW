@@ -15,7 +15,8 @@ export type WorkspaceShortcutAction =
   | { type: "split-right" }
   | { type: "split-down" }
   | { type: "edit-note" }
-  | { type: "toggle-focus-pane" };
+  | { type: "toggle-focus-pane" }
+  | { type: "toggle-ai-voice-bypass" };
 
 export type TerminalShortcutAction = { type: "copy-selection" } | { type: "paste" };
 
@@ -102,6 +103,10 @@ function resolvePaneActionShortcut(
 
   if (matchesShortcutBinding(event, shortcuts.toggleFocusPane)) {
     return { type: "toggle-focus-pane" };
+  }
+
+  if (matchesShortcutBinding(event, shortcuts.toggleAiVoiceBypass)) {
+    return { type: "toggle-ai-voice-bypass" };
   }
 
   return null;

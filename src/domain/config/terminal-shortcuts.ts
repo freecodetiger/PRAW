@@ -11,6 +11,7 @@ export interface TerminalShortcutConfig {
   splitDown: ShortcutBinding | null;
   editNote: ShortcutBinding | null;
   toggleFocusPane: ShortcutBinding | null;
+  toggleAiVoiceBypass: ShortcutBinding | null;
 }
 
 export type TerminalShortcutConfigKey = keyof TerminalShortcutConfig;
@@ -29,6 +30,7 @@ export const DEFAULT_TERMINAL_SHORTCUTS: TerminalShortcutConfig = {
   splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
   editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
   toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+  toggleAiVoiceBypass: { key: "/", ctrl: true, alt: true, shift: true, meta: false },
 };
 
 export function normalizeTerminalShortcutConfig(
@@ -39,6 +41,7 @@ export function normalizeTerminalShortcutConfig(
     splitDown: normalizeShortcutBinding(value?.splitDown, DEFAULT_TERMINAL_SHORTCUTS.splitDown),
     editNote: normalizeShortcutBinding(value?.editNote, DEFAULT_TERMINAL_SHORTCUTS.editNote),
     toggleFocusPane: normalizeShortcutBinding(value?.toggleFocusPane, DEFAULT_TERMINAL_SHORTCUTS.toggleFocusPane),
+    toggleAiVoiceBypass: normalizeShortcutBinding(value?.toggleAiVoiceBypass, DEFAULT_TERMINAL_SHORTCUTS.toggleAiVoiceBypass),
   };
 
   return hasDuplicateShortcutBindings(normalized) ? cloneShortcutConfig(DEFAULT_TERMINAL_SHORTCUTS) : normalized;
@@ -166,6 +169,7 @@ function cloneShortcutConfig(config: TerminalShortcutConfig): TerminalShortcutCo
     splitDown: cloneShortcutBinding(config.splitDown),
     editNote: cloneShortcutBinding(config.editNote),
     toggleFocusPane: cloneShortcutBinding(config.toggleFocusPane),
+    toggleAiVoiceBypass: cloneShortcutBinding(config.toggleAiVoiceBypass),
   };
 }
 
