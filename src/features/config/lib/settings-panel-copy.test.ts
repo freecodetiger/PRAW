@@ -15,8 +15,10 @@ describe("settings panel copy", () => {
     expect(copy.panelLanguage.label).toBe("Panel Language");
   });
 
-  it("includes a focus-pane shortcut label in both locales", () => {
+  it("includes focus-pane and AI voice bypass shortcut labels in both locales", () => {
     expect(getSettingsPanelCopy("en").terminal.shortcutLabels.toggleFocusPane).toBe("Toggle Focus Pane");
     expect(getSettingsPanelCopy("zh-CN").terminal.shortcutLabels.toggleFocusPane).toBe("切换聚焦分屏");
+    expect(getSettingsPanelCopy("en").terminal.shortcutLabels.toggleAiVoiceBypass).toBe("Toggle AI Voice Bypass");
+    expect(getSettingsPanelCopy("zh-CN").terminal.shortcutLabels.toggleAiVoiceBypass).toBe("切换 AI 语音旁路");
   });
 });

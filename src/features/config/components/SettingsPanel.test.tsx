@@ -174,6 +174,34 @@ describe("SettingsPanel", () => {
     expect(useAppConfigStore.getState().config.speech.language).toBe("zh");
   });
 
+  it("renders the AI voice bypass shortcut in the shortcuts section", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Toggle AI Voice Bypass");
+  });
+
+  it("renders the localized AI voice bypass shortcut label in chinese", () => {
+    useAppConfigStore.getState().patchUiConfig({
+      settingsPanelLanguage: "zh-CN",
+    });
+
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("切换 AI 语音旁路");
+  });
+
   it("shows a speech api key field and updates stored speech config independently", () => {
     act(() => {
       root.render(<SettingsPanel />);
