@@ -1,12 +1,12 @@
 # PRAW
 
-> A modern desktop terminal workspace for developers who want split panes, readable command history, raw terminal compatibility, and AI-friendly CLI workflows.
+> A modern desktop terminal workspace for developers who want split panes, readable command history, raw terminal compatibility, voice input, and AI-friendly CLI workflows.
 
 [中文](#中文) | [English](#english)
 
 ## 中文
 
-PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保留真实 shell 和原生 CLI 语义，同时围绕多分屏、Dialog 命令流、Classic/raw terminal 兼容模式，以及 AI CLI 工作流做额外优化。
+PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保留真实 shell 和原生 CLI 语义，同时围绕多分屏工作区、可读的命令历史、Classic/raw terminal 兼容模式、语音输入，以及 AI CLI 工作流做额外优化。
 
 当前公开发布同时覆盖 Linux 正式安装包与 macOS 预览构建。
 
@@ -26,6 +26,7 @@ PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保
 - Classic/raw terminal 模式：保留真实终端语义，兼容复杂 CLI/TUI
 - AI mode：面向 `codex`、`claude`、`qwen` 等 AI CLI 的 raw-like 交互体验
 - AI mode 旁路输入：在查看历史时快速发送 prompt
+- 语音输入：支持通过快捷键或旁路输入中的麦克风按钮进行语音转文字，适合中英文 prompt 输入
 - 可复制、可粘贴的终端交互，针对中文输入法和 AI CLI 场景做了兼容优化
 - 命令补全、短语补全、主题和字体配置
 
@@ -96,7 +97,7 @@ PRAW 使用 [Apache License 2.0](./LICENSE) 开源。
 
 ## English
 
-PRAW is a desktop terminal app built with `Tauri + React + Rust`. It keeps a real shell and native CLI semantics, while adding a workspace-oriented interface for split panes, readable command history, raw terminal compatibility, and AI CLI workflows.
+PRAW is a desktop terminal app built with `Tauri + React + Rust`. It keeps a real shell and native CLI semantics, while adding a workspace-oriented interface for split panes, readable command history, raw terminal compatibility, voice input, and AI CLI workflows.
 
 The current public release covers Linux packages plus a macOS preview lane.
 
@@ -116,6 +117,7 @@ Download the latest build from the website or GitHub Releases:
 - Classic/raw terminal mode for compatibility-sensitive CLI and TUI behavior
 - AI mode optimized for raw-like `codex`, `claude`, `qwen`, and similar AI CLI workflows
 - Quick side-channel prompt input for AI mode
+- Voice input for AI prompts, available from shortcuts or the bypass microphone control, with Chinese and English speech-to-text support
 - Copy/paste behavior tuned for AI CLI sessions and Chinese IME edge cases
 - Command completion, phrase completion, themes, and font controls
 
