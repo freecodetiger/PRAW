@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 pub const VOICE_TRANSCRIPTION_STARTED_EVENT: &str = "voice/transcription-started";
 pub const VOICE_TRANSCRIPTION_STATUS_EVENT: &str = "voice/transcription-status";
+pub const VOICE_TRANSCRIPTION_LIVE_EVENT: &str = "voice/transcription-live";
 pub const VOICE_TRANSCRIPTION_COMPLETED_EVENT: &str = "voice/transcription-completed";
 pub const VOICE_TRANSCRIPTION_FAILED_EVENT: &str = "voice/transcription-failed";
 const ALIYUN_REALTIME_PROVIDER: &str = "aliyun-paraformer-realtime";
@@ -46,6 +47,13 @@ pub struct VoiceTranscriptionStartedEvent {
 pub struct VoiceTranscriptionStatusEvent {
     pub session_id: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceTranscriptionLiveEvent {
+    pub session_id: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -90,15 +98,7 @@ impl VoiceTranscriptionManager {
 
         let manager = Arc::clone(self);
         let task_session_id = session_id.clone();
-        tauri::async_runtime::spawn(async move {
-            let result =
-                run_voice_session(app.clone(), task_session_id.clone(), request, command_rx).await;
-            manager.finish_session(&task_session_id);
-
-            if let Err(error) = result {
-                emit_failed(&app, &task_session_id, error.to_string());
-            }
-        });
+        spawn_voice_session_thread(manager, app, task_session_id, request, command_rx);
 
         Ok(StartVoiceTranscriptionResponse { session_id })
     }
@@ -140,6 +140,35 @@ struct AudioCapture {
     stream: cpal::Stream,
     receiver: mpsc::UnboundedReceiver<Vec<u8>>,
     sample_rate: u32,
+}
+
+fn spawn_voice_session_thread(
+    manager: Arc<VoiceTranscriptionManager>,
+    app: AppHandle,
+    session_id: String,
+    request: StartVoiceTranscriptionRequest,
+    command_rx: mpsc::UnboundedReceiver<VoiceSessionCommand>,
+) {
+    std::thread::spawn(move || {
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("failed to create voice runtime")
+            .and_then(|runtime| {
+                runtime.block_on(run_voice_session(
+                    app.clone(),
+                    session_id.clone(),
+                    request,
+                    command_rx,
+                ))
+            });
+
+        manager.finish_session(&session_id);
+
+        if let Err(error) = result {
+            emit_failed(&app, &session_id, error.to_string());
+        }
+    });
 }
 
 async fn run_voice_session(
@@ -231,7 +260,8 @@ async fn run_voice_session(
                     }
                     ServerMessage::ResultGenerated { text } => {
                         if let Some(text) = text {
-                            final_text = text;
+                            final_text = text.clone();
+                            emit_live(&app, &session_id, &text);
                         }
                     }
                     ServerMessage::TaskFinished => {
@@ -321,6 +351,7 @@ fn language_hints(language: &str) -> Vec<&'static str> {
     }
 }
 
+#[derive(Debug)]
 enum ServerMessage {
     TaskStarted,
     ResultGenerated { text: Option<String> },
@@ -484,6 +515,16 @@ fn emit_status(app: &AppHandle, session_id: &str, message: &str) {
     );
 }
 
+fn emit_live(app: &AppHandle, session_id: &str, text: &str) {
+    let _ = app.emit(
+        VOICE_TRANSCRIPTION_LIVE_EVENT,
+        VoiceTranscriptionLiveEvent {
+            session_id: session_id.to_string(),
+            text: text.to_string(),
+        },
+    );
+}
+
 fn emit_completed(app: &AppHandle, session_id: &str, text: &str) {
     let _ = app.emit(
         VOICE_TRANSCRIPTION_COMPLETED_EVENT,
@@ -574,6 +615,32 @@ mod tests {
             Some("session-1")
         );
         assert!(value.pointer("/payload/input").is_some());
+    }
+
+    #[test]
+    fn parses_live_result_generated_event_text() {
+        let result = parse_server_event(
+            r#"{
+                "header": { "task_id": "session-1", "event": "result-generated" },
+                "payload": {
+                    "output": {
+                        "sentence": {
+                            "text": "hello partial",
+                            "sentence_end": false,
+                            "heartbeat": false
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect("result-generated payload should parse");
+
+        match result {
+            ServerMessage::ResultGenerated { text } => {
+                assert_eq!(text.as_deref(), Some("hello partial"));
+            }
+            other => panic!("expected ResultGenerated, got {other:?}"),
+        }
     }
 
     #[test]
