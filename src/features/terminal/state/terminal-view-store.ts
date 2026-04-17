@@ -220,9 +220,18 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           promptCwd = event.cwd;
         }
 
+        const activeCommand =
+          event.type === "command-end" && nextState.activeCommandBlockId !== null
+            ? nextState.blocks.find((block) => block.id === nextState.activeCommandBlockId)
+            : null;
+        const exitingAgentWorkflow =
+          event.type === "command-end" && nextState.presentation === "agent-workflow";
         const archivedOutput =
           event.type === "command-end" && nextState.presentation !== "agent-workflow"
-            ? computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline)
+            ? sanitizeArchivedCommandOutput(
+                computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline),
+                activeCommand?.command ?? null,
+              )
             : undefined;
 
         nextState = {
@@ -233,6 +242,10 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           ),
           activeArchiveBaseline: event.type === "command-end" ? null : nextState.activeArchiveBaseline,
         };
+
+        if (exitingAgentWorkflow) {
+          resetDirect(tabId);
+        }
 
         if (
           event.type === "command-end" &&
@@ -470,6 +483,41 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   return delta || undefined;
+}
+
+function sanitizeArchivedCommandOutput(archiveText: string | undefined, command: string | null): string | undefined {
+  if (!archiveText) {
+    return undefined;
+  }
+
+  const normalized = archiveText.replace(/\r\n/g, "\n");
+  const trimmedLeading = normalized.replace(/^\n+/, "");
+  if (!command) {
+    return trimmedLeading || undefined;
+  }
+
+  const lines = trimmedLeading.split("\n");
+  const firstLine = lines[0]?.trim() ?? "";
+  const normalizedCommand = command.trim();
+
+  if (looksLikePromptEcho(firstLine, normalizedCommand)) {
+    const remaining = lines.slice(1).join("\n").replace(/^\n+/, "");
+    return remaining || undefined;
+  }
+
+  return trimmedLeading || undefined;
+}
+
+function looksLikePromptEcho(line: string, command: string): boolean {
+  if (!line || !command) {
+    return false;
+  }
+
+  if (line === command) {
+    return true;
+  }
+
+  return ["$ ", "% ", "# ", "> ", "› ", "❯ "].some((promptSuffix) => line.endsWith(`${promptSuffix}${command}`));
 }
 function createTranscriptViewportState(): TranscriptViewportState {
   return {

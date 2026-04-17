@@ -133,19 +133,14 @@ describe("terminal-view-store AI transcript", () => {
     },
   );
 
-  it("captures idle output into DOM blocks even when legacy mode state says classic", () => {
+  it("ignores idle output instead of creating session blocks even when legacy mode state says classic", () => {
     const store = useTerminalViewStore.getState();
 
     store.syncTabState("tab:1", "/usr/bin/fish", "/workspace", "dialog");
     store.consumeOutput("tab:1", "unsupported shell output\n");
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
-    expect(tabState?.blocks).toEqual([
-      expect.objectContaining({
-        kind: "session",
-        output: "unsupported shell output\n",
-      }),
-    ]);
+    expect(tabState?.blocks).toEqual([]);
   });
 
   it("keeps prompt-reported cwd when a stale workspace sync runs after pane focus changes", () => {
@@ -283,6 +278,76 @@ describe("terminal-view-store AI transcript", () => {
         kind: "command",
         command: "pwd",
         output: "/workspace",
+      }),
+    ]);
+  });
+
+  it("clears raw AI archive state after codex exits so the next ls only captures its own output", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "codex");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    writeDirect("tab:1", "OpenAI Codex\nassistant: hello\n");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07");
+
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "file-a\nfile-b\n");
+    store.consumeOutput("tab:1", "file-a\nfile-b\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "codex",
+        output: "",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "file-a\nfile-b",
+      }),
+    ]);
+  });
+
+  it("does not let the shell prompt rewrite the tail of an old codex transcript into the next ls archive", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "codex");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    writeDirect("tab:1", "OpenAI Codex\n› pong");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07");
+
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "\r/Users/s$ ls\r\nfile-a\nfile-b\n");
+    store.consumeOutput("tab:1", "\r/Users/s$ ls\r\nfile-a\nfile-b\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "codex",
+        output: "",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "file-a\nfile-b",
       }),
     ]);
   });
