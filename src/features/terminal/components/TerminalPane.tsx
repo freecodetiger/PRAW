@@ -220,6 +220,14 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     clearNoteEditorRequest(tabId);
   }, [clearNoteEditorRequest, noteEditorTabId, tab, tabId]);
   useEffect(() => {
+    if (tabState?.presentation === "agent-workflow") {
+      return;
+    }
+
+    setVoiceBypassToggleRequestKey(0);
+  }, [tabState?.presentation]);
+
+  useEffect(() => {
     if (voiceBypassTabId !== tabId) {
       return;
     }

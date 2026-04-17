@@ -13,6 +13,34 @@ import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalViewStore } from "../state/terminal-view-store";
 import { AiWorkflowSurface } from "./AiWorkflowSurface";
 
+const terminalRegistryApi = vi.hoisted(() => ({
+  getTerminal: vi.fn(),
+}));
+
+const tauriWindowApi = vi.hoisted(() => {
+  let dragDropHandler: ((event: { payload: unknown }) => void) | null = null;
+
+  return {
+    getCurrentWindow: vi.fn(() => ({
+      onDragDropEvent: vi.fn(async (handler: typeof dragDropHandler extends infer T ? T : never) => {
+        dragDropHandler = handler as typeof dragDropHandler;
+        return () => {
+          if (dragDropHandler === handler) {
+            dragDropHandler = null;
+          }
+        };
+      }),
+    })),
+    emitDragDropEvent(payload: unknown) {
+      dragDropHandler?.({ payload });
+    },
+    reset() {
+      this.getCurrentWindow.mockClear();
+      dragDropHandler = null;
+    },
+  };
+});
+
 const renderCalls: Array<{ inputSuspended?: boolean }> = [];
 
 const voiceApi = vi.hoisted(() => {
@@ -90,6 +118,8 @@ const voiceApi = vi.hoisted(() => {
 });
 
 vi.mock("../../../lib/tauri/voice", () => voiceApi);
+vi.mock("../lib/terminal-registry", () => terminalRegistryApi);
+vi.mock("@tauri-apps/api/window", () => tauriWindowApi);
 
 vi.mock("./ClassicTerminalSurface", () => ({
   ClassicTerminalSurface: (props: { inputSuspended?: boolean }) => {
@@ -171,11 +201,14 @@ function renderSurface(
 describe("AiWorkflowSurface", () => {
   let host: HTMLDivElement;
   let root: Root;
+  let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     renderCalls.length = 0;
     voiceApi.reset();
+    terminalRegistryApi.getTerminal.mockReset();
+    tauriWindowApi.reset();
     useAppConfigStore.setState({
       config: DEFAULT_APP_CONFIG,
       hydrateConfig: useAppConfigStore.getState().hydrateConfig,
@@ -189,6 +222,19 @@ describe("AiWorkflowSurface", () => {
       tabStates: {},
     }));
     useTerminalViewStore.getState().syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({
+      left: 100,
+      top: 40,
+      right: 320,
+      bottom: 180,
+      width: 220,
+      height: 140,
+      x: 100,
+      y: 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect));
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -198,6 +244,7 @@ describe("AiWorkflowSurface", () => {
     act(() => {
       root.unmount();
     });
+    getBoundingClientRectSpy.mockRestore();
     host.remove();
   });
 
@@ -236,6 +283,90 @@ describe("AiWorkflowSurface", () => {
     expect(host.querySelector('[data-testid="classic-terminal-surface"]')).not.toBeNull();
     expect(host.querySelector(".ai-workflow__transcript")).toBeNull();
     expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
+  });
+
+  it("shows the dashed drop target only while files are dragged over this AI pane", async () => {
+    renderSurface(root);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[aria-label="AI file drop target"]')).toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "enter",
+        paths: ["/tmp/demo.png"],
+        position: { x: 20, y: 20 },
+      });
+    });
+
+    expect(host.querySelector('[aria-label="AI file drop target"]')).toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "enter",
+        paths: ["/tmp/demo.png"],
+        position: { x: 240, y: 120 },
+      });
+    });
+
+    expect(host.querySelector('[aria-label="AI file drop target"]')).not.toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({ type: "leave" });
+    });
+
+    expect(host.querySelector('[aria-label="AI file drop target"]')).toBeNull();
+  });
+
+  it("drops file paths into the real raw terminal buffer when the bypass input is closed", async () => {
+    const pasteText = vi.fn();
+    terminalRegistryApi.getTerminal.mockReturnValue({ pasteText });
+
+    renderSurface(root);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "drop",
+        paths: ["/tmp/demo.png", "/tmp/it's here.png"],
+        position: { x: 240, y: 120 },
+      });
+    });
+
+    expect(pasteText).toHaveBeenCalledWith("'/tmp/demo.png' '/tmp/it'\"'\"'s here.png'");
+    expect(host.querySelector('[aria-label="AI prompt input"]')).toBeNull();
+  });
+
+  it("routes dropped file paths into the bypass draft when the bypass input is already open", async () => {
+    const pasteText = vi.fn();
+    terminalRegistryApi.getTerminal.mockReturnValue({ pasteText });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "drop",
+        paths: ["/tmp/demo.png"],
+        position: { x: 240, y: 120 },
+      });
+    });
+
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe(
+      "'/tmp/demo.png'",
+    );
+    expect(pasteText).not.toHaveBeenCalled();
   });
 
   it("opens the bypass capsule on request while keeping the raw terminal surface active", () => {

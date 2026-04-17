@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { getCurrentWindow, type DragDropEvent } from "@tauri-apps/api/window";
+
 import { getNextPhraseSelection, getPhraseMatches } from "../../../domain/terminal/phrase-completion";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import { useAppConfigStore } from "../../config/state/app-config-store";
+import {
+  appendDroppedPathsToDraft,
+  formatDroppedPathsForShell,
+  isDragPositionInsidePane,
+} from "../lib/ai-drop-paths";
 import { useSuggestionEngine } from "../hooks/useSuggestionEngine";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { SuggestionBar } from "./SuggestionBar";
@@ -32,7 +39,10 @@ export function DialogIdleComposer({
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [suggestionBarVisible, setSuggestionBarVisible] = useState(false);
+  const [fileDropActive, setFileDropActive] = useState(false);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const dismissSuggestionsRef = useRef<() => void>(() => undefined);
   const history = paneState.composerHistory;
 
   const phraseCompletionEnabled =
@@ -111,6 +121,80 @@ export function DialogIdleComposer({
     setSuggestionBarVisible(false);
   }, [draft]);
 
+  useEffect(() => {
+    dismissSuggestionsRef.current = dismissSuggestions;
+  }, [dismissSuggestions]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    const isEventInsideComposer = (payload: DragDropEvent) => {
+      if (payload.type === "leave") {
+        return false;
+      }
+
+      const composer = composerRef.current;
+      if (!composer) {
+        return false;
+      }
+
+      return isDragPositionInsidePane(
+        payload.position,
+        composer.getBoundingClientRect(),
+        window.devicePixelRatio || 1,
+      );
+    };
+
+    const subscribe = async () => {
+      try {
+        const currentWindow = getCurrentWindow();
+        unlisten = await currentWindow.onDragDropEvent((event) => {
+          const payload = event.payload;
+          const insideComposer = isEventInsideComposer(payload);
+
+          if (payload.type === "enter" || payload.type === "over") {
+            setFileDropActive(insideComposer);
+            return;
+          }
+
+          if (payload.type === "leave") {
+            setFileDropActive(false);
+            return;
+          }
+
+          setFileDropActive(false);
+          if (!insideComposer || isDisabled) {
+            return;
+          }
+
+          const droppedText = formatDroppedPathsForShell(payload.paths);
+          if (!droppedText) {
+            return;
+          }
+
+          setDraft((current) => appendDroppedPathsToDraft(current, droppedText));
+          setHistoryIndex(null);
+          setCursorAtEnd(true);
+          setPhraseIndex(0);
+          setSuggestionIndex(0);
+          setSuggestionBarVisible(false);
+          dismissSuggestionsRef.current();
+        });
+      } catch {
+        unlisten = null;
+      }
+    };
+
+    void subscribe();
+
+    return () => {
+      setFileDropActive(false);
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [isDisabled]);
+
   const syncCursorState = (input: HTMLTextAreaElement) => {
     const end = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
     setCursorAtEnd(end);
@@ -171,9 +255,14 @@ export function DialogIdleComposer({
   };
 
   return (
-    <div className="dialog-terminal__composer" onMouseDown={() => inputRef.current?.focus()}>
+    <div ref={composerRef} className="dialog-terminal__composer" onMouseDown={() => inputRef.current?.focus()}>
       <span className="dialog-terminal__prompt">{paneState.cwd} $</span>
       <div className="dialog-terminal__input-column">
+        {fileDropActive ? (
+          <div className="dialog-terminal__file-drop-target" aria-label="Dialog file drop target">
+            <div className="dialog-terminal__file-drop-frame">Drop files to insert paths</div>
+          </div>
+        ) : null}
         {showSuggestionBar && activeGroup ? (
           <SuggestionBar
             suggestions={visibleSuggestions}

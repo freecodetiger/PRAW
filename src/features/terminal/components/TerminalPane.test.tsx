@@ -317,6 +317,54 @@ describe("TerminalPane", () => {
     expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
   });
 
+  it("does not replay a consumed voice bypass request after leaving and re-entering AI mode", async () => {
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    await act(async () => {
+      useWorkspaceStore.getState().requestAiVoiceBypassForActiveTab();
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(1);
+
+    await act(async () => {
+      useTerminalViewStore.setState((state) => ({
+        ...state,
+        tabStates: {
+          "tab:1": {
+            ...createDialogState("/bin/bash", "/workspace"),
+            mode: "classic",
+            modeSource: "auto-interactive",
+            presentation: "default",
+            shell: "/bin/bash",
+            parserState: createShellIntegrationParserState(),
+          },
+        },
+      }));
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
+
+    await act(async () => {
+      useTerminalViewStore.setState((state) => ({
+        ...state,
+        tabStates: {
+          "tab:1": {
+            ...createDialogState("/bin/bash", "/workspace"),
+            mode: "classic",
+            modeSource: "auto-interactive",
+            presentation: "agent-workflow",
+            shell: "/bin/bash",
+            parserState: createShellIntegrationParserState(),
+          },
+        },
+      }));
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
+  });
+
   it("increments the quick prompt request key when the header trigger is clicked", async () => {
     useTerminalViewStore.setState((state) => ({
       ...state,

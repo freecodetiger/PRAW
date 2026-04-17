@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { getCurrentWindow, type DragDropEvent } from "@tauri-apps/api/window";
+
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
 import type { TerminalSessionStatus } from "../../../domain/terminal/types";
 import {
@@ -14,6 +16,12 @@ import {
 } from "../../../lib/tauri/voice";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
+import {
+  appendDroppedPathsToDraft,
+  formatDroppedPathsForShell,
+  isDragPositionInsidePane,
+} from "../lib/ai-drop-paths";
+import { getTerminal } from "../lib/terminal-registry";
 import { AiModePromptOverlay } from "./AiModePromptOverlay";
 import { ClassicTerminalSurface } from "./ClassicTerminalSurface";
 
@@ -49,6 +57,7 @@ export function AiWorkflowSurface({
   voiceBypassToggleRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
   void paneState;
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const speechConfig = useAppConfigStore((state) => state.config.speech);
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
@@ -58,15 +67,26 @@ export function AiWorkflowSurface({
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [isVoiceFinalizing, setIsVoiceFinalizing] = useState(false);
+  const [fileDropActive, setFileDropActive] = useState(false);
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
+  const bypassPromptOpenRef = useRef(false);
+  const composerDisabledRef = useRef(false);
   const handledVoiceBypassRequestKeyRef = useRef(0);
   const voiceConfigured = speechConfig.enabled && speechConfig.apiKey.trim().length > 0;
 
   useEffect(() => {
     voiceSessionIdRef.current = voiceSessionId;
   }, [voiceSessionId]);
+
+  useEffect(() => {
+    bypassPromptOpenRef.current = bypassPromptOpen;
+  }, [bypassPromptOpen]);
+
+  useEffect(() => {
+    composerDisabledRef.current = composerDisabled;
+  }, [composerDisabled]);
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
@@ -254,6 +274,98 @@ ${transcript}` : transcript));
     }
   };
 
+  const routeDroppedPaths = async (droppedText: string) => {
+    if (droppedText.length === 0) {
+      return;
+    }
+
+    if (composerDisabledRef.current) {
+      if (bypassPromptOpenRef.current) {
+        setBypassError("The AI session is not accepting input.");
+      }
+      return;
+    }
+
+    if (bypassPromptOpenRef.current) {
+      setBypassDraft((current) => appendDroppedPathsToDraft(current, droppedText));
+      setBypassError(null);
+      return;
+    }
+
+    const controller = getTerminal(tabId);
+    if (controller) {
+      controller.pasteText(droppedText);
+      return;
+    }
+
+    await write(droppedText);
+  };
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    const isEventInsidePane = (payload: DragDropEvent) => {
+      if (payload.type === "leave") {
+        return false;
+      }
+
+      const surface = surfaceRef.current;
+      if (!surface) {
+        return false;
+      }
+
+      return isDragPositionInsidePane(
+        payload.position,
+        surface.getBoundingClientRect(),
+        window.devicePixelRatio || 1,
+      );
+    };
+
+    const subscribe = async () => {
+      try {
+        const currentWindow = getCurrentWindow();
+        unlisten = await currentWindow.onDragDropEvent((event) => {
+          const payload = event.payload;
+          const insidePane = isEventInsidePane(payload);
+
+          if (payload.type === "enter" || payload.type === "over") {
+            setFileDropActive(insidePane);
+            return;
+          }
+
+          if (payload.type === "leave") {
+            setFileDropActive(false);
+            return;
+          }
+
+          setFileDropActive(false);
+          if (!insidePane) {
+            return;
+          }
+
+          const droppedText = formatDroppedPathsForShell(payload.paths);
+          void routeDroppedPaths(droppedText);
+        });
+      } catch {
+        unlisten = null;
+      }
+    };
+
+    void subscribe();
+
+    return () => {
+      disposed = true;
+      setFileDropActive(false);
+      if (unlisten) {
+        unlisten();
+      }
+      if (disposed) {
+        unlisten = null;
+      }
+    };
+  }, [tabId, write]);
+
   const startVoiceCapture = async () => {
     if (!voiceConfigured || composerDisabled || isBypassSubmitting || voiceSessionIdRef.current) {
       return;
@@ -305,7 +417,13 @@ ${transcript}` : transcript));
   };
 
   return (
-    <div className="ai-workflow">
+    <div ref={surfaceRef} className="ai-workflow">
+      {fileDropActive ? (
+        <div className="ai-workflow__file-drop-target" aria-label="AI file drop target">
+          <div className="ai-workflow__file-drop-frame">Drop files to insert paths</div>
+        </div>
+      ) : null}
+
       {showsBypassCapsule ? (
         <AiModePromptOverlay
           expanded={bypassPromptOpen}
