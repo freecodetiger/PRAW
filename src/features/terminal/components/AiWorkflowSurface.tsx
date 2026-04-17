@@ -30,6 +30,7 @@ interface AiWorkflowSurfaceProps {
   resize: (cols: number, rows: number) => Promise<void>;
   onSubmitAiInput: (input: string) => Promise<void> | void;
   quickPromptOpenRequestKey?: number;
+  voiceBypassToggleRequestKey?: number;
 }
 
 export function AiWorkflowSurface({
@@ -45,6 +46,7 @@ export function AiWorkflowSurface({
   resize,
   onSubmitAiInput,
   quickPromptOpenRequestKey = 0,
+  voiceBypassToggleRequestKey = 0,
 }: AiWorkflowSurfaceProps) {
   void paneState;
   const speechConfig = useAppConfigStore((state) => state.config.speech);
@@ -59,6 +61,7 @@ export function AiWorkflowSurface({
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
+  const handledVoiceBypassRequestKeyRef = useRef(0);
   const voiceConfigured = speechConfig.enabled && speechConfig.apiKey.trim().length > 0;
 
   useEffect(() => {
@@ -73,6 +76,48 @@ export function AiWorkflowSurface({
     setBypassPromptOpen(true);
     setBypassError(null);
   }, [quickPromptOpenRequestKey, showsBypassCapsule]);
+
+  useEffect(() => {
+    if (voiceBypassToggleRequestKey <= 0 || !showsBypassCapsule) {
+      return;
+    }
+
+    if (handledVoiceBypassRequestKeyRef.current === voiceBypassToggleRequestKey) {
+      return;
+    }
+    handledVoiceBypassRequestKeyRef.current = voiceBypassToggleRequestKey;
+
+    setBypassPromptOpen(true);
+    setBypassError(null);
+    setVoiceStatus(null);
+
+    if (isVoiceFinalizing) {
+      return;
+    }
+
+    if (voiceSessionIdRef.current) {
+      void stopVoiceCapture();
+      return;
+    }
+
+    if (!voiceConfigured) {
+      setVoiceStatus("Speech input is not configured.");
+      return;
+    }
+
+    if (composerDisabled || isBypassSubmitting) {
+      return;
+    }
+
+    void startVoiceCapture();
+  }, [
+    voiceBypassToggleRequestKey,
+    showsBypassCapsule,
+    isVoiceFinalizing,
+    voiceConfigured,
+    composerDisabled,
+    isBypassSubmitting,
+  ]);
 
   useEffect(() => {
     const cleanup: Array<() => void> = [];

@@ -174,6 +174,49 @@ describe("SettingsPanel", () => {
     expect(useAppConfigStore.getState().config.speech.language).toBe("zh");
   });
 
+  it("records a pane shortcut after modifier keys and stores the completed chord", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const shortcutRow = Array.from(host.querySelectorAll(".settings-shortcuts__row")).find((row) =>
+      row.textContent?.includes("Split Right"),
+    );
+    const captureButton = shortcutRow?.querySelector(".shortcut-recorder__capture") ?? null;
+    expect(captureButton).not.toBeNull();
+
+    act(() => {
+      captureButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true, bubbles: true }));
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "k",
+          code: "KeyK",
+          ctrlKey: true,
+          altKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+
+    expect(useAppConfigStore.getState().config.terminal.shortcuts.splitRight).toEqual({
+      key: "k",
+      code: "KeyK",
+      ctrl: true,
+      alt: true,
+      shift: false,
+      meta: false,
+    });
+  });
+
   it("renders the AI voice bypass shortcut in the shortcuts section", () => {
     act(() => {
       root.render(<SettingsPanel />);

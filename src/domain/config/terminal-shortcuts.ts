@@ -1,5 +1,6 @@
 export interface ShortcutBinding {
   key: string;
+  code?: string;
   ctrl: boolean;
   alt: boolean;
   shift: boolean;
@@ -18,6 +19,7 @@ export type TerminalShortcutConfigKey = keyof TerminalShortcutConfig;
 
 interface ShortcutCaptureEvent {
   key: string;
+  code?: string;
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
@@ -25,12 +27,52 @@ interface ShortcutCaptureEvent {
   isComposing?: boolean;
 }
 
+const SHORTCUT_CODE_KEY_LABELS: Record<string, string> = {
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Enter: "Enter",
+};
+
+const SHORTCUT_KEY_CODE_LABELS: Record<string, string> = {
+  "`": "Backquote",
+  "~": "Backquote",
+  "-": "Minus",
+  "_": "Minus",
+  "=": "Equal",
+  "+": "Equal",
+  "[": "BracketLeft",
+  "{": "BracketLeft",
+  "]": "BracketRight",
+  "}": "BracketRight",
+  "\\": "Backslash",
+  "|": "Backslash",
+  ";": "Semicolon",
+  ":": "Semicolon",
+  "'": "Quote",
+  '"': "Quote",
+  ",": "Comma",
+  "<": "Comma",
+  ".": "Period",
+  ">": "Period",
+  "/": "Slash",
+  "?": "Slash",
+};
+
 export const DEFAULT_TERMINAL_SHORTCUTS: TerminalShortcutConfig = {
-  splitRight: { key: "[", ctrl: true, alt: true, shift: false, meta: false },
-  splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
-  editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
-  toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
-  toggleAiVoiceBypass: { key: "/", ctrl: true, alt: true, shift: true, meta: false },
+  splitRight: { key: "[", code: "BracketLeft", ctrl: true, alt: true, shift: false, meta: false },
+  splitDown: { key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false },
+  editNote: { key: "\\", code: "Backslash", ctrl: true, alt: true, shift: false, meta: false },
+  toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+  toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
 };
 
 export function normalizeTerminalShortcutConfig(
@@ -96,30 +138,34 @@ export function formatShortcutBinding(binding: ShortcutBinding | null): string {
     binding.alt ? "Alt" : null,
     binding.shift ? "Shift" : null,
     binding.meta ? "Meta" : null,
-    binding.key.length === 1 ? binding.key : binding.key,
+    binding.key,
   ].filter((value): value is string => value !== null);
 
   return parts.join("+");
 }
 
+export function isModifierOnlyShortcutKey(key: string): boolean {
+  const normalizedKey = normalizeKey(key);
+  return normalizedKey === "control" || normalizedKey === "shift" || normalizedKey === "alt" || normalizedKey === "meta";
+}
+
 export function toShortcutBinding(event: ShortcutCaptureEvent): ShortcutBinding | null {
   const key = event.key.trim();
-  const normalizedKey = key.toLowerCase();
+  const normalizedKey = normalizeKey(key);
   if (
     event.isComposing ||
     key.length === 0 ||
     normalizedKey === "process" ||
     normalizedKey === "dead" ||
-    normalizedKey === "control" ||
-    normalizedKey === "shift" ||
-    normalizedKey === "alt" ||
-    normalizedKey === "meta"
+    isModifierOnlyShortcutKey(key)
   ) {
     return null;
   }
 
+  const code = normalizeShortcutCode(event.code, key);
   return {
-    key,
+    key: canonicalShortcutKey(key, code),
+    ...(code ? { code } : {}),
     ctrl: event.ctrlKey,
     alt: event.altKey,
     shift: event.shiftKey,
@@ -139,8 +185,10 @@ function normalizeShortcutBinding(
     return cloneShortcutBinding(fallback);
   }
 
+  const code = normalizeShortcutCode(value.code, value.key);
   return {
-    key: value.key.trim(),
+    key: canonicalShortcutKey(value.key.trim(), code),
+    ...(code ? { code } : {}),
     ctrl: value.ctrl,
     alt: value.alt,
     shift: value.shift,
@@ -156,6 +204,7 @@ function isShortcutBinding(value: unknown): value is ShortcutBinding {
   return (
     typeof value.key === "string" &&
     value.key.trim().length > 0 &&
+    (value.code === undefined || typeof value.code === "string") &&
     typeof value.ctrl === "boolean" &&
     typeof value.alt === "boolean" &&
     typeof value.shift === "boolean" &&
@@ -178,7 +227,65 @@ function cloneShortcutBinding(binding: ShortcutBinding | null): ShortcutBinding 
 }
 
 function createShortcutSignature(binding: ShortcutBinding): string {
-  return `${binding.key.toLowerCase()}|${binding.ctrl ? 1 : 0}|${binding.alt ? 1 : 0}|${binding.shift ? 1 : 0}|${binding.meta ? 1 : 0}`;
+  const identity = normalizeShortcutCode(binding.code, binding.key);
+  const normalizedIdentity = identity ? normalizeKey(identity) : normalizeKey(binding.key);
+  return `${normalizedIdentity}|${binding.ctrl ? 1 : 0}|${binding.alt ? 1 : 0}|${binding.shift ? 1 : 0}|${binding.meta ? 1 : 0}`;
+}
+
+function normalizeShortcutCode(code: string | undefined, key: string): string | undefined {
+  const trimmedCode = code?.trim();
+  if (trimmedCode) {
+    return trimmedCode;
+  }
+
+  return inferShortcutCodeFromKey(key.trim());
+}
+
+function inferShortcutCodeFromKey(key: string): string | undefined {
+  if (key.length === 0) {
+    return undefined;
+  }
+
+  if (key === "Enter") {
+    return "Enter";
+  }
+
+  if (/^[a-z]$/i.test(key)) {
+    return `Key${key.toUpperCase()}`;
+  }
+
+  if (/^[0-9]$/.test(key)) {
+    return `Digit${key}`;
+  }
+
+  return SHORTCUT_KEY_CODE_LABELS[key];
+}
+
+function canonicalShortcutKey(key: string, code: string | undefined): string {
+  if (code) {
+    const mapped = displayKeyFromCode(code);
+    if (mapped) {
+      return mapped;
+    }
+  }
+
+  return key;
+}
+
+function displayKeyFromCode(code: string): string | undefined {
+  if (code.startsWith("Key") && code.length === 4) {
+    return code.slice(3).toLowerCase();
+  }
+
+  if (code.startsWith("Digit") && code.length === 6) {
+    return code.slice(5);
+  }
+
+  return SHORTCUT_CODE_KEY_LABELS[code];
+}
+
+function normalizeKey(key: string): string {
+  return key.trim().toLowerCase();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -99,10 +99,11 @@ describe("app-config-store", () => {
     });
 
     expect(useAppConfigStore.getState().config.terminal.shortcuts).toEqual({
-      splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
-      splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
+      splitRight: { key: "=", code: "Equal", ctrl: true, alt: true, shift: false, meta: false },
+      splitDown: { key: "-", code: "Minus", ctrl: true, alt: true, shift: false, meta: false },
       editNote: null,
-      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
     });
   });
 

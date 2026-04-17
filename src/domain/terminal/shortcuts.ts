@@ -3,6 +3,7 @@ import type { TerminalShortcutConfig } from "../config/terminal-shortcuts";
 
 export interface TerminalShortcutEvent {
   key: string;
+  code?: string;
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
@@ -120,8 +121,11 @@ function matchesShortcutBinding(
     return false;
   }
 
+  const keyMatches = normalizeKey(event.key) === normalizeKey(binding.key);
+  const codeMatches = binding.code && event.code ? normalizeKey(event.code) === normalizeKey(binding.code) : null;
+
   return (
-    normalizeKey(event.key) === normalizeKey(binding.key) &&
+    (codeMatches ?? keyMatches) &&
     event.ctrlKey === binding.ctrl &&
     event.altKey === binding.alt &&
     event.shiftKey === binding.shift &&

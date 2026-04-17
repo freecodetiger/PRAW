@@ -11,11 +11,11 @@ import {
 describe("terminal shortcut config", () => {
   it("provides the approved default pane action bindings", () => {
     expect(DEFAULT_TERMINAL_SHORTCUTS).toEqual({
-      splitRight: { key: "[", ctrl: true, alt: true, shift: false, meta: false },
-      splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
-      editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
-      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
-      toggleAiVoiceBypass: { key: "/", ctrl: true, alt: true, shift: true, meta: false },
+      splitRight: { key: "[", code: "BracketLeft", ctrl: true, alt: true, shift: false, meta: false },
+      splitDown: { key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false },
+      editNote: { key: "\\", code: "Backslash", ctrl: true, alt: true, shift: false, meta: false },
+      toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
     });
   });
 
@@ -37,7 +37,7 @@ describe("terminal shortcut config", () => {
 
   it("formats a binding for settings display", () => {
     expect(
-      formatShortcutBinding({ key: "]", ctrl: true, alt: true, shift: false, meta: false }),
+      formatShortcutBinding({ key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false }),
     ).toBe("Ctrl+Alt+]");
   });
 
@@ -83,6 +83,29 @@ describe("terminal shortcut config", () => {
     ).toBeNull();
   });
 
+  it("captures shifted punctuation using a stable physical key code", () => {
+    expect(
+      toShortcutBinding({
+        key: "?",
+        code: "Slash",
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+        metaKey: false,
+      }),
+    ).toEqual({ key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false });
+  });
+
+  it("finds conflicts for the AI voice bypass shortcut even when the event key is shifted", () => {
+    expect(
+      findShortcutConflict(
+        DEFAULT_TERMINAL_SHORTCUTS,
+        { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
+        "splitRight",
+      ),
+    ).toBe("toggleAiVoiceBypass");
+  });
+
   it("captures a normalized binding from a keyboard event shape", () => {
     expect(
       toShortcutBinding({
@@ -92,6 +115,6 @@ describe("terminal shortcut config", () => {
         shiftKey: false,
         metaKey: false,
       }),
-    ).toEqual({ key: "]", ctrl: true, alt: true, shift: false, meta: false });
+    ).toEqual({ key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false });
   });
 });

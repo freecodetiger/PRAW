@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 
 import type { ShortcutBinding } from "../../../domain/config/terminal-shortcuts";
-import { formatShortcutBinding, toShortcutBinding } from "../../../domain/config/terminal-shortcuts";
+import {
+  formatShortcutBinding,
+  isModifierOnlyShortcutKey,
+  toShortcutBinding,
+} from "../../../domain/config/terminal-shortcuts";
 
 interface ShortcutRecorderProps {
   value: ShortcutBinding | null;
@@ -36,6 +40,11 @@ export function ShortcutRecorder({
     const handleKeyDown = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
+
+      if (isModifierOnlyShortcutKey(event.key)) {
+        setCaptureError(null);
+        return;
+      }
 
       const binding = toShortcutBinding(event);
       if (!binding) {

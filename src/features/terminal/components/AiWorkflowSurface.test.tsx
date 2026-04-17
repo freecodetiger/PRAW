@@ -329,6 +329,78 @@ describe("AiWorkflowSurface", () => {
     expect(host.textContent).toContain("Could not send prompt");
   });
 
+  it("opens bypass and starts recording when a voice bypass shortcut request arrives", async () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 1,
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt input"]')).not.toBeNull();
+    expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops recording when a second voice bypass shortcut request arrives", async () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 1,
+    });
+
+    await act(async () => {
+      voiceApi.emitStarted({ sessionId: "voice-session-1" });
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 2,
+    });
+
+    expect(voiceApi.stopVoiceTranscription).toHaveBeenCalledWith("voice-session-1");
+  });
+
+  it("opens bypass but does not start recording when speech is unconfigured", () => {
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 1,
+    });
+
+    expect(host.querySelector('[aria-label="AI prompt input"]')).not.toBeNull();
+    expect(voiceApi.startVoiceTranscription).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Speech input is not configured");
+  });
+
+  it("ignores repeated voice bypass shortcut requests while finalizing", async () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 1,
+    });
+
+    await act(async () => {
+      voiceApi.emitStarted({ sessionId: "voice-session-1" });
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 2,
+    });
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      voiceBypassToggleRequestKey: 3,
+    });
+
+    expect(voiceApi.stopVoiceTranscription).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the voice button visible but disabled when speech is not configured", () => {
     renderSurface(root, createAgentWorkflowPaneState(), {
       quickPromptOpenRequestKey: 1,

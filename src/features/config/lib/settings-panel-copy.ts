@@ -1,4 +1,5 @@
 import type { SettingsPanelLanguage } from "../../../domain/config/settings-panel-language";
+import type { TerminalShortcutConfigKey } from "../../../domain/config/terminal-shortcuts";
 
 interface SettingsPanelCopy {
   header: {
@@ -35,12 +36,7 @@ interface SettingsPanelCopy {
     workspaceFontFamily: string;
     shortcutsTitle: string;
     shortcutsDescription: string;
-    shortcutLabels: {
-      splitRight: string;
-      splitDown: string;
-      editNote: string;
-      toggleFocusPane: string;
-    };
+    shortcutLabels: Record<TerminalShortcutConfigKey, string>;
     shortcutConflictWith: (label: string) => string;
     recorder: {
       pressKeys: string;

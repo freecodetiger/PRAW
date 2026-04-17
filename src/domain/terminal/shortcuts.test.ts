@@ -75,7 +75,8 @@ describe("workspace shortcuts", () => {
     expect(
       resolveWorkspaceShortcut(
         {
-          key: "/",
+          key: "?",
+          code: "Slash",
           ctrlKey: true,
           altKey: true,
           shiftKey: true,
