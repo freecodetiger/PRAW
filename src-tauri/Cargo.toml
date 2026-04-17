@@ -2,7 +2,7 @@
 name = "praw"
 version = "0.1.0"
 description = "PRAW intelligent terminal for Ubuntu"
-authors = ["zpc"]
+authors = ["freecodetiger <2388387947@qq.com>"]
 edition = "2021"
 license = "Apache-2.0"
 
