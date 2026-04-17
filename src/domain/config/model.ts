@@ -2,7 +2,7 @@ import { DEFAULT_BUNDLED_MONO_FONT_FAMILY, DEFAULT_DIALOG_FONT_SIZE } from "./fo
 import { DEFAULT_TERMINAL_SHELL } from "./default-shell";
 import { DEFAULT_SETTINGS_PANEL_LANGUAGE, normalizeSettingsPanelLanguage } from "./settings-panel-language";
 import { isThemePresetId } from "../theme/presets";
-import type { AiConfig, AppConfig, TerminalConfig, TerminalPreferredMode, UiConfig } from "./types";
+import type { AiConfig, AppConfig, SpeechConfig, SpeechLanguage, TerminalConfig, TerminalPreferredMode, UiConfig } from "./types";
 import { DEFAULT_TERMINAL_SHORTCUTS, normalizeTerminalShortcutConfig, type TerminalShortcutConfig } from "./terminal-shortcuts";
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -27,6 +27,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     themeColor: "#1f5eff",
     backgroundColor: "#eef4ff",
   },
+  speech: {
+    enabled: false,
+    provider: "aliyun-paraformer-realtime",
+    apiKey: "",
+    language: "auto",
+  },
   ui: {
     settingsPanelLanguage: DEFAULT_SETTINGS_PANEL_LANGUAGE,
   },
@@ -49,6 +55,7 @@ export interface TerminalConfigInput {
 export interface AppConfigInput {
   terminal?: TerminalConfigInput;
   ai?: Partial<AiConfig>;
+  speech?: Partial<SpeechConfig>;
   ui?: Partial<UiConfig>;
 }
 
@@ -58,6 +65,7 @@ const MAX_FONT_SIZE = 32;
 export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
   const terminal = input?.terminal;
   const ai = input?.ai;
+  const speech = input?.speech;
   const ui = input?.ui;
   const phrases = normalizePhraseList(terminal?.phrases);
 
@@ -85,6 +93,12 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
       apiKey: normalizeOptionalString(ai?.apiKey),
       themeColor: normalizeHexColor(ai?.themeColor, DEFAULT_APP_CONFIG.ai.themeColor),
       backgroundColor: normalizeHexColor(ai?.backgroundColor, DEFAULT_APP_CONFIG.ai.backgroundColor),
+    },
+    speech: {
+      enabled: typeof speech?.enabled === "boolean" ? speech.enabled : DEFAULT_APP_CONFIG.speech.enabled,
+      provider: normalizeSpeechProvider(speech?.provider),
+      apiKey: normalizeOptionalString(speech?.apiKey),
+      language: normalizeSpeechLanguage(speech?.language),
     },
     ui: {
       settingsPanelLanguage: normalizeSettingsPanelLanguage(ui?.settingsPanelLanguage),
@@ -123,6 +137,21 @@ function normalizeOptionalString(value: string | undefined): string {
   }
 
   return value.trim();
+}
+
+function normalizeSpeechProvider(value: string | undefined): string {
+  const normalized = normalizeOptionalString(value).toLowerCase();
+  return normalized.length > 0 ? normalized : DEFAULT_APP_CONFIG.speech.provider;
+}
+
+function normalizeSpeechLanguage(value: string | undefined): SpeechLanguage {
+  const normalized = normalizeOptionalString(value).toLowerCase();
+
+  if (normalized === "zh" || normalized === "en" || normalized === "auto") {
+    return normalized;
+  }
+
+  return DEFAULT_APP_CONFIG.speech.language;
 }
 
 function normalizeFontSize(value: number | undefined): number {

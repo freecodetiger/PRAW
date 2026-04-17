@@ -78,6 +78,19 @@ interface SettingsPanelCopy {
     appearanceDescription: string;
     themeColor: string;
   };
+  speech: {
+    sectionTitle: string;
+    sectionDescription: string;
+    enableProvider: string;
+    apiKey: string;
+    language: string;
+    languageOptions: {
+      auto: string;
+      zh: string;
+      en: string;
+    };
+    localKeySummary: string;
+  };
 }
 
 const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
@@ -159,6 +172,19 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       appearanceDescription: "AI workflow panes follow the active theme. Accent color remains configurable.",
       themeColor: "Theme color",
     },
+    speech: {
+      sectionTitle: "Speech Input",
+      sectionDescription: "Press-and-hold voice input in AI bypass uses an independent Bailian realtime key.",
+      enableProvider: "Enable speech input",
+      apiKey: "Speech API key",
+      language: "Speech language",
+      languageOptions: {
+        auto: "Auto (Chinese + English)",
+        zh: "Chinese",
+        en: "English",
+      },
+      localKeySummary: "This speech key is stored separately from the main AI provider key.",
+    },
   },
   "zh-CN": {
     header: {
@@ -237,6 +263,19 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       appearanceTitle: "AI Appearance",
       appearanceDescription: "AI workflow pane 会跟随当前主题，accent color 仍可单独配置。",
       themeColor: "Theme color",
+    },
+    speech: {
+      sectionTitle: "Speech Input",
+      sectionDescription: "按住 AI 旁路输入里的语音按钮时，会使用独立的百炼实时语音 key。",
+      enableProvider: "启用语音输入",
+      apiKey: "语音 API key",
+      language: "语音语言",
+      languageOptions: {
+        auto: "自动（中文 + English）",
+        zh: "中文",
+        en: "English",
+      },
+      localKeySummary: "这个语音 key 与主 AI provider key 分开存储。",
     },
   },
 };

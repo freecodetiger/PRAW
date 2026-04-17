@@ -4,14 +4,80 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
 import { createDialogState } from "../../../domain/terminal/dialog";
 import { getThemePreset } from "../../../domain/theme/presets";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
+import { useAppConfigStore } from "../../config/state/app-config-store";
 import { useTerminalViewStore } from "../state/terminal-view-store";
 import { AiWorkflowSurface } from "./AiWorkflowSurface";
 
 const renderCalls: Array<{ inputSuspended?: boolean }> = [];
+
+const voiceApi = vi.hoisted(() => {
+  let startedHandler: ((event: { sessionId: string }) => void) | null = null;
+  let statusHandler: ((event: { sessionId: string; message: string }) => void) | null = null;
+  let completedHandler: ((event: { sessionId: string; text: string }) => void) | null = null;
+  let failedHandler: ((event: { sessionId: string; message: string }) => void) | null = null;
+
+  return {
+    startVoiceTranscription: vi.fn(async () => ({ sessionId: "voice-session-1" })),
+    stopVoiceTranscription: vi.fn(async () => undefined),
+    cancelVoiceTranscription: vi.fn(async () => undefined),
+    onVoiceTranscriptionStarted: vi.fn(async (handler: typeof startedHandler extends infer T ? T : never) => {
+      startedHandler = handler as typeof startedHandler;
+      return () => {
+        startedHandler = null;
+      };
+    }),
+    onVoiceTranscriptionStatus: vi.fn(async (handler: typeof statusHandler extends infer T ? T : never) => {
+      statusHandler = handler as typeof statusHandler;
+      return () => {
+        statusHandler = null;
+      };
+    }),
+    onVoiceTranscriptionCompleted: vi.fn(async (handler: typeof completedHandler extends infer T ? T : never) => {
+      completedHandler = handler as typeof completedHandler;
+      return () => {
+        completedHandler = null;
+      };
+    }),
+    onVoiceTranscriptionFailed: vi.fn(async (handler: typeof failedHandler extends infer T ? T : never) => {
+      failedHandler = handler as typeof failedHandler;
+      return () => {
+        failedHandler = null;
+      };
+    }),
+    emitStarted(payload: { sessionId: string }) {
+      startedHandler?.(payload);
+    },
+    emitStatus(payload: { sessionId: string; message: string }) {
+      statusHandler?.(payload);
+    },
+    emitCompleted(payload: { sessionId: string; text: string }) {
+      completedHandler?.(payload);
+    },
+    emitFailed(payload: { sessionId: string; message: string }) {
+      failedHandler?.(payload);
+    },
+    reset() {
+      this.startVoiceTranscription.mockClear();
+      this.stopVoiceTranscription.mockClear();
+      this.cancelVoiceTranscription.mockClear();
+      this.onVoiceTranscriptionStarted.mockClear();
+      this.onVoiceTranscriptionStatus.mockClear();
+      this.onVoiceTranscriptionCompleted.mockClear();
+      this.onVoiceTranscriptionFailed.mockClear();
+      startedHandler = null;
+      statusHandler = null;
+      completedHandler = null;
+      failedHandler = null;
+    },
+  };
+});
+
+vi.mock("../../../lib/tauri/voice", () => voiceApi);
 
 vi.mock("./ClassicTerminalSurface", () => ({
   ClassicTerminalSurface: (props: { inputSuspended?: boolean }) => {
@@ -97,6 +163,15 @@ describe("AiWorkflowSurface", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     renderCalls.length = 0;
+    voiceApi.reset();
+    useAppConfigStore.setState({
+      config: DEFAULT_APP_CONFIG,
+      hydrateConfig: useAppConfigStore.getState().hydrateConfig,
+      patchTerminalConfig: useAppConfigStore.getState().patchTerminalConfig,
+      patchAiConfig: useAppConfigStore.getState().patchAiConfig,
+      patchSpeechConfig: useAppConfigStore.getState().patchSpeechConfig,
+      patchUiConfig: useAppConfigStore.getState().patchUiConfig,
+    });
     useTerminalViewStore.setState((state) => ({
       ...state,
       tabStates: {},
@@ -240,6 +315,62 @@ describe("AiWorkflowSurface", () => {
       "retry this prompt",
     );
     expect(host.textContent).toContain("Could not send prompt");
+  });
+
+  it("renders a hold-to-talk voice control when speech input is configured", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    expect(host.querySelector('[aria-label="Start voice input"]')).not.toBeNull();
+  });
+
+  it("starts on press, stops on release, and inserts the transcript into the bypass draft", async () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "zh",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Start voice input"]');
+    expect(voiceButton).not.toBeNull();
+
+    await act(async () => {
+      voiceButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
+    expect(voiceApi.startVoiceTranscription).toHaveBeenCalledWith({
+      apiKey: "speech-key",
+      language: "zh",
+      provider: "aliyun-paraformer-realtime",
+    });
+
+    await act(async () => {
+      voiceApi.emitStarted({ sessionId: "voice-session-1" });
+      voiceApi.emitStatus({ sessionId: "voice-session-1", message: "Listening…" });
+      voiceButton?.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+
+    expect(voiceApi.stopVoiceTranscription).toHaveBeenCalledWith("voice-session-1");
+
+    await act(async () => {
+      voiceApi.emitCompleted({ sessionId: "voice-session-1", text: "你好 codex" });
+    });
+
+    expect((host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null)?.value).toBe(
+      "你好 codex",
+    );
+    expect(host.textContent).not.toContain("Listening…");
   });
 
   it("does not render resume picker chrome in the raw-only AI surface", () => {

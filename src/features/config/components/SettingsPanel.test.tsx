@@ -19,6 +19,7 @@ function resetStore() {
     hydrateConfig: useAppConfigStore.getState().hydrateConfig,
     patchTerminalConfig: useAppConfigStore.getState().patchTerminalConfig,
     patchAiConfig: useAppConfigStore.getState().patchAiConfig,
+    patchSpeechConfig: useAppConfigStore.getState().patchSpeechConfig,
     patchUiConfig: useAppConfigStore.getState().patchUiConfig,
   });
 }
@@ -147,6 +148,56 @@ describe("SettingsPanel", () => {
 
     const optionLabels = Array.from((providerSelect as HTMLSelectElement).options).map((option) => option.text);
     expect(optionLabels).not.toContain("Select provider");
+  });
+
+  it("renders speech settings and updates the selected speech language", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const languageField = findLabel(host, "Speech language") ?? findLabel(host, "语音语言");
+    const languageSelect = languageField?.querySelector("select") ?? null;
+    expect(languageSelect).not.toBeNull();
+    expect((languageSelect as HTMLSelectElement).value).toBe("auto");
+
+    act(() => {
+      if (languageSelect instanceof HTMLSelectElement) {
+        languageSelect.value = "zh";
+      }
+      languageSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.speech.language).toBe("zh");
+  });
+
+  it("shows a speech api key field and updates stored speech config independently", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const apiKeyField = findLabel(host, "Speech API key") ?? findLabel(host, "语音 API key");
+    const apiKeyInput = apiKeyField?.querySelector('input[type="password"]') ?? null;
+    expect(apiKeyInput).not.toBeNull();
+
+    act(() => {
+      if (apiKeyInput instanceof HTMLInputElement) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(apiKeyInput, "speech-key");
+      }
+      apiKeyInput?.dispatchEvent(new Event("input", { bubbles: true }));
+      apiKeyInput?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.speech.apiKey).toBe("speech-key");
+    expect(useAppConfigStore.getState().config.ai.apiKey).toBe("");
   });
 
   it("shows a base url field and sends it during connection tests", async () => {

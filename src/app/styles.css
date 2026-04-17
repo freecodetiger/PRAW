@@ -923,6 +923,13 @@ button {
   padding: 0;
 }
 
+.ai-workflow__bypass-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .ai-workflow__bypass-input {
   min-height: 40px;
   max-height: 160px;
@@ -931,6 +938,18 @@ button {
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 98%, var(--ai-background-color));
   resize: none;
+}
+
+.ai-workflow__bypass-voice {
+  min-width: 72px;
+  min-height: 40px;
+  align-self: stretch;
+}
+
+.ai-workflow__bypass-voice--active {
+  border-color: color-mix(in srgb, var(--ai-theme-color) 56%, var(--border));
+  background: color-mix(in srgb, var(--ai-theme-color) 14%, var(--surface));
+  color: var(--text-primary);
 }
 
 .ai-workflow__bypass-panel .ai-workflow__prompt-input-shell {

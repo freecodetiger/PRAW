@@ -10,6 +10,7 @@ describe("app-config-store", () => {
       hydrateConfig: useAppConfigStore.getState().hydrateConfig,
       patchTerminalConfig: useAppConfigStore.getState().patchTerminalConfig,
       patchAiConfig: useAppConfigStore.getState().patchAiConfig,
+      patchSpeechConfig: useAppConfigStore.getState().patchSpeechConfig,
       patchUiConfig: useAppConfigStore.getState().patchUiConfig,
     });
   });
@@ -105,6 +106,24 @@ describe("app-config-store", () => {
     });
   });
 
+  it("patches speech settings without disturbing terminal and ai config", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      provider: "aliyun-paraformer-realtime",
+      apiKey: "speech-key",
+      language: "zh",
+    });
+
+    expect(useAppConfigStore.getState().config.speech).toEqual({
+      enabled: true,
+      provider: "aliyun-paraformer-realtime",
+      apiKey: "speech-key",
+      language: "zh",
+    });
+    expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
+    expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
+  });
+
   it("patches ui settings without disturbing terminal and ai config", () => {
     useAppConfigStore.getState().patchUiConfig({
       settingsPanelLanguage: "zh-CN",
@@ -113,5 +132,6 @@ describe("app-config-store", () => {
     expect(useAppConfigStore.getState().config.ui.settingsPanelLanguage).toBe("zh-CN");
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
     expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
+    expect(useAppConfigStore.getState().config.speech).toEqual(DEFAULT_APP_CONFIG.speech);
   });
 });

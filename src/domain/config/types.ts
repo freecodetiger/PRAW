@@ -27,6 +27,15 @@ export interface AiConfig {
   backgroundColor: string;
 }
 
+export type SpeechLanguage = "auto" | "zh" | "en";
+
+export interface SpeechConfig {
+  enabled: boolean;
+  provider: string;
+  apiKey: string;
+  language: SpeechLanguage;
+}
+
 export interface UiConfig {
   settingsPanelLanguage: SettingsPanelLanguage;
 }
@@ -34,5 +43,6 @@ export interface UiConfig {
 export interface AppConfig {
   terminal: TerminalConfig;
   ai: AiConfig;
+  speech: SpeechConfig;
   ui: UiConfig;
 }

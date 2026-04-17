@@ -60,6 +60,30 @@ pub struct AiConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SpeechConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_speech_provider")]
+    pub provider: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_speech_language")]
+    pub language: String,
+}
+
+impl Default for SpeechConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: default_speech_provider(),
+            api_key: String::new(),
+            language: default_speech_language(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UiConfig {
     #[serde(default = "default_settings_panel_language")]
     pub settings_panel_language: String,
@@ -78,6 +102,8 @@ impl Default for UiConfig {
 pub struct AppConfig {
     pub terminal: TerminalConfig,
     pub ai: AiConfig,
+    #[serde(default)]
+    pub speech: SpeechConfig,
     #[serde(default)]
     pub ui: UiConfig,
 }
@@ -132,6 +158,14 @@ fn default_settings_panel_language() -> String {
     "en".to_string()
 }
 
+fn default_speech_provider() -> String {
+    "aliyun-paraformer-realtime".to_string()
+}
+
+fn default_speech_language() -> String {
+    "auto".to_string()
+}
+
 fn fallback_default_shell(is_macos: bool) -> String {
     if is_macos {
         "/bin/zsh".to_string()
@@ -168,6 +202,7 @@ impl Default for AppConfig {
                 theme_color: "#1f5eff".to_string(),
                 background_color: "#eef4ff".to_string(),
             },
+            speech: SpeechConfig::default(),
             ui: UiConfig::default(),
         }
     }
@@ -224,8 +259,52 @@ mod tests {
         assert_eq!(config.ai.theme_color, "#1f5eff");
         assert_eq!(config.ai.background_color, "#eef4ff");
         assert_eq!(config.ui.settings_panel_language, "zh-CN");
+        assert!(!config.speech.enabled);
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.language, "auto");
         assert!(config.terminal.phrases.is_empty());
         assert!(config.terminal.phrase_usage.is_empty());
+    }
+
+    #[test]
+    fn deserializes_speech_config_shape() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "dialogFontFamily": "CaskaydiaCove Nerd Font",
+                    "dialogFontSize": 14,
+                    "preferredMode": "dialog",
+                    "themePreset": "light"
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "baseUrl": "",
+                    "enabled": false,
+                    "smartSuggestionBubble": true,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                },
+                "speech": {
+                    "enabled": true,
+                    "provider": "aliyun-paraformer-realtime",
+                    "apiKey": "speech-key",
+                    "language": "zh"
+                },
+                "ui": {
+                    "settingsPanelLanguage": "en"
+                }
+            }"##,
+        )
+        .expect("config should deserialize speech settings");
+
+        assert!(config.speech.enabled);
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.api_key, "speech-key");
+        assert_eq!(config.speech.language, "zh");
     }
 
     #[test]
@@ -319,6 +398,7 @@ mod tests {
         let json = serde_json::to_value(AppConfig::default()).expect("config should serialize");
         let terminal = json.get("terminal").expect("terminal should exist");
         let ai = json.get("ai").expect("ai should exist");
+        let speech = json.get("speech").expect("speech should exist");
         let ui = json.get("ui").expect("ui should exist");
 
         assert!(terminal.get("dialogFontFamily").is_some());
@@ -330,7 +410,16 @@ mod tests {
         assert!(ai.get("baseUrl").is_some());
         assert!(ai.get("smartSuggestionBubble").is_some());
         assert_eq!(
-            ui.get("settingsPanelLanguage").and_then(|value| value.as_str()),
+            speech.get("provider").and_then(|value| value.as_str()),
+            Some("aliyun-paraformer-realtime")
+        );
+        assert_eq!(
+            speech.get("language").and_then(|value| value.as_str()),
+            Some("auto")
+        );
+        assert_eq!(
+            ui.get("settingsPanelLanguage")
+                .and_then(|value| value.as_str()),
             Some("en")
         );
     }
@@ -342,5 +431,7 @@ mod tests {
         assert_eq!(config.ai.provider, "");
         assert_eq!(config.ai.model, "");
         assert_eq!(config.ai.base_url, "");
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.language, "auto");
     }
 }
