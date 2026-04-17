@@ -28,6 +28,15 @@ describe("resolveAppConfig", () => {
     expect(DEFAULT_APP_CONFIG.ai.smartSuggestionBubble).toBe(true);
   });
 
+  it("defaults speech input to an opt-in aliyun realtime profile", () => {
+    expect(DEFAULT_APP_CONFIG.speech).toEqual({
+      enabled: false,
+      provider: "aliyun-paraformer-realtime",
+      apiKey: "",
+      language: "auto",
+    });
+  });
+
   it("exposes all first-wave providers in the catalog", () => {
     expect(AI_PROVIDER_OPTIONS.map((option) => option.id)).toEqual([
       "openai",
@@ -67,6 +76,7 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         enabled: true,
       },
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -84,6 +94,46 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         apiKey: "secret-key",
       },
+      speech: DEFAULT_APP_CONFIG.speech,
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("normalizes speech settings without dropping the stored speech api key", () => {
+    expect(
+      resolveAppConfig({
+        speech: {
+          enabled: true,
+          provider: "  custom-provider  " as never,
+          apiKey: "  speech-key  ",
+          language: " EN " as never,
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      speech: {
+        enabled: true,
+        provider: "custom-provider",
+        apiKey: "speech-key",
+        language: "en",
+      },
+      ui: DEFAULT_APP_CONFIG.ui,
+    });
+  });
+
+  it("falls back to the default speech provider and language when values are invalid", () => {
+    expect(
+      resolveAppConfig({
+        speech: {
+          provider: "   " as never,
+          language: "ja" as never,
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -119,6 +169,7 @@ describe("resolveAppConfig", () => {
         provider: "glm",
         model: "glm-4.7-flash",
       },
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -138,6 +189,7 @@ describe("resolveAppConfig", () => {
         provider: "",
         model: "",
       },
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -177,6 +229,7 @@ describe("resolveAppConfig", () => {
         dialogFontSize: 16,
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -194,6 +247,7 @@ describe("resolveAppConfig", () => {
         preferredMode: "dialog",
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -213,6 +267,7 @@ describe("resolveAppConfig", () => {
         themeColor: "#2b6fff",
         backgroundColor: DEFAULT_APP_CONFIG.ai.backgroundColor,
       },
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -230,6 +285,7 @@ describe("resolveAppConfig", () => {
         ...DEFAULT_APP_CONFIG.ai,
         smartSuggestionBubble: false,
       },
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -256,6 +312,7 @@ describe("resolveAppConfig", () => {
         },
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -273,6 +330,7 @@ describe("resolveAppConfig", () => {
         themePreset: "light",
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -290,6 +348,7 @@ describe("resolveAppConfig", () => {
         defaultShell: "/usr/bin/zsh",
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -306,6 +365,7 @@ describe("resolveAppConfig", () => {
     ).toEqual({
       terminal: DEFAULT_APP_CONFIG.terminal,
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -328,6 +388,7 @@ describe("resolveAppConfig", () => {
         },
       },
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: DEFAULT_APP_CONFIG.ui,
     });
   });
@@ -347,6 +408,7 @@ describe("resolveAppConfig", () => {
     ).toEqual({
       terminal: DEFAULT_APP_CONFIG.terminal,
       ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
       ui: {
         settingsPanelLanguage: "zh-CN",
       },
