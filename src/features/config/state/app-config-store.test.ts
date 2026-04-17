@@ -103,7 +103,7 @@ describe("app-config-store", () => {
       splitDown: { key: "-", code: "Minus", ctrl: true, alt: true, shift: false, meta: false },
       editNote: null,
       toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
-      toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
+      toggleAiVoiceBypass: { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
     });
   });
 

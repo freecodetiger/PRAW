@@ -66,7 +66,7 @@ export function AiModePromptOverlay({
       return;
     }
 
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     const end = inputRef.current?.value.length ?? 0;
     inputRef.current?.setSelectionRange(end, end);
   }, [expanded, disabled]);

@@ -20,6 +20,8 @@ pub struct TerminalShortcutConfig {
     pub split_right: Option<ShortcutBinding>,
     pub split_down: Option<ShortcutBinding>,
     pub edit_note: Option<ShortcutBinding>,
+    pub toggle_focus_pane: Option<ShortcutBinding>,
+    pub toggle_ai_voice_bypass: Option<ShortcutBinding>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,6 +145,20 @@ fn default_terminal_shortcuts() -> TerminalShortcutConfig {
         edit_note: Some(ShortcutBinding {
             key: "\\".to_string(),
             ctrl: true,
+            alt: true,
+            shift: false,
+            meta: false,
+        }),
+        toggle_focus_pane: Some(ShortcutBinding {
+            key: "Enter".to_string(),
+            ctrl: true,
+            alt: true,
+            shift: false,
+            meta: false,
+        }),
+        toggle_ai_voice_bypass: Some(ShortcutBinding {
+            key: "a".to_string(),
+            ctrl: false,
             alt: true,
             shift: false,
             meta: false,
@@ -391,6 +407,36 @@ mod tests {
 
         assert_eq!(config.terminal.dialog_font_family, "JetBrains Mono");
         assert_eq!(config.terminal.dialog_font_size, 16);
+    }
+
+    #[test]
+    fn serializes_full_shortcut_configuration() {
+        let json = serde_json::to_value(AppConfig::default()).expect("config should serialize");
+        let terminal = json.get("terminal").expect("terminal should exist");
+        let shortcuts = terminal.get("shortcuts").expect("shortcuts should exist");
+
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("key"))
+                .and_then(|value| value.as_str()),
+            Some("a")
+        );
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("alt"))
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("ctrl"))
+                .and_then(|value| value.as_bool()),
+            Some(false)
+        );
+        assert!(shortcuts.get("toggleFocusPane").is_some());
     }
 
     #[test]

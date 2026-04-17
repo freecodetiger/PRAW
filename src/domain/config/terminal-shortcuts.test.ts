@@ -15,7 +15,7 @@ describe("terminal shortcut config", () => {
       splitDown: { key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false },
       editNote: { key: "\\", code: "Backslash", ctrl: true, alt: true, shift: false, meta: false },
       toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
-      toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
+      toggleAiVoiceBypass: { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
     });
   });
 
@@ -55,7 +55,7 @@ describe("terminal shortcut config", () => {
     expect(
       findShortcutConflict(
         DEFAULT_TERMINAL_SHORTCUTS,
-        { key: "/", ctrl: true, alt: true, shift: true, meta: false },
+        { key: "a", ctrl: false, alt: true, shift: false, meta: false },
         "splitRight",
       ),
     ).toBe("toggleAiVoiceBypass");
@@ -83,24 +83,24 @@ describe("terminal shortcut config", () => {
     ).toBeNull();
   });
 
-  it("captures shifted punctuation using a stable physical key code", () => {
+  it("captures letter shortcuts using a stable physical key code", () => {
     expect(
       toShortcutBinding({
-        key: "?",
-        code: "Slash",
-        ctrlKey: true,
+        key: "A",
+        code: "KeyA",
+        ctrlKey: false,
         altKey: true,
-        shiftKey: true,
+        shiftKey: false,
         metaKey: false,
       }),
-    ).toEqual({ key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false });
+    ).toEqual({ key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false });
   });
 
-  it("finds conflicts for the AI voice bypass shortcut even when the event key is shifted", () => {
+  it("finds conflicts for the AI voice bypass shortcut using alt+a", () => {
     expect(
       findShortcutConflict(
         DEFAULT_TERMINAL_SHORTCUTS,
-        { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
+        { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
         "splitRight",
       ),
     ).toBe("toggleAiVoiceBypass");

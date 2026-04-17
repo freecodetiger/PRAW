@@ -2,8 +2,10 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
+import { installAltTerminalMouseGuards } from "./alt-terminal-guards";
 import { createImeTextareaGuard } from "./ime-textarea-guard";
 import { applyTerminalAppearance } from "./terminal-appearance";
+import { createPersistentTerminalOptions } from "./xterm-options";
 import type { TerminalController } from "./terminal-registry";
 import { updateViewport } from "./terminal-registry";
 
@@ -34,6 +36,7 @@ class PersistentTerminalRuntime {
   private resizeDisposable: { dispose(): void } | null = null;
   private scrollDisposable: { dispose(): void } | null = null;
   private guardCleanup: (() => void) | null = null;
+  private altGuardCleanup: (() => void) | null = null;
   private pendingWrites = "";
   private config: PersistentTerminalRuntimeConfig;
   private installedGuardFactory?: PersistentTerminalRuntimeConfig["installTerminalGuards"];
@@ -100,6 +103,10 @@ class PersistentTerminalRuntime {
       theme: config.theme,
     });
 
+    if (!this.altGuardCleanup) {
+      this.altGuardCleanup = installAltTerminalMouseGuards(this.host);
+    }
+
     if (this.installedGuardFactory !== config.installTerminalGuards) {
       this.guardCleanup?.();
       this.guardCleanup = (config.installTerminalGuards?.(this.terminal) ?? null) as (() => void) | null;
@@ -156,6 +163,8 @@ class PersistentTerminalRuntime {
   private disposeTerminalInstance(): void {
     this.guardCleanup?.();
     this.guardCleanup = null;
+    this.altGuardCleanup?.();
+    this.altGuardCleanup = null;
     this.dataDisposable?.dispose();
     this.resizeDisposable?.dispose();
     this.scrollDisposable?.dispose();
@@ -175,19 +184,18 @@ class PersistentTerminalRuntime {
       return;
     }
 
-    const terminal = new Terminal({
-      allowTransparency: false,
-      convertEol: true,
-      cursorBlink: true,
-      fontFamily: this.config.fontFamily,
-      fontSize: this.config.fontSize,
-      lineHeight: 1.3,
-      theme: this.config.theme,
-    });
+    const terminal = new Terminal(
+      createPersistentTerminalOptions({
+        fontFamily: this.config.fontFamily,
+        fontSize: this.config.fontSize,
+        theme: this.config.theme,
+      }),
+    );
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(this.host);
+    this.altGuardCleanup = installAltTerminalMouseGuards(this.host);
 
     this.dataDisposable = terminal.onData((data) => {
       void this.config.write(data);

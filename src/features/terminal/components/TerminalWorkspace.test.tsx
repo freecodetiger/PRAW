@@ -57,6 +57,54 @@ describe("TerminalWorkspace", () => {
     expect(host.querySelector(".workspace")?.className).toContain("workspace--focus-mode");
   });
 
+
+  it("registers workspace shortcuts in the capture phase so alt chords win over terminal input", () => {
+    const addEventListenerSpy = vi.spyOn(window, "addEventListener");
+
+    act(() => {
+      root.render(<TerminalWorkspace />);
+    });
+
+    expect(
+      addEventListenerSpy.mock.calls.some(
+        ([type, _listener, options]) =>
+          type === "keydown" && typeof options === "object" && options !== null && "capture" in options && options.capture === true,
+      ),
+    ).toBe(true);
+  });
+
+  it("stops shortcut events before they continue into the raw terminal", () => {
+    const addEventListenerSpy = vi.spyOn(window, "addEventListener");
+
+    act(() => {
+      root.render(<TerminalWorkspace />);
+    });
+
+    const keydownRegistration = addEventListenerSpy.mock.calls.find(([type]) => type === "keydown");
+    expect(keydownRegistration).toBeTruthy();
+    const handler = keydownRegistration?.[1] as ((event: KeyboardEvent) => void) | undefined;
+    expect(handler).toBeTypeOf("function");
+
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    const event = {
+      key: "a",
+      code: "KeyA",
+      ctrlKey: false,
+      altKey: true,
+      shiftKey: false,
+      metaKey: false,
+      target: document.body,
+      preventDefault,
+      stopPropagation,
+    } as unknown as KeyboardEvent;
+
+    handler?.(event);
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
   it("toggles focus mode from the configured fullscreen shortcut", () => {
     act(() => {
       root.render(<TerminalWorkspace />);

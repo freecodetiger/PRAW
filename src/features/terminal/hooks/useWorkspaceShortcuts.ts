@@ -37,6 +37,7 @@ export function useWorkspaceShortcuts({
       }
 
       event.preventDefault();
+      event.stopPropagation();
 
       switch (action.type) {
         case "focus-pane":
@@ -60,9 +61,10 @@ export function useWorkspaceShortcuts({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    const listenerOptions = { capture: true } as const;
+    window.addEventListener("keydown", handleKeyDown, listenerOptions);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, listenerOptions);
     };
   }, [focusAdjacentTab, requestEditNoteForActiveTab, shortcuts, splitActiveTab, toggleAiVoiceBypass, toggleFocusPane]);
 }

@@ -1,0 +1,22 @@
+import type { ITerminalOptions } from "@xterm/xterm";
+
+import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
+
+interface PersistentTerminalOptionConfig {
+  fontFamily: string;
+  fontSize: number;
+  theme: ThemeTerminalPalette;
+}
+
+export function createPersistentTerminalOptions(config: PersistentTerminalOptionConfig): ITerminalOptions {
+  return {
+    allowTransparency: false,
+    altClickMovesCursor: false,
+    convertEol: true,
+    cursorBlink: true,
+    fontFamily: config.fontFamily,
+    fontSize: config.fontSize,
+    lineHeight: 1.3,
+    theme: config.theme,
+  };
+}

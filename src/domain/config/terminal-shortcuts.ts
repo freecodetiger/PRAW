@@ -72,7 +72,7 @@ export const DEFAULT_TERMINAL_SHORTCUTS: TerminalShortcutConfig = {
   splitDown: { key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false },
   editNote: { key: "\\", code: "Backslash", ctrl: true, alt: true, shift: false, meta: false },
   toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
-  toggleAiVoiceBypass: { key: "/", code: "Slash", ctrl: true, alt: true, shift: true, meta: false },
+  toggleAiVoiceBypass: { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
 };
 
 export function normalizeTerminalShortcutConfig(
