@@ -8,15 +8,16 @@
 
 PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保留真实 shell 和原生 CLI 语义，同时围绕多分屏、Dialog 命令流、Classic/raw terminal 兼容模式，以及 AI CLI 工作流做额外优化。
 
-当前公开版本只发布 Linux 平台安装包。
+当前公开发布同时覆盖 Linux 正式安装包与 macOS 预览构建。
 
 ### 下载
 
-请从官方网站下载最新 Linux 版本：
+请从官网或 GitHub Releases 下载最新版：
 
 - 官网：[praw.top](https://praw.top/)
-- 当前发布平台：Linux
-- 当前安装包类型：`.deb`、`.rpm`、`.AppImage`
+- Releases: https://github.com/freecodetiger/PRAW/releases
+- Linux 安装包：`.deb`、`.rpm`、`.AppImage`
+- macOS 预览构建：`.dmg`、`.app.tar.gz`
 
 ### 主要特性
 
@@ -44,11 +45,28 @@ chmod +x ./PRAW_0.1.0_amd64.AppImage
 ./PRAW_0.1.0_amd64.AppImage
 ```
 
+## Install The macOS Preview Build
+
+macOS 当前走 `latest prerelease` 预览发布通道，请从 GitHub Releases 下载：
+
+- Releases: https://github.com/freecodetiger/PRAW/releases
+- **Apple Silicon** Mac 请优先选择 `aarch64` / `arm64` 资产
+- **Intel** Mac 请优先选择 `x64` / `x86_64` 资产
+- 大多数用户直接使用 `.dmg`
+- 如果需要手动解包或排障，可使用 `.app.tar.gz`
+- 详细安装说明见：[docs/installing-macos.md](./docs/installing-macos.md)
+
 ### 本地开发
 
 ```bash
 npm install
 npm run tauri dev
+```
+
+如果你在 Linux 本地开发并启用了语音转文字能力，请先安装 ALSA 开发包：
+
+```bash
+sudo apt install libasound2-dev
 ```
 
 常用检查：
@@ -70,7 +88,7 @@ npm run build
 
 ### 状态
 
-PRAW 仍处于快速迭代阶段。Linux 是当前唯一公开发布平台；macOS 和其他平台暂不作为正式发布目标。
+PRAW 仍处于快速迭代阶段。Linux 安装包已经公开发布；macOS 目前提供预览构建，其余平台暂未公开发布。
 
 ### 许可证
 
@@ -80,15 +98,16 @@ PRAW 使用 [Apache License 2.0](./LICENSE) 开源。
 
 PRAW is a desktop terminal app built with `Tauri + React + Rust`. It keeps a real shell and native CLI semantics, while adding a workspace-oriented interface for split panes, readable command history, raw terminal compatibility, and AI CLI workflows.
 
-The current public release is Linux-only.
+The current public release covers Linux packages plus a macOS preview lane.
 
 ### Download
 
-Download the latest Linux build from the official website:
+Download the latest build from the website or GitHub Releases:
 
 - Website: [praw.top](https://praw.top/)
-- Current release platform: Linux
-- Current package formats: `.deb`, `.rpm`, `.AppImage`
+- Releases: https://github.com/freecodetiger/PRAW/releases
+- Linux packages: `.deb`, `.rpm`, `.AppImage`
+- macOS preview assets: `.dmg`, `.app.tar.gz`
 
 ### Highlights
 
@@ -116,11 +135,28 @@ chmod +x ./PRAW_0.1.0_amd64.AppImage
 ./PRAW_0.1.0_amd64.AppImage
 ```
 
+## Install The macOS Preview Build
+
+macOS currently ships through the `latest prerelease` lane on GitHub Releases:
+
+- Releases: https://github.com/freecodetiger/PRAW/releases
+- Use `aarch64` / `arm64` assets on **Apple Silicon**
+- Use `x64` / `x86_64` assets on **Intel**
+- Most users should start with the `.dmg`
+- Use `.app.tar.gz` only if you want the unpacked app bundle for manual inspection or troubleshooting
+- Full install guide: [docs/installing-macos.md](./docs/installing-macos.md)
+
 ### Development
 
 ```bash
 npm install
 npm run tauri dev
+```
+
+If you are developing on Linux with the voice-to-text feature enabled, install the ALSA development package first:
+
+```bash
+sudo apt install libasound2-dev
 ```
 
 Useful checks:
@@ -142,7 +178,7 @@ npm run build
 
 ### Status
 
-PRAW is still moving quickly. Linux is the only public release platform right now; macOS and other platforms are not formal release targets yet.
+PRAW is still moving quickly. Linux packages are publicly released today, while macOS is available as a preview build. Other platforms are not public targets yet.
 
 ### License
 

@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
-use tokio_tungstenite::{connect_async, tungstenite::http::Request, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{client::IntoClientRequest, http::Request, Message},
+};
 use uuid::Uuid;
 
 pub const VOICE_TRANSCRIPTION_STARTED_EVENT: &str = "voice/transcription-started";
@@ -191,7 +194,8 @@ async fn run_voice_session(
     let mut audio_stream = Some(audio_capture.stream);
     let mut task_started = false;
     let mut finish_sent = false;
-    let mut final_text = String::new();
+    let mut finalized_chunks: Vec<String> = Vec::new();
+    let mut current_chunk = String::new();
 
     sink.send(Message::Text(
         build_run_task_message(&session_id, sample_rate, &request.language).into(),
@@ -258,13 +262,19 @@ async fn run_voice_session(
                             emit_status(&app, &session_id, "Listening…");
                         }
                     }
-                    ServerMessage::ResultGenerated { text } => {
+                    ServerMessage::ResultGenerated { text, sentence_end } => {
                         if let Some(text) = text {
-                            final_text = text.clone();
-                            emit_live(&app, &session_id, &text);
+                            let transcript = accumulate_transcript_update(
+                                &mut finalized_chunks,
+                                &mut current_chunk,
+                                &text,
+                                sentence_end,
+                            );
+                            emit_live(&app, &session_id, &transcript);
                         }
                     }
                     ServerMessage::TaskFinished => {
+                        let final_text = compose_transcript(&finalized_chunks, Some(current_chunk.as_str()));
                         emit_completed(&app, &session_id, final_text.trim());
                         return Ok(());
                     }
@@ -296,11 +306,16 @@ fn validate_start_request(request: &StartVoiceTranscriptionRequest) -> Result<()
 }
 
 fn build_websocket_request(api_key: &str) -> Result<Request<()>> {
-    Request::builder()
-        .uri(ALIYUN_REALTIME_ENDPOINT)
-        .header("Authorization", format!("Bearer {}", api_key.trim()))
-        .body(())
-        .map_err(|error| anyhow!("failed to build websocket request: {error}"))
+    let mut request = ALIYUN_REALTIME_ENDPOINT
+        .into_client_request()
+        .map_err(|error| anyhow!("failed to build websocket request: {error}"))?;
+    request.headers_mut().insert(
+        "Authorization",
+        format!("Bearer {}", api_key.trim())
+            .parse()
+            .map_err(|error| anyhow!("failed to build websocket auth header: {error}"))?,
+    );
+    Ok(request)
 }
 
 fn build_run_task_message(session_id: &str, sample_rate: u32, language: &str) -> String {
@@ -354,7 +369,10 @@ fn language_hints(language: &str) -> Vec<&'static str> {
 #[derive(Debug)]
 enum ServerMessage {
     TaskStarted,
-    ResultGenerated { text: Option<String> },
+    ResultGenerated {
+        text: Option<String>,
+        sentence_end: bool,
+    },
     TaskFinished,
     TaskFailed { message: String },
     Ignore,
@@ -398,6 +416,13 @@ fn parse_server_event(payload: &str) -> Result<ServerMessage> {
                 .and_then(|sentence| sentence.get("text"))
                 .and_then(Value::as_str)
                 .map(str::to_string),
+            sentence_end: value
+                .get("payload")
+                .and_then(|payload| payload.get("output"))
+                .and_then(|output| output.get("sentence"))
+                .and_then(|sentence| sentence.get("sentence_end"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }),
         "task-finished" => Ok(ServerMessage::TaskFinished),
         "task-failed" => Ok(ServerMessage::TaskFailed {
@@ -410,6 +435,66 @@ fn parse_server_event(payload: &str) -> Result<ServerMessage> {
         }),
         _ => Ok(ServerMessage::Ignore),
     }
+}
+
+fn compose_transcript(finalized_chunks: &[String], current_chunk: Option<&str>) -> String {
+    let mut segments: Vec<&str> = finalized_chunks
+        .iter()
+        .map(String::as_str)
+        .filter(|segment| !segment.trim().is_empty())
+        .collect();
+
+    if let Some(current_chunk) = current_chunk {
+        if !current_chunk.trim().is_empty() {
+            segments.push(current_chunk);
+        }
+    }
+
+    let mut transcript = String::new();
+    for segment in segments {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if !transcript.is_empty() && needs_ascii_space(&transcript, trimmed) {
+            transcript.push(' ');
+        }
+        transcript.push_str(trimmed);
+    }
+
+    transcript
+}
+
+fn accumulate_transcript_update(
+    finalized_chunks: &mut Vec<String>,
+    current_chunk: &mut String,
+    next_text: &str,
+    sentence_end: bool,
+) -> String {
+    let normalized = next_text.trim();
+    if normalized.is_empty() {
+        return compose_transcript(finalized_chunks, Some(current_chunk.as_str()));
+    }
+
+    current_chunk.clear();
+    current_chunk.push_str(normalized);
+
+    if sentence_end {
+        if finalized_chunks.last().map(String::as_str) != Some(normalized) {
+            finalized_chunks.push(normalized.to_string());
+        }
+        current_chunk.clear();
+    }
+
+    compose_transcript(finalized_chunks, Some(current_chunk.as_str()))
+}
+
+fn needs_ascii_space(existing: &str, next: &str) -> bool {
+    let previous = existing.chars().next_back();
+    let upcoming = next.chars().next();
+    matches!(previous, Some(ch) if ch.is_ascii_alphanumeric())
+        && matches!(upcoming, Some(ch) if ch.is_ascii_alphanumeric())
 }
 
 fn build_audio_capture() -> Result<AudioCapture> {
@@ -548,10 +633,26 @@ fn emit_failed(app: &AppHandle, session_id: &str, message: String) {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_finish_task_message, build_run_task_message, language_hints, parse_server_event,
+        accumulate_transcript_update, build_finish_task_message, build_run_task_message,
+        build_websocket_request, compose_transcript, language_hints, parse_server_event,
         validate_start_request, ServerMessage, StartVoiceTranscriptionRequest,
+        ALIYUN_REALTIME_ENDPOINT,
     };
     use serde_json::Value;
+
+    #[test]
+    fn builds_websocket_request_with_authorization_and_websocket_handshake_headers() {
+        let request = build_websocket_request("test-key")
+            .expect("websocket request should include auth and client handshake headers");
+
+        assert_eq!(
+            request.headers().get("Authorization").and_then(|value| value.to_str().ok()),
+            Some("Bearer test-key")
+        );
+        assert!(request.headers().contains_key("sec-websocket-key"));
+        assert!(request.headers().contains_key("sec-websocket-version"));
+        assert_eq!(request.uri().to_string(), ALIYUN_REALTIME_ENDPOINT);
+    }
 
     #[test]
     fn builds_run_task_message_with_language_hints_and_normalization_flags() {
@@ -618,6 +719,32 @@ mod tests {
     }
 
     #[test]
+    fn aggregates_finalized_and_in_progress_transcript_without_dropping_prior_text() {
+        let mut finalized_chunks = Vec::new();
+        let mut current_chunk = String::new();
+
+        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "你好", true);
+        assert_eq!(first, "你好");
+        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好");
+
+        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "继续说", false);
+        assert_eq!(second, "你好继续说");
+        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好继续说");
+    }
+
+    #[test]
+    fn inserts_ascii_space_between_finalized_and_current_english_chunks() {
+        let mut finalized_chunks = Vec::new();
+        let mut current_chunk = String::new();
+
+        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "hello world", true);
+        assert_eq!(first, "hello world");
+
+        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "again", false);
+        assert_eq!(second, "hello world again");
+    }
+
+    #[test]
     fn parses_live_result_generated_event_text() {
         let result = parse_server_event(
             r#"{
@@ -636,8 +763,9 @@ mod tests {
         .expect("result-generated payload should parse");
 
         match result {
-            ServerMessage::ResultGenerated { text } => {
+            ServerMessage::ResultGenerated { text, sentence_end } => {
                 assert_eq!(text.as_deref(), Some("hello partial"));
+                assert!(!sentence_end);
             }
             other => panic!("expected ResultGenerated, got {other:?}"),
         }
@@ -661,8 +789,9 @@ mod tests {
         )
         .expect("result-generated payload should parse");
         match result {
-            ServerMessage::ResultGenerated { text } => {
-                assert_eq!(text.as_deref(), Some("hello world"))
+            ServerMessage::ResultGenerated { text, sentence_end } => {
+                assert_eq!(text.as_deref(), Some("hello world"));
+                assert!(sentence_end);
             }
             _ => panic!("unexpected parsed message"),
         }
