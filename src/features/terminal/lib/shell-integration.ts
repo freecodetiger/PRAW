@@ -11,6 +11,7 @@ export interface ShellIntegrationParserState {
   pendingControl: string;
   pendingCarriageReturn: boolean;
   suppressPrompt: boolean;
+  shellReady: boolean;
 }
 
 export interface ShellIntegrationChunkResult {
@@ -25,6 +26,7 @@ export function createShellIntegrationParserState(): ShellIntegrationParserState
     pendingControl: "",
     pendingCarriageReturn: false,
     suppressPrompt: false,
+    shellReady: false,
   };
 }
 
@@ -37,21 +39,23 @@ export function consumeShellIntegrationChunk(
   let rawVisibleOutput = "";
   const events: ShellLifecycleEvent[] = [];
   let suppressPrompt = state.suppressPrompt;
+  let shellReady = state.shellReady;
 
   while (cursor < source.length) {
     const markerIndex = source.indexOf(MARKER_PREFIX, cursor);
     if (markerIndex === -1) {
-      if (!suppressPrompt) {
+      if (shellReady && !suppressPrompt) {
         rawVisibleOutput += source.slice(cursor);
       }
       return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
         pending: "",
         suppressPrompt,
+        shellReady,
         events,
       });
     }
 
-    if (!suppressPrompt) {
+    if (shellReady && !suppressPrompt) {
       rawVisibleOutput += source.slice(cursor, markerIndex);
     }
 
@@ -60,6 +64,7 @@ export function consumeShellIntegrationChunk(
       return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
         pending: source.slice(markerIndex),
         suppressPrompt,
+        shellReady,
         events,
       });
     }
@@ -79,8 +84,11 @@ export function consumeShellIntegrationChunk(
         ? marker
         : null;
     if (event) {
+      if (event.type === "prompt-state") {
+        shellReady = true;
+      }
       events.push(event);
-    } else if (!suppressPrompt && marker === null) {
+    } else if (shellReady && !suppressPrompt && marker === null) {
       rawVisibleOutput += source.slice(markerIndex, markerEnd.index + markerEnd.length);
     }
 
@@ -90,6 +98,7 @@ export function consumeShellIntegrationChunk(
   return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
     pending: "",
     suppressPrompt,
+    shellReady,
     events,
   });
 }
@@ -101,6 +110,7 @@ function finalizeVisibleOutput(
   result: {
     pending: string;
     suppressPrompt: boolean;
+    shellReady: boolean;
     events: ShellLifecycleEvent[];
   },
 ): ShellIntegrationChunkResult {
@@ -112,6 +122,7 @@ function finalizeVisibleOutput(
       pendingControl: sanitized.pendingControl,
       pendingCarriageReturn: sanitized.pendingCarriageReturn,
       suppressPrompt: result.suppressPrompt,
+      shellReady: result.shellReady,
     },
     visibleOutput: sanitized.visibleOutput,
     events: result.events,

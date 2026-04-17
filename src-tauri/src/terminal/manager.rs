@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -65,9 +65,21 @@ impl TerminalManager {
         command.env("COLORTERM", "truecolor");
         command.env("PRAW_SESSION_ID", &request.session_id);
         command.env(PRAW_APP_BIN_ENV, &app_bin);
+        let session_path = request
+            .env
+            .as_ref()
+            .and_then(|env| env.get("PATH").cloned())
+            .or_else(|| std::env::var("PATH").ok());
+        let home = std::env::var("HOME").ok();
+        if let Some(path) = build_session_path(session_path.as_deref(), home.as_deref()) {
+            command.env("PATH", path);
+        }
 
         if let Some(env) = request.env {
             for (key, value) in env {
+                if key == "PATH" {
+                    continue;
+                }
                 command.env(key, value);
             }
         }
@@ -285,4 +297,89 @@ fn expand_home(path: &str) -> String {
     }
 
     path.to_string()
+}
+
+fn build_session_path(path: Option<&str>, home: Option<&str>) -> Option<String> {
+    let mut seen = HashSet::new();
+    let mut segments = Vec::new();
+
+    let mut push = |value: String| {
+        let normalized = value.trim();
+        if normalized.is_empty() {
+            return;
+        }
+
+        let owned = normalized.to_string();
+        if seen.insert(owned.clone()) {
+            segments.push(owned);
+        }
+    };
+
+    if let Some(home) = home.map(str::trim).filter(|value| !value.is_empty()) {
+        push(format!("{home}/.local/bin"));
+        push(format!("{home}/.cargo/bin"));
+    }
+
+    for candidate in [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+    ] {
+        push(candidate.to_string());
+    }
+
+    if let Some(path) = path {
+        for segment in path.split(':') {
+            push(segment.to_string());
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join(":"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_session_path;
+
+    #[test]
+    fn enriches_sparse_gui_session_paths_with_user_and_homebrew_bins() {
+        let path = build_session_path(Some("/usr/bin:/bin"), Some("/Users/test"))
+            .expect("session path should be built");
+        let segments: Vec<&str> = path.split(':').collect();
+
+        assert!(segments.starts_with(&[
+            "/Users/test/.local/bin",
+            "/Users/test/.cargo/bin",
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            "/usr/local/sbin",
+        ]));
+        assert!(segments.contains(&"/usr/bin"));
+        assert!(segments.contains(&"/bin"));
+    }
+
+    #[test]
+    fn deduplicates_session_path_segments() {
+        let path = build_session_path(
+            Some("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/bin"),
+            Some("/Users/test"),
+        )
+        .expect("session path should be built");
+        let segments: Vec<&str> = path.split(':').collect();
+
+        assert_eq!(
+            segments.iter().filter(|segment| **segment == "/opt/homebrew/bin").count(),
+            1
+        );
+        assert_eq!(
+            segments.iter().filter(|segment| **segment == "/usr/local/bin").count(),
+            1
+        );
+    }
 }

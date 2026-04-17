@@ -378,11 +378,16 @@ export function selectTranscriptViewportState(
 }
 
 function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
+  const supported = isDialogShellSupported(shell);
+
   return {
     ...createDialogState(shell, cwd, preferredMode),
     shell,
     workspaceCwd: cwd,
-    parserState: createShellIntegrationParserState(),
+    parserState: {
+      ...createShellIntegrationParserState(),
+      shellReady: !supported,
+    },
     aiTranscript: createAiTranscriptState(),
     aiSession: null,
     transcriptViewport: createTranscriptViewportState(),

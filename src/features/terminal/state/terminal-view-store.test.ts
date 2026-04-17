@@ -160,6 +160,21 @@ describe("terminal-view-store AI transcript", () => {
     expect(tabState?.cwd).toBe("/home/zpc/projects/praw");
   });
 
+  it("ignores pre-prompt startup noise before the first shell-ready marker arrives", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/zsh", "/Users/s", "dialog");
+    const promptCwd = store.consumeOutput(
+      "tab:1",
+      "/Users/s/.zshrc:1: command not found: fnm\r\n\x1b]133;P;cwd=/Users/s\x07",
+    );
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(promptCwd).toBe("/Users/s");
+    expect(tabState?.cwd).toBe("/Users/s");
+    expect(tabState?.blocks).toEqual([]);
+  });
+
   it("does not create a session output block for prompt-only whitespace after a command ends", () => {
     const store = useTerminalViewStore.getState();
 

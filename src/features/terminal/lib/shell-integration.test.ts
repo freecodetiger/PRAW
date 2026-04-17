@@ -50,6 +50,20 @@ describe("shell integration parser", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("ignores startup noise until the first shell-ready prompt-state marker arrives", () => {
+    const result = consumeShellIntegrationChunk(
+      {
+        ...createShellIntegrationParserState(),
+        shellReady: false,
+      },
+      `/Users/s/.zshrc:1: command not found: fnm\n\x1b]133;P;cwd=/Users/s\x07`,
+    );
+
+    expect(result.visibleOutput).toBe("");
+    expect(result.events).toEqual([{ type: "prompt-state", cwd: "/Users/s" }]);
+    expect(result.state.shellReady).toBe(true);
+  });
+
   it("parses shell markers that use the ST terminator", () => {
     const result = consumeShellIntegrationChunk(
       createShellIntegrationParserState(),
