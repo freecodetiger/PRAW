@@ -73,7 +73,20 @@ export function SettingsPanel() {
   };
 
   const patchSpeech = (partial: Partial<SpeechConfig>) => {
-    patchSpeechConfig(partial);
+    const nextApiKey = partial.apiKey;
+    const apiKeyChanged =
+      typeof nextApiKey === "string" && nextApiKey.trim() !== config.speech.apiKey.trim();
+
+    patchSpeechConfig({
+      ...partial,
+      ...(apiKeyChanged
+        ? {
+            programmerVocabularyId: "",
+            programmerVocabularyStatus: "idle",
+            programmerVocabularyError: "",
+          }
+        : {}),
+    });
   };
 
   const shortcutLabels = copy.terminal.shortcutLabels;
@@ -504,6 +517,18 @@ export function SettingsPanel() {
               </select>
             </label>
 
+            <label className="settings-field">
+              <span>{copy.speech.preset}</span>
+              <select
+                value={config.speech.preset}
+                onChange={(event) => patchSpeech({ preset: event.target.value as SpeechConfig["preset"] })}
+              >
+                <option value="default">{copy.speech.presetOptions.default}</option>
+                <option value="programmer">{copy.speech.presetOptions.programmer}</option>
+              </select>
+            </label>
+
+            <p className="settings-panel__summary">{copy.speech.presetSummary}</p>
             <p className="settings-panel__summary">{copy.speech.localKeySummary}</p>
           </section>
         </div>

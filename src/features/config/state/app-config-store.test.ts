@@ -113,6 +113,7 @@ describe("app-config-store", () => {
       provider: "aliyun-paraformer-realtime",
       apiKey: "speech-key",
       language: "zh",
+      preset: "default",
     });
 
     expect(useAppConfigStore.getState().config.speech).toEqual({
@@ -120,9 +121,36 @@ describe("app-config-store", () => {
       provider: "aliyun-paraformer-realtime",
       apiKey: "speech-key",
       language: "zh",
+      preset: "default",
+      programmerVocabularyId: "",
+      programmerVocabularyStatus: "idle",
+      programmerVocabularyError: "",
     });
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
     expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
+  });
+
+  it("patches speech preset without disturbing other speech settings", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      preset: "programmer",
+    });
+
+    expect(useAppConfigStore.getState().config.speech).toEqual({
+      ...DEFAULT_APP_CONFIG.speech,
+      preset: "programmer",
+    });
+  });
+
+  it("preserves programmer vocabulary cache fields when patching speech config", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      programmerVocabularyId: "vocab-123",
+      programmerVocabularyStatus: "ready",
+      programmerVocabularyError: "",
+    } as never);
+
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyId).toBe("vocab-123");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyStatus).toBe("ready");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyError).toBe("");
   });
 
   it("patches ui settings without disturbing terminal and ai config", () => {

@@ -1,3 +1,7 @@
+mod normalize;
+mod preset;
+mod vocabulary;
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -6,6 +10,7 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use futures_util::{SinkExt, StreamExt};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
@@ -16,14 +21,21 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
+use self::{normalize::normalize_transcript, preset::SpeechPreset};
+use crate::{config::AppConfig, storage};
+
 pub const VOICE_TRANSCRIPTION_STARTED_EVENT: &str = "voice/transcription-started";
 pub const VOICE_TRANSCRIPTION_STATUS_EVENT: &str = "voice/transcription-status";
 pub const VOICE_TRANSCRIPTION_LIVE_EVENT: &str = "voice/transcription-live";
 pub const VOICE_TRANSCRIPTION_COMPLETED_EVENT: &str = "voice/transcription-completed";
 pub const VOICE_TRANSCRIPTION_FAILED_EVENT: &str = "voice/transcription-failed";
+pub const VOICE_PROGRAMMER_VOCABULARY_STATE_EVENT: &str = "voice/programmer-vocabulary-state";
 const ALIYUN_REALTIME_PROVIDER: &str = "aliyun-paraformer-realtime";
 const ALIYUN_REALTIME_MODEL: &str = "paraformer-realtime-v2";
 const ALIYUN_REALTIME_ENDPOINT: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/inference";
+const ALIYUN_CUSTOMIZATION_ENDPOINT: &str =
+    "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/customization";
+const APP_CONFIG_PATH: &str = "config/app-config.json";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +43,8 @@ pub struct StartVoiceTranscriptionRequest {
     pub provider: String,
     pub api_key: String,
     pub language: String,
+    #[serde(default = "default_start_request_preset")]
+    pub preset: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +85,14 @@ pub struct VoiceTranscriptionCompletedEvent {
 pub struct VoiceTranscriptionFailedEvent {
     pub session_id: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceProgrammerVocabularyStateEvent {
+    pub programmer_vocabulary_id: String,
+    pub programmer_vocabulary_status: String,
+    pub programmer_vocabulary_error: String,
 }
 
 #[derive(Debug)]
@@ -180,7 +202,13 @@ async fn run_voice_session(
     request: StartVoiceTranscriptionRequest,
     mut command_rx: mpsc::UnboundedReceiver<VoiceSessionCommand>,
 ) -> Result<()> {
-    emit_status(&app, &session_id, "Connecting to Bailian…");
+    let preset = SpeechPreset::parse(&request.preset);
+    let vocabulary_id =
+        ensure_programmer_vocabulary(&app, &session_id, &request.api_key, preset).await;
+
+    if vocabulary_id.is_some() || preset != SpeechPreset::Programmer {
+        emit_status(&app, &session_id, "Connecting to Bailian…");
+    }
 
     let websocket_request = build_websocket_request(&request.api_key)?;
     let (websocket, _) = connect_async(websocket_request)
@@ -198,7 +226,14 @@ async fn run_voice_session(
     let mut current_chunk = String::new();
 
     sink.send(Message::Text(
-        build_run_task_message(&session_id, sample_rate, &request.language).into(),
+        build_run_task_message(
+            &session_id,
+            sample_rate,
+            &request.language,
+            preset,
+            vocabulary_id.as_deref(),
+        )
+        .into(),
     ))
     .await
     .context("failed to send Bailian run-task")?;
@@ -270,12 +305,14 @@ async fn run_voice_session(
                                 &text,
                                 sentence_end,
                             );
-                            emit_live(&app, &session_id, &transcript);
+                            let normalized = normalize_transcript(&transcript, preset);
+                            emit_live(&app, &session_id, &normalized);
                         }
                     }
                     ServerMessage::TaskFinished => {
                         let final_text = compose_transcript(&finalized_chunks, Some(current_chunk.as_str()));
-                        emit_completed(&app, &session_id, final_text.trim());
+                        let normalized = normalize_transcript(final_text.trim(), preset);
+                        emit_completed(&app, &session_id, normalized.trim());
                         return Ok(());
                     }
                     ServerMessage::TaskFailed { message } => {
@@ -305,6 +342,10 @@ fn validate_start_request(request: &StartVoiceTranscriptionRequest) -> Result<()
     }
 }
 
+fn default_start_request_preset() -> String {
+    "default".to_string()
+}
+
 fn build_websocket_request(api_key: &str) -> Result<Request<()>> {
     let mut request = ALIYUN_REALTIME_ENDPOINT
         .into_client_request()
@@ -318,8 +359,14 @@ fn build_websocket_request(api_key: &str) -> Result<Request<()>> {
     Ok(request)
 }
 
-fn build_run_task_message(session_id: &str, sample_rate: u32, language: &str) -> String {
-    json!({
+fn build_run_task_message(
+    session_id: &str,
+    sample_rate: u32,
+    language: &str,
+    preset: SpeechPreset,
+    vocabulary_id: Option<&str>,
+) -> String {
+    let mut payload = json!({
         "header": {
             "action": "run-task",
             "task_id": session_id,
@@ -336,12 +383,17 @@ fn build_run_task_message(session_id: &str, sample_rate: u32, language: &str) ->
                 "disfluency_removal_enabled": false,
                 "punctuation_prediction_enabled": true,
                 "inverse_text_normalization_enabled": true,
-                "language_hints": language_hints(language),
+                "language_hints": language_hints(language, preset),
             },
             "input": {}
         }
-    })
-    .to_string()
+    });
+
+    if let Some(vocabulary_id) = vocabulary_id {
+        payload["payload"]["parameters"]["vocabulary_id"] = json!(vocabulary_id);
+    }
+
+    payload.to_string()
 }
 
 fn build_finish_task_message(session_id: &str) -> String {
@@ -358,8 +410,9 @@ fn build_finish_task_message(session_id: &str) -> String {
     .to_string()
 }
 
-fn language_hints(language: &str) -> Vec<&'static str> {
+fn language_hints(language: &str, preset: SpeechPreset) -> Vec<&'static str> {
     match language.trim().to_lowercase().as_str() {
+        "zh" if preset == SpeechPreset::Programmer => vec!["zh", "en"],
         "zh" => vec!["zh"],
         "en" => vec!["en"],
         _ => vec!["zh", "en"],
@@ -630,6 +683,104 @@ fn emit_failed(app: &AppHandle, session_id: &str, message: String) {
     );
 }
 
+fn emit_programmer_vocabulary_state(app: &AppHandle, speech: &crate::config::SpeechConfig) {
+    let _ = app.emit(
+        VOICE_PROGRAMMER_VOCABULARY_STATE_EVENT,
+        VoiceProgrammerVocabularyStateEvent {
+            programmer_vocabulary_id: speech.programmer_vocabulary_id.clone(),
+            programmer_vocabulary_status: speech.programmer_vocabulary_status.clone(),
+            programmer_vocabulary_error: speech.programmer_vocabulary_error.clone(),
+        },
+    );
+}
+
+fn persist_programmer_vocabulary_state(app: &AppHandle, config: &AppConfig) {
+    let _ = storage::save_json(app, APP_CONFIG_PATH, config);
+    emit_programmer_vocabulary_state(app, &config.speech);
+}
+
+async fn ensure_programmer_vocabulary(
+    app: &AppHandle,
+    session_id: &str,
+    api_key: &str,
+    preset: SpeechPreset,
+) -> Option<String> {
+    if preset != SpeechPreset::Programmer {
+        return None;
+    }
+
+    let mut config = storage::load_or_default::<_, AppConfig>(app, APP_CONFIG_PATH).unwrap_or_default();
+    let cached_id = config.speech.programmer_vocabulary_id.trim().to_string();
+    if !cached_id.is_empty() {
+        config.speech.programmer_vocabulary_status = "ready".to_string();
+        config.speech.programmer_vocabulary_error.clear();
+        persist_programmer_vocabulary_state(app, &config);
+        return Some(cached_id);
+    }
+
+    config.speech.programmer_vocabulary_status = "creating".to_string();
+    config.speech.programmer_vocabulary_error.clear();
+    persist_programmer_vocabulary_state(app, &config);
+    emit_status(app, session_id, "Preparing programmer vocabulary…");
+
+    match create_programmer_vocabulary(api_key).await {
+        Ok(vocabulary_id) => {
+            config.speech.programmer_vocabulary_id = vocabulary_id.clone();
+            config.speech.programmer_vocabulary_status = "ready".to_string();
+            config.speech.programmer_vocabulary_error.clear();
+            persist_programmer_vocabulary_state(app, &config);
+            Some(vocabulary_id)
+        }
+        Err(error) => {
+            config.speech.programmer_vocabulary_status = "failed".to_string();
+            config.speech.programmer_vocabulary_error = error.to_string();
+            persist_programmer_vocabulary_state(app, &config);
+            emit_status(
+                app,
+                session_id,
+                "Programmer cloud vocabulary unavailable. Using local enhancement instead.",
+            );
+            None
+        }
+    }
+}
+
+async fn create_programmer_vocabulary(api_key: &str) -> Result<String> {
+    let suffix = Uuid::new_v4().simple().to_string();
+    let prefix = format!("programmer-{}", &suffix[..8]);
+    let payload = vocabulary::build_programmer_vocabulary_create_payload(&prefix);
+
+    let response = Client::new()
+        .post(ALIYUN_CUSTOMIZATION_ENDPOINT)
+        .bearer_auth(api_key.trim())
+        .json(&payload)
+        .send()
+        .await
+        .context("failed to request programmer vocabulary creation")?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .context("failed to read programmer vocabulary response body")?;
+
+    if !status.is_success() {
+        return Err(anyhow!(
+            "programmer vocabulary creation failed ({status}): {body}"
+        ));
+    }
+
+    let value: Value =
+        serde_json::from_str(&body).context("failed to parse programmer vocabulary response")?;
+
+    value
+        .pointer("/output/vocabulary_id")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("programmer vocabulary response did not include vocabulary_id"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -638,6 +789,7 @@ mod tests {
         validate_start_request, ServerMessage, StartVoiceTranscriptionRequest,
         ALIYUN_REALTIME_ENDPOINT,
     };
+    use crate::voice::preset::SpeechPreset;
     use serde_json::Value;
 
     #[test]
@@ -656,7 +808,8 @@ mod tests {
 
     #[test]
     fn builds_run_task_message_with_language_hints_and_normalization_flags() {
-        let message = build_run_task_message("session-1", 44_100, "auto");
+        let message =
+            build_run_task_message("session-1", 44_100, "auto", SpeechPreset::Default, None);
         let value: Value =
             serde_json::from_str(&message).expect("run-task payload should be valid json");
 
@@ -698,6 +851,45 @@ mod tests {
                 .and_then(Value::as_array)
                 .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>()),
             Some(vec!["zh", "en"])
+        );
+        assert!(value.pointer("/payload/parameters/vocabulary_id").is_none());
+    }
+
+    #[test]
+    fn builds_programmer_run_task_message_with_vocabulary_id() {
+        let message = build_run_task_message(
+            "session-1",
+            44_100,
+            "zh",
+            SpeechPreset::Programmer,
+            Some("vocab-user-123"),
+        );
+        let value: Value =
+            serde_json::from_str(&message).expect("programmer run-task payload should be valid json");
+
+        assert_eq!(
+            value
+                .pointer("/payload/parameters/language_hints")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().filter_map(Value::as_str).collect::<Vec<_>>()),
+            Some(vec!["zh", "en"])
+        );
+        assert_eq!(
+            value
+                .pointer("/payload/parameters/vocabulary_id")
+                .and_then(Value::as_str),
+            Some("vocab-user-123")
+        );
+    }
+
+    #[test]
+    fn programmer_vocabulary_create_payload_targets_realtime_v2() {
+        let payload = crate::voice::vocabulary::build_programmer_vocabulary_create_payload("progx-auto");
+        assert_eq!(payload["model"].as_str(), Some("speech-biasing"));
+        assert_eq!(payload["input"]["action"].as_str(), Some("create_vocabulary"));
+        assert_eq!(
+            payload["input"]["target_model"].as_str(),
+            Some("paraformer-realtime-v2")
         );
     }
 
@@ -772,6 +964,36 @@ mod tests {
     }
 
     #[test]
+    fn keeps_default_preset_transcript_unchanged() {
+        let normalized = super::normalize::normalize_transcript(
+            "react 项目",
+            super::preset::SpeechPreset::Default,
+        );
+
+        assert_eq!(normalized, "react 项目");
+    }
+
+    #[test]
+    fn normalizes_programmer_terms_and_spaced_commands() {
+        let normalized = super::normalize::normalize_transcript(
+            "用 typescript 写一个 react hook 然后运行 p n p m dev",
+            super::preset::SpeechPreset::Programmer,
+        );
+
+        assert_eq!(normalized, "用 TypeScript 写一个 React hook 然后运行 pnpm dev");
+    }
+
+    #[test]
+    fn normalizes_common_chinese_tool_transliterations() {
+        let normalized = super::normalize::normalize_transcript(
+            "在陶瑞里面修一下克劳德和扣代克斯",
+            super::preset::SpeechPreset::Programmer,
+        );
+
+        assert_eq!(normalized, "在 Tauri 里面修一下 Claude 和 Codex");
+    }
+
+    #[test]
     fn parses_result_generated_and_failed_events() {
         let result = parse_server_event(
             r#"{
@@ -821,9 +1043,11 @@ mod tests {
             provider: "aliyun-paraformer-realtime".to_string(),
             api_key: "secret-key".to_string(),
             language: "zh".to_string(),
+            preset: "default".to_string(),
         };
         validate_start_request(&request).expect("request should be accepted");
-        assert_eq!(language_hints("en"), vec!["en"]);
+        assert_eq!(language_hints("en", SpeechPreset::Default), vec!["en"]);
+        assert_eq!(language_hints("zh", SpeechPreset::Programmer), vec!["zh", "en"]);
     }
 
     #[test]
@@ -832,6 +1056,7 @@ mod tests {
             provider: "aliyun-paraformer-realtime".to_string(),
             api_key: "secret-key".to_string(),
             language: "ja".to_string(),
+            preset: "default".to_string(),
         };
         assert!(validate_start_request(&invalid_language).is_err());
 
@@ -839,6 +1064,7 @@ mod tests {
             provider: "other".to_string(),
             api_key: "secret-key".to_string(),
             language: "auto".to_string(),
+            preset: "default".to_string(),
         };
         assert!(validate_start_request(&invalid_provider).is_err());
     }

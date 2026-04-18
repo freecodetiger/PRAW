@@ -174,6 +174,30 @@ describe("SettingsPanel", () => {
     expect(useAppConfigStore.getState().config.speech.language).toBe("zh");
   });
 
+  it("renders the speech preset selector and updates the stored preset", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const presetField = findLabel(host, "Speech mode") ?? findLabel(host, "识别模式");
+    const presetSelect = presetField?.querySelector("select") ?? null;
+    expect(presetSelect).not.toBeNull();
+    expect((presetSelect as HTMLSelectElement).value).toBe("default");
+
+    act(() => {
+      if (presetSelect instanceof HTMLSelectElement) {
+        presetSelect.value = "programmer";
+      }
+      presetSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.speech.preset).toBe("programmer");
+  });
+
   it("records a pane shortcut after modifier keys and stores the completed chord", () => {
     act(() => {
       root.render(<SettingsPanel />);
@@ -269,6 +293,41 @@ describe("SettingsPanel", () => {
 
     expect(useAppConfigStore.getState().config.speech.apiKey).toBe("speech-key");
     expect(useAppConfigStore.getState().config.ai.apiKey).toBe("");
+  });
+
+  it("clears programmer vocabulary cache when the speech api key changes", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      apiKey: "old-speech-key",
+      programmerVocabularyId: "vocab-user-123",
+      programmerVocabularyStatus: "ready",
+      programmerVocabularyError: "old error",
+    });
+
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const apiKeyField = findLabel(host, "Speech API key") ?? findLabel(host, "语音 API key");
+    const apiKeyInput = apiKeyField?.querySelector('input[type="password"]') ?? null;
+    expect(apiKeyInput).not.toBeNull();
+
+    act(() => {
+      if (apiKeyInput instanceof HTMLInputElement) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        descriptor?.set?.call(apiKeyInput, "new-speech-key");
+      }
+      apiKeyInput?.dispatchEvent(new Event("input", { bubbles: true }));
+      apiKeyInput?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.speech.apiKey).toBe("new-speech-key");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyId).toBe("");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyStatus).toBe("idle");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyError).toBe("");
   });
 
   it("shows a base url field and sends it during connection tests", async () => {

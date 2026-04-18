@@ -9,6 +9,7 @@ import {
   onVoiceTranscriptionCompleted,
   onVoiceTranscriptionFailed,
   onVoiceTranscriptionLive,
+  onVoiceProgrammerVocabularyState,
   onVoiceTranscriptionStarted,
   onVoiceTranscriptionStatus,
   startVoiceTranscription,
@@ -59,6 +60,7 @@ export function AiWorkflowSurface({
   void paneState;
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const speechConfig = useAppConfigStore((state) => state.config.speech);
+  const patchSpeechConfig = useAppConfigStore((state) => state.patchSpeechConfig);
   const [bypassPromptOpen, setBypassPromptOpen] = useState(false);
   const [bypassDraft, setBypassDraft] = useState("");
   const [bypassError, setBypassError] = useState<string | null>(null);
@@ -141,41 +143,32 @@ export function AiWorkflowSurface({
 
   useEffect(() => {
     const cleanup: Array<() => void> = [];
-    let disposed = false;
+    let cancelled = false;
 
     const subscribe = async () => {
-      cleanup.push(
-        await onVoiceTranscriptionStarted((event) => {
+      const unlisten = await Promise.all([
+        onVoiceTranscriptionStarted((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
           }
 
           setVoiceStatus("Listening…");
         }),
-      );
-
-      cleanup.push(
-        await onVoiceTranscriptionStatus((event) => {
+        onVoiceTranscriptionStatus((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
           }
 
           setVoiceStatus(event.message);
         }),
-      );
-
-      cleanup.push(
-        await onVoiceTranscriptionLive((event) => {
+        onVoiceTranscriptionLive((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
           }
 
           setLiveTranscript(event.text);
         }),
-      );
-
-      cleanup.push(
-        await onVoiceTranscriptionCompleted((event) => {
+        onVoiceTranscriptionCompleted((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
           }
@@ -188,10 +181,7 @@ ${transcript}` : transcript));
 
           resetVoiceState();
         }),
-      );
-
-      cleanup.push(
-        await onVoiceTranscriptionFailed((event) => {
+        onVoiceTranscriptionFailed((event) => {
           if (event.sessionId !== voiceSessionIdRef.current) {
             return;
           }
@@ -199,13 +189,29 @@ ${transcript}` : transcript));
           resetVoiceState();
           setBypassError(event.message || "Voice input failed.");
         }),
-      );
+        onVoiceProgrammerVocabularyState((event) => {
+          patchSpeechConfig({
+            programmerVocabularyId: event.programmerVocabularyId,
+            programmerVocabularyStatus: event.programmerVocabularyStatus,
+            programmerVocabularyError: event.programmerVocabularyError,
+          });
+        }),
+      ]);
+
+      if (cancelled) {
+        for (const unsubscribe of unlisten) {
+          unsubscribe();
+        }
+        return;
+      }
+
+      cleanup.push(...unlisten);
     };
 
     void subscribe();
 
     return () => {
-      disposed = true;
+      cancelled = true;
       for (const unsubscribe of cleanup) {
         unsubscribe();
       }
@@ -213,11 +219,9 @@ ${transcript}` : transcript));
       if (voiceSessionIdRef.current) {
         void cancelVoiceTranscription(voiceSessionIdRef.current);
       }
-      if (disposed) {
-        voiceSessionIdRef.current = null;
-      }
+      voiceSessionIdRef.current = null;
     };
-  }, []);
+  }, [patchSpeechConfig]);
 
   const resetVoiceState = () => {
     voiceSessionIdRef.current = null;
@@ -381,6 +385,7 @@ ${transcript}` : transcript));
         provider: speechConfig.provider,
         apiKey: speechConfig.apiKey,
         language: speechConfig.language,
+        preset: speechConfig.preset,
       });
       voiceSessionIdRef.current = session.sessionId;
       setVoiceSessionId(session.sessionId);

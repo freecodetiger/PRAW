@@ -71,6 +71,14 @@ pub struct SpeechConfig {
     pub api_key: String,
     #[serde(default = "default_speech_language")]
     pub language: String,
+    #[serde(default = "default_speech_preset")]
+    pub preset: String,
+    #[serde(default)]
+    pub programmer_vocabulary_id: String,
+    #[serde(default = "default_programmer_vocabulary_status")]
+    pub programmer_vocabulary_status: String,
+    #[serde(default)]
+    pub programmer_vocabulary_error: String,
 }
 
 impl Default for SpeechConfig {
@@ -80,6 +88,10 @@ impl Default for SpeechConfig {
             provider: default_speech_provider(),
             api_key: String::new(),
             language: default_speech_language(),
+            preset: default_speech_preset(),
+            programmer_vocabulary_id: String::new(),
+            programmer_vocabulary_status: default_programmer_vocabulary_status(),
+            programmer_vocabulary_error: String::new(),
         }
     }
 }
@@ -182,6 +194,14 @@ fn default_speech_language() -> String {
     "auto".to_string()
 }
 
+fn default_speech_preset() -> String {
+    "default".to_string()
+}
+
+fn default_programmer_vocabulary_status() -> String {
+    "idle".to_string()
+}
+
 fn fallback_default_shell(is_macos: bool) -> String {
     if is_macos {
         "/bin/zsh".to_string()
@@ -278,6 +298,10 @@ mod tests {
         assert!(!config.speech.enabled);
         assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
         assert_eq!(config.speech.language, "auto");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
         assert!(config.terminal.phrases.is_empty());
         assert!(config.terminal.phrase_usage.is_empty());
     }
@@ -321,6 +345,69 @@ mod tests {
         assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
         assert_eq!(config.speech.api_key, "speech-key");
         assert_eq!(config.speech.language, "zh");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
+    }
+
+    #[test]
+    fn speech_config_defaults_to_default_preset() {
+        let config = AppConfig::default();
+        assert_eq!(config.speech.preset, "default");
+    }
+
+    #[test]
+    fn speech_config_defaults_vocabulary_cache_state() {
+        let config = AppConfig::default();
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
+    }
+
+    #[test]
+    fn deserializes_speech_preset_from_json() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "dialogFontFamily": "CaskaydiaCove Nerd Font",
+                    "dialogFontSize": 14,
+                    "preferredMode": "dialog",
+                    "themePreset": "light"
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "baseUrl": "",
+                    "enabled": false,
+                    "smartSuggestionBubble": true,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                },
+                "speech": {
+                    "enabled": true,
+                    "provider": "aliyun-paraformer-realtime",
+                    "apiKey": "speech-key",
+                    "language": "auto",
+                    "preset": "programmer",
+                    "programmerVocabularyId": "vocab-123",
+                    "programmerVocabularyStatus": "ready",
+                    "programmerVocabularyError": ""
+                },
+                "ui": {
+                    "settingsPanelLanguage": "en"
+                }
+            }"##,
+        )
+        .expect("config should deserialize speech preset");
+
+        assert_eq!(config.speech.preset, "programmer");
+        assert_eq!(config.speech.programmer_vocabulary_id, "vocab-123");
+        assert_eq!(config.speech.programmer_vocabulary_status, "ready");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
     }
 
     #[test]
@@ -464,6 +551,28 @@ mod tests {
             Some("auto")
         );
         assert_eq!(
+            speech.get("preset").and_then(|value| value.as_str()),
+            Some("default")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyId")
+                .and_then(|value| value.as_str()),
+            Some("")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyStatus")
+                .and_then(|value| value.as_str()),
+            Some("idle")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyError")
+                .and_then(|value| value.as_str()),
+            Some("")
+        );
+        assert_eq!(
             ui.get("settingsPanelLanguage")
                 .and_then(|value| value.as_str()),
             Some("en")
@@ -479,5 +588,9 @@ mod tests {
         assert_eq!(config.ai.base_url, "");
         assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
         assert_eq!(config.speech.language, "auto");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
     }
 }

@@ -34,7 +34,21 @@ describe("resolveAppConfig", () => {
       provider: "aliyun-paraformer-realtime",
       apiKey: "",
       language: "auto",
+      preset: "default",
+      programmerVocabularyId: "",
+      programmerVocabularyStatus: "idle",
+      programmerVocabularyError: "",
     });
+  });
+
+  it("defaults speech preset to general mode", () => {
+    expect(DEFAULT_APP_CONFIG.speech.preset).toBe("default");
+  });
+
+  it("defaults programmer vocabulary cache fields safely", () => {
+    expect(DEFAULT_APP_CONFIG.speech.programmerVocabularyId).toBe("");
+    expect(DEFAULT_APP_CONFIG.speech.programmerVocabularyStatus).toBe("idle");
+    expect(DEFAULT_APP_CONFIG.speech.programmerVocabularyError).toBe("");
   });
 
   it("exposes all first-wave providers in the catalog", () => {
@@ -117,6 +131,10 @@ describe("resolveAppConfig", () => {
         provider: "custom-provider",
         apiKey: "speech-key",
         language: "en",
+        preset: "default",
+        programmerVocabularyId: "",
+        programmerVocabularyStatus: "idle",
+        programmerVocabularyError: "",
       },
       ui: DEFAULT_APP_CONFIG.ui,
     });
@@ -211,6 +229,44 @@ describe("resolveAppConfig", () => {
         dialogFontSize: 10,
         preferredMode: DEFAULT_APP_CONFIG.terminal.preferredMode,
       },
+    });
+  });
+
+  it("normalizes supported speech presets and falls back for invalid values", () => {
+    expect(
+      resolveAppConfig({
+        speech: {
+          enabled: true,
+          provider: "aliyun-paraformer-realtime",
+          apiKey: "speech-key",
+          language: "auto",
+          preset: "programmer" as never,
+        },
+      }).speech.preset,
+    ).toBe("programmer");
+
+    expect(
+      resolveAppConfig({
+        speech: {
+          preset: "writer" as never,
+        },
+      }).speech.preset,
+    ).toBe("default");
+  });
+
+  it("normalizes programmer vocabulary cache fields", () => {
+    expect(
+      resolveAppConfig({
+        speech: {
+          programmerVocabularyId: " vocab-123 " as never,
+          programmerVocabularyStatus: "ready" as never,
+          programmerVocabularyError: " temporary error " as never,
+        },
+      }).speech,
+    ).toMatchObject({
+      programmerVocabularyId: "vocab-123",
+      programmerVocabularyStatus: "ready",
+      programmerVocabularyError: "temporary error",
     });
   });
 

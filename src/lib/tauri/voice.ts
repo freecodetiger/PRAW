@@ -1,16 +1,19 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { SpeechLanguage, SpeechPreset, SpeechVocabularyStatus } from "../../domain/config/types";
 
 export const VOICE_TRANSCRIPTION_STARTED_EVENT = "voice/transcription-started";
 export const VOICE_TRANSCRIPTION_STATUS_EVENT = "voice/transcription-status";
 export const VOICE_TRANSCRIPTION_LIVE_EVENT = "voice/transcription-live";
 export const VOICE_TRANSCRIPTION_COMPLETED_EVENT = "voice/transcription-completed";
 export const VOICE_TRANSCRIPTION_FAILED_EVENT = "voice/transcription-failed";
+export const VOICE_PROGRAMMER_VOCABULARY_STATE_EVENT = "voice/programmer-vocabulary-state";
 
 export interface StartVoiceTranscriptionRequest {
   provider: string;
   apiKey: string;
-  language: "auto" | "zh" | "en";
+  language: SpeechLanguage;
+  preset: SpeechPreset;
 }
 
 export interface StartVoiceTranscriptionResponse {
@@ -39,6 +42,12 @@ export interface VoiceTranscriptionCompletedEvent {
 export interface VoiceTranscriptionFailedEvent {
   sessionId: string;
   message: string;
+}
+
+export interface VoiceProgrammerVocabularyStateEvent {
+  programmerVocabularyId: string;
+  programmerVocabularyStatus: SpeechVocabularyStatus;
+  programmerVocabularyError: string;
 }
 
 export async function startVoiceTranscription(
@@ -105,4 +114,16 @@ export function onVoiceTranscriptionFailed(
   }
 
   return listen<VoiceTranscriptionFailedEvent>(VOICE_TRANSCRIPTION_FAILED_EVENT, (event) => handler(event.payload));
+}
+
+export function onVoiceProgrammerVocabularyState(
+  handler: (event: VoiceProgrammerVocabularyStateEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    return Promise.resolve(() => undefined);
+  }
+
+  return listen<VoiceProgrammerVocabularyStateEvent>(VOICE_PROGRAMMER_VOCABULARY_STATE_EVENT, (event) =>
+    handler(event.payload),
+  );
 }
