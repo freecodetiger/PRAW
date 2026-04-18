@@ -42,6 +42,17 @@ interface AiWorkflowSurfaceProps {
   voiceBypassToggleRequestKey?: number;
 }
 
+async function requestBrowserMicrophoneAccess(): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return;
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
 export function AiWorkflowSurface({
   tabId,
   paneState,
@@ -73,6 +84,8 @@ export function AiWorkflowSurface({
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
+  const voicePermissionPrimedRef = useRef(false);
+  const voicePermissionWarmupRef = useRef<Promise<void> | null>(null);
   const bypassPromptOpenRef = useRef(false);
   const composerDisabledRef = useRef(false);
   const handledVoiceBypassRequestKeyRef = useRef(0);
@@ -89,6 +102,30 @@ export function AiWorkflowSurface({
   useEffect(() => {
     composerDisabledRef.current = composerDisabled;
   }, [composerDisabled]);
+
+  const ensureVoicePermissionPrimed = async (silent: boolean) => {
+    if (voicePermissionPrimedRef.current || typeof navigator === "undefined" || !navigator.mediaDevices) {
+      return;
+    }
+
+    if (!voicePermissionWarmupRef.current) {
+      voicePermissionWarmupRef.current = requestBrowserMicrophoneAccess()
+        .then(() => {
+          voicePermissionPrimedRef.current = true;
+        })
+        .finally(() => {
+          voicePermissionWarmupRef.current = null;
+        });
+    }
+
+    try {
+      await voicePermissionWarmupRef.current;
+    } catch (error) {
+      if (!silent) {
+        throw error;
+      }
+    }
+  };
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
@@ -140,6 +177,14 @@ export function AiWorkflowSurface({
     composerDisabled,
     isBypassSubmitting,
   ]);
+
+  useEffect(() => {
+    if (!voiceConfigured || composerDisabled || voiceSessionIdRef.current) {
+      return;
+    }
+
+    void ensureVoicePermissionPrimed(true);
+  }, [voiceConfigured, composerDisabled]);
 
   useEffect(() => {
     const cleanup: Array<() => void> = [];
@@ -381,6 +426,9 @@ ${transcript}` : transcript));
     setVoiceStatus("Starting microphone…");
 
     try {
+      if (!voicePermissionPrimedRef.current && typeof navigator !== "undefined" && navigator.mediaDevices) {
+        await ensureVoicePermissionPrimed(false);
+      }
       const session = await startVoiceTranscription({
         provider: speechConfig.provider,
         apiKey: speechConfig.apiKey,
@@ -391,7 +439,7 @@ ${transcript}` : transcript));
       setVoiceSessionId(session.sessionId);
     } catch {
       resetVoiceState();
-      setBypassError("Voice input could not start.");
+      setBypassError("Voice input could not start. Check microphone permission and try again.");
     }
   };
 

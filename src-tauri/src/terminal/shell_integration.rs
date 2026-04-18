@@ -20,6 +20,7 @@ pub fn build_shell_integration_command(
         command.arg("-i");
     } else if is_zsh_shell(shell) {
         command.env("ZDOTDIR", shell_integration_zdotdir_path(session_id));
+        command.arg("-l");
         command.arg("-i");
     } else {
         return None;
@@ -64,9 +65,26 @@ pub fn install_shell_integration(shell: &str, session_id: &str) -> Result<Vec<Pa
             || format!("failed to write shell integration envfile {}", zshenv_path.display()),
         )?;
 
+        let zprofile_path = dir.join(".zprofile");
+        fs::write(
+            &zprofile_path,
+            build_zsh_shell_integration_profilefile(session_id),
+        )
+        .with_context(|| {
+            format!(
+                "failed to write shell integration profile file {}",
+                zprofile_path.display()
+            )
+        })?;
+
         let zshrc_path = dir.join(".zshrc");
         fs::write(&zshrc_path, build_zsh_shell_integration_script(session_id)).with_context(
             || format!("failed to write shell integration rcfile {}", zshrc_path.display()),
+        )?;
+
+        let zlogin_path = dir.join(".zlogin");
+        fs::write(&zlogin_path, build_zsh_shell_integration_loginfile(session_id)).with_context(
+            || format!("failed to write shell integration login file {}", zlogin_path.display()),
         )?;
 
         return Ok(vec![dir]);
@@ -92,7 +110,7 @@ fn build_bash_shell_integration_script(session_id: &str) -> String {
 __praw_saved_vte_version="${{VTE_VERSION-__PRAW_VTE_UNSET__}}"
 export VTE_VERSION=0
 if [[ -f "$HOME/.bashrc" ]]; then
-  source "$HOME/.bashrc"
+  {{ source "$HOME/.bashrc"; }} >/dev/null 2>&1
 fi
 if [[ "$__praw_saved_vte_version" == "__PRAW_VTE_UNSET__" ]]; then
   unset VTE_VERSION
@@ -104,6 +122,7 @@ unset __praw_saved_vte_version
 __praw_agent_wrapper() {{
   local provider="$1"
   shift
+  printf '\033]133;PRAW_AGENT;provider=%s\a' "$provider"
   if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
     command "$provider" "$@"
     return $?
@@ -156,7 +175,25 @@ fn build_zsh_shell_integration_envfile(session_id: &str) -> String {
 __praw_saved_vte_version="${{VTE_VERSION-__PRAW_VTE_UNSET__}}"
 export VTE_VERSION=0
 if [[ -f "$HOME/.zshenv" ]]; then
-  source "$HOME/.zshenv"
+  {{ source "$HOME/.zshenv"; }} >/dev/null 2>&1
+fi
+if [[ "$__praw_saved_vte_version" == "__PRAW_VTE_UNSET__" ]]; then
+  unset VTE_VERSION
+else
+  export VTE_VERSION="$__praw_saved_vte_version"
+fi
+unset __praw_saved_vte_version
+"#
+    )
+}
+
+fn build_zsh_shell_integration_profilefile(session_id: &str) -> String {
+    format!(
+        r#"export PRAW_SESSION_ID="{session_id}"
+__praw_saved_vte_version="${{VTE_VERSION-__PRAW_VTE_UNSET__}}"
+export VTE_VERSION=0
+if [[ -f "$HOME/.zprofile" ]]; then
+  {{ source "$HOME/.zprofile"; }} >/dev/null 2>&1
 fi
 if [[ "$__praw_saved_vte_version" == "__PRAW_VTE_UNSET__" ]]; then
   unset VTE_VERSION
@@ -174,7 +211,7 @@ fn build_zsh_shell_integration_script(session_id: &str) -> String {
 __praw_saved_vte_version="${{VTE_VERSION-__PRAW_VTE_UNSET__}}"
 export VTE_VERSION=0
 if [[ -f "$HOME/.zshrc" ]]; then
-  source "$HOME/.zshrc"
+  {{ source "$HOME/.zshrc"; }} >/dev/null 2>&1
 fi
 if [[ "$__praw_saved_vte_version" == "__PRAW_VTE_UNSET__" ]]; then
   unset VTE_VERSION
@@ -188,6 +225,7 @@ typeset -g __praw_prompt_ready=''
 __praw_agent_wrapper() {{
   local provider="$1"
   shift
+  printf '\033]133;PRAW_AGENT;provider=%s\a' "$provider"
   if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
     command "$provider" "$@"
     return $?
@@ -207,6 +245,9 @@ function qwen() {{
   __praw_agent_wrapper qwen "$@"
 }}
 
+typeset -ga precmd_functions
+typeset -ga preexec_functions
+
 __praw_precmd() {{
   local exit_code=$?
   if [[ -n "${{__praw_prompt_ready:-}}" ]]; then
@@ -224,16 +265,34 @@ __praw_preexec() {{
   fi
 }}
 
-if (( ${{precmd_functions[(Ie)__praw_precmd]}} == 0 )); then
+if (( ${{precmd_functions[(Ie)__praw_precmd]:-0}} == 0 )); then
   precmd_functions+=(__praw_precmd)
 fi
 
-if (( ${{preexec_functions[(Ie)__praw_preexec]}} == 0 )); then
+if (( ${{preexec_functions[(Ie)__praw_preexec]:-0}} == 0 )); then
   preexec_functions+=(__praw_preexec)
 fi
 
 PROMPT=$'%{{\033]133;A\a%}}'"${{PROMPT:-%n@%m %1~ %# }}"$'%{{\033]133;B\a%}}'
 PS1="$PROMPT"
+"#
+    )
+}
+
+fn build_zsh_shell_integration_loginfile(session_id: &str) -> String {
+    format!(
+        r#"export PRAW_SESSION_ID="{session_id}"
+__praw_saved_vte_version="${{VTE_VERSION-__PRAW_VTE_UNSET__}}"
+export VTE_VERSION=0
+if [[ -f "$HOME/.zlogin" ]]; then
+  {{ source "$HOME/.zlogin"; }} >/dev/null 2>&1
+fi
+if [[ "$__praw_saved_vte_version" == "__PRAW_VTE_UNSET__" ]]; then
+  unset VTE_VERSION
+else
+  export VTE_VERSION="$__praw_saved_vte_version"
+fi
+unset __praw_saved_vte_version
 "#
     )
 }

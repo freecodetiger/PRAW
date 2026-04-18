@@ -220,9 +220,18 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           promptCwd = event.cwd;
         }
 
+        const activeCommand =
+          event.type === "command-end" && nextState.activeCommandBlockId !== null
+            ? nextState.blocks.find((block) => block.id === nextState.activeCommandBlockId)
+            : null;
+        const exitingAgentWorkflow =
+          event.type === "command-end" && nextState.presentation === "agent-workflow";
         const archivedOutput =
           event.type === "command-end" && nextState.presentation !== "agent-workflow"
-            ? computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline)
+            ? sanitizeArchivedCommandOutput(
+                computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline),
+                activeCommand?.command ?? null,
+              )
             : undefined;
 
         nextState = {
@@ -233,6 +242,10 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
           ),
           activeArchiveBaseline: event.type === "command-end" ? null : nextState.activeArchiveBaseline,
         };
+
+        if (exitingAgentWorkflow) {
+          resetDirect(tabId);
+        }
 
         if (
           event.type === "command-end" &&
@@ -378,11 +391,16 @@ export function selectTranscriptViewportState(
 }
 
 function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
+  const supported = isDialogShellSupported(shell);
+
   return {
     ...createDialogState(shell, cwd, preferredMode),
     shell,
     workspaceCwd: cwd,
-    parserState: createShellIntegrationParserState(),
+    parserState: {
+      ...createShellIntegrationParserState(),
+      shellReady: !supported,
+    },
     aiTranscript: createAiTranscriptState(),
     aiSession: null,
     transcriptViewport: createTranscriptViewportState(),
@@ -456,6 +474,16 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   if (!nextArchive.startsWith(baseline)) {
+    const overlap = findSuffixPrefixOverlap(baseline, nextArchive);
+    if (overlap >= 8) {
+      const delta = nextArchive.slice(overlap);
+      if (delta.startsWith("\n")) {
+        return delta.slice(1) || undefined;
+      }
+
+      return delta || undefined;
+    }
+
     return nextArchive;
   }
 
@@ -465,6 +493,53 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   return delta || undefined;
+}
+
+function findSuffixPrefixOverlap(previous: string, next: string): number {
+  const maxOverlap = Math.min(previous.length, next.length);
+
+  for (let length = maxOverlap; length > 0; length -= 1) {
+    if (previous.endsWith(next.slice(0, length))) {
+      return length;
+    }
+  }
+
+  return 0;
+}
+
+function sanitizeArchivedCommandOutput(archiveText: string | undefined, command: string | null): string | undefined {
+  if (!archiveText) {
+    return undefined;
+  }
+
+  const normalized = archiveText.replace(/\r\n/g, "\n");
+  const trimmedLeading = normalized.replace(/^\n+/, "");
+  if (!command) {
+    return trimmedLeading || undefined;
+  }
+
+  const lines = trimmedLeading.split("\n");
+  const firstLine = lines[0]?.trim() ?? "";
+  const normalizedCommand = command.trim();
+
+  if (looksLikePromptEcho(firstLine, normalizedCommand)) {
+    const remaining = lines.slice(1).join("\n").replace(/^\n+/, "");
+    return remaining || undefined;
+  }
+
+  return trimmedLeading || undefined;
+}
+
+function looksLikePromptEcho(line: string, command: string): boolean {
+  if (!line || !command) {
+    return false;
+  }
+
+  if (line === command) {
+    return true;
+  }
+
+  return ["$ ", "% ", "# ", "> ", "› ", "❯ "].some((promptSuffix) => line.endsWith(`${promptSuffix}${command}`));
 }
 function createTranscriptViewportState(): TranscriptViewportState {
   return {

@@ -15,6 +15,7 @@ interface DialogTranscriptProps {
 
 export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: DialogTranscriptProps) {
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const visibleBlocks = useMemo(() => blocks.filter((block) => block.kind === "command"), [blocks]);
 
   return (
     <div
@@ -46,7 +47,7 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
         void writeClipboardText(selectedText);
       }}
     >
-      {blocks.map((block, index) => (
+      {visibleBlocks.map((block, index) => (
         <article className="command-block" key={block.id}>
           {index > 0 ? <hr className="command-block__divider" /> : null}
           <div className="command-block__meta">

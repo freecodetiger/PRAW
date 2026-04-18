@@ -402,16 +402,10 @@ describe("dialog terminal state", () => {
     });
   });
 
-  it("captures non-command output in a session output block", () => {
+  it("ignores non-command idle output instead of surfacing a session output block", () => {
     const state = appendDialogOutput(createDialogState("/bin/bash", "/workspace"), "Welcome\n");
 
-    expect(state.blocks).toEqual([
-      expect.objectContaining({
-        kind: "session",
-        output: "Welcome\n",
-        status: "completed",
-      }),
-    ]);
+    expect(state.blocks).toEqual([]);
   });
 
   it("updates the cwd from shell prompt markers for the next command header", () => {

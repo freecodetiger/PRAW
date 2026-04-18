@@ -77,12 +77,11 @@ impl TerminalSemanticDetector {
                 emitted_agent_workflow: false,
             });
 
-            if command_entry
-                .as_deref()
-                .is_some_and(is_agent_workflow_command)
-            {
-                self.emit_agent_workflow(session_id, events);
-            }
+            return;
+        }
+
+        if payload.starts_with("PRAW_AGENT;provider=") {
+            self.emit_agent_workflow(session_id, events);
             return;
         }
 
@@ -218,91 +217,6 @@ fn detect_classic_reason(sequence: &str) -> Option<TerminalSemanticReason> {
     }
 }
 
-fn is_agent_workflow_command(command: &str) -> bool {
-    let words = resolve_command_words(command);
-    let Some(entry) = words.first().map(String::as_str) else {
-        return false;
-    };
-
-    match entry {
-        "claude" | "claude-code" | "codex" | "qwen-code" => true,
-        "qwen" => {
-            let second = words.get(1).map(String::as_str);
-            words.len() == 1 || second == Some("code") || second.is_some_and(|value| value.starts_with('-'))
-        }
-        _ => false,
-    }
-}
-
-fn resolve_command_words(command: &str) -> Vec<String> {
-    let tokens: Vec<&str> = command.split_whitespace().filter(|token| !token.is_empty()).collect();
-
-    for index in 0..tokens.len() {
-        let token = tokens[index];
-        if is_environment_assignment_token(token) || is_wrapper_option_token(token) {
-            continue;
-        }
-
-        let entry = normalize_command_entry(token);
-        if entry.is_empty() || command_prefixes_to_skip().contains(&entry.as_str()) {
-            continue;
-        }
-
-        let mut words = vec![entry];
-        words.extend(tokens.iter().skip(index + 1).map(|value| normalize_command_token(value)));
-        return words;
-    }
-
-    Vec::new()
-}
-
-fn command_prefixes_to_skip() -> &'static [&'static str] {
-    &["env", "command", "exec", "npx", "pnpm", "bunx", "uvx", "dlx"]
-}
-
-fn is_environment_assignment_token(token: &str) -> bool {
-    let mut chars = token.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return false;
-    }
-
-    let mut saw_equals = false;
-    for char in chars {
-        if char == '=' {
-            saw_equals = true;
-            break;
-        }
-
-        if !(char.is_ascii_alphanumeric() || char == '_') {
-            return false;
-        }
-    }
-
-    saw_equals
-}
-
-fn is_wrapper_option_token(token: &str) -> bool {
-    let mut chars = token.trim().chars();
-    matches!(chars.next(), Some('-'))
-        && chars
-            .next()
-            .is_some_and(|char| char.is_ascii_alphanumeric())
-}
-
-fn normalize_command_entry(token: &str) -> String {
-    let bare = normalize_command_token(token);
-    bare.rsplit('/').next().unwrap_or(&bare).to_string()
-}
-
-fn normalize_command_token(token: &str) -> String {
-    token
-        .trim_matches(|char| matches!(char, '\'' | '"' | '`'))
-        .to_ascii_lowercase()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,42 +284,37 @@ mod tests {
     }
 
     #[test]
-    fn emits_agent_workflow_for_wrapped_ai_cli_commands() {
+    fn does_not_emit_agent_workflow_for_shell_entry_without_bridge_marker() {
         let mut detector = TerminalSemanticDetector::default();
 
         let codex = detector.consume(
             "session-1",
             "\u{1b}]133;C;entry=uvx codex --model gpt-5\u{7}",
         );
-        detector.consume("session-1", "\u{1b}]133;D;0\u{7}");
-        let qwen = detector.consume(
-            "session-1",
-            "\u{1b}]133;C;entry=env OPENAI_API_KEY=secret qwen code --model qwen3-coder-plus\u{7}",
-        );
 
-        assert_eq!(codex.len(), 1);
-        assert_eq!(codex[0].kind, TerminalSemanticKind::AgentWorkflow);
-        assert_eq!(codex[0].reason, TerminalSemanticReason::ShellEntry);
-        assert_eq!(codex[0].command_entry.as_deref(), Some("uvx codex --model gpt-5"));
-        assert_eq!(qwen.len(), 1);
-        assert_eq!(qwen[0].kind, TerminalSemanticKind::AgentWorkflow);
+        assert!(codex.is_empty());
     }
 
     #[test]
-    fn ignores_commands_that_only_mention_ai_cli_names() {
+    fn emits_agent_workflow_only_after_bridge_marker_confirms_wrapped_ai_cli() {
         let mut detector = TerminalSemanticDetector::default();
 
-        let grep = detector.consume(
+        let first = detector.consume(
             "session-1",
-            "\u{1b}]133;C;entry=grep codex README.md\u{7}",
+            "\u{1b}]133;C;entry=env OPENAI_API_KEY=secret qwen code --model qwen3-coder-plus\u{7}",
         );
-        detector.consume("session-1", "\u{1b}]133;D;0\u{7}");
-        let qwen_chat = detector.consume(
+        let second = detector.consume(
             "session-1",
-            "\u{1b}]133;C;entry=qwen chat\u{7}",
+            "\u{1b}]133;PRAW_AGENT;provider=qwen\u{7}",
         );
 
-        assert!(grep.is_empty());
-        assert!(qwen_chat.is_empty());
+        assert!(first.is_empty());
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].kind, TerminalSemanticKind::AgentWorkflow);
+        assert_eq!(second[0].reason, TerminalSemanticReason::ShellEntry);
+        assert_eq!(
+            second[0].command_entry.as_deref(),
+            Some("env OPENAI_API_KEY=secret qwen code --model qwen3-coder-plus")
+        );
     }
 }

@@ -53,8 +53,6 @@ export type ShellLifecycleEvent =
   | { type: "command-end"; exitCode: number; archivedOutput?: string }
   | { type: "prompt-state"; cwd: string };
 
-let nextSessionBlockId = 1;
-
 export function createDialogState(shell: string, cwd: string, preferredMode: PaneRenderMode = "dialog"): DialogState {
   const supported = isDialogShellSupported(shell);
 
@@ -168,40 +166,7 @@ export function appendDialogOutput(state: DialogState, data: string): DialogStat
     };
   }
 
-  if (data.trim().length === 0) {
-    return state;
-  }
-
-  const lastBlock = state.blocks[state.blocks.length - 1];
-  if (lastBlock?.kind === "session") {
-    return {
-      ...state,
-      blocks: [
-        ...state.blocks.slice(0, -1),
-        {
-          ...lastBlock,
-          output: `${lastBlock.output}${data}`,
-        },
-      ],
-    };
-  }
-
-  return {
-    ...state,
-    blocks: [
-      ...state.blocks,
-      {
-        id: `session:${nextSessionBlockId++}`,
-        kind: "session",
-        cwd: state.cwd,
-        command: null,
-        output: data,
-        status: "completed",
-        interactive: false,
-        exitCode: null,
-      },
-    ],
-  };
+  return state;
 }
 
 export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecycleEvent): DialogState {

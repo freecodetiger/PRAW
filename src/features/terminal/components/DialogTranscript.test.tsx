@@ -162,6 +162,46 @@ describe("DialogTranscript", () => {
     expect(writeText).toHaveBeenCalledWith("$ printf color\nred\nplain\n");
   });
 
+  it("never renders session output blocks even if stale state still contains them", async () => {
+    const blocks: CommandBlock[] = [
+      {
+        id: "session:1",
+        kind: "session",
+        cwd: "/workspace",
+        command: null,
+        output: "stale startup noise\n",
+        status: "completed",
+        interactive: false,
+        exitCode: null,
+      },
+      {
+        id: "cmd:1",
+        kind: "command",
+        cwd: "/workspace",
+        command: "ls",
+        output: "file-a\n",
+        status: "completed",
+        interactive: false,
+        exitCode: 0,
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DialogTranscript
+          blocks={blocks}
+          scrollRef={{ current: null }}
+          onScroll={() => undefined}
+        />,
+      );
+    });
+
+    expect(host.textContent).not.toContain("session output");
+    expect(host.textContent).not.toContain("stale startup noise");
+    expect(host.textContent).toContain("ls");
+    expect(host.textContent).toContain("file-a");
+  });
+
   it("shows a transcript context menu for copying selected text", async () => {
     const blocks: CommandBlock[] = [
       {
