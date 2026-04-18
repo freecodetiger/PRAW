@@ -18,7 +18,12 @@ export interface ShellIntegrationChunkResult {
   state: ShellIntegrationParserState;
   visibleOutput: string;
   events: ShellLifecycleEvent[];
+  timeline: ShellIntegrationTimelineEntry[];
 }
+
+export type ShellIntegrationTimelineEntry =
+  | { type: "output"; text: string }
+  | { type: "event"; event: ShellLifecycleEvent };
 
 export function createShellIntegrationParserState(): ShellIntegrationParserState {
   return {
@@ -36,37 +41,68 @@ export function consumeShellIntegrationChunk(
 ): ShellIntegrationChunkResult {
   const source = `${state.pending}${chunk}`;
   let cursor = 0;
-  let rawVisibleOutput = "";
+  let visibleOutput = "";
   const events: ShellLifecycleEvent[] = [];
+  const timeline: ShellIntegrationTimelineEntry[] = [];
   let suppressPrompt = state.suppressPrompt;
   let shellReady = state.shellReady;
+  let pendingControl = state.pendingControl;
+  let pendingCarriageReturn = state.pendingCarriageReturn;
+
+  const appendVisibleSlice = (value: string) => {
+    if (!shellReady || suppressPrompt || value.length === 0) {
+      return;
+    }
+
+    const sanitized = sanitizeVisibleTerminalOutput(pendingControl, pendingCarriageReturn, value);
+    pendingControl = sanitized.pendingControl;
+    pendingCarriageReturn = sanitized.pendingCarriageReturn;
+
+    if (sanitized.visibleOutput.length === 0) {
+      return;
+    }
+
+    visibleOutput += sanitized.visibleOutput;
+    timeline.push({
+      type: "output",
+      text: sanitized.visibleOutput,
+    });
+  };
 
   while (cursor < source.length) {
     const markerIndex = source.indexOf(MARKER_PREFIX, cursor);
     if (markerIndex === -1) {
-      if (shellReady && !suppressPrompt) {
-        rawVisibleOutput += source.slice(cursor);
-      }
-      return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
-        pending: "",
-        suppressPrompt,
-        shellReady,
+      appendVisibleSlice(source.slice(cursor));
+      return {
+        state: {
+          pending: "",
+          pendingControl,
+          pendingCarriageReturn,
+          suppressPrompt,
+          shellReady,
+        },
+        visibleOutput,
         events,
-      });
+        timeline,
+      };
     }
 
-    if (shellReady && !suppressPrompt) {
-      rawVisibleOutput += source.slice(cursor, markerIndex);
-    }
+    appendVisibleSlice(source.slice(cursor, markerIndex));
 
     const markerEnd = findMarkerEnd(source, markerIndex + MARKER_PREFIX.length);
     if (!markerEnd) {
-      return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
-        pending: source.slice(markerIndex),
-        suppressPrompt,
-        shellReady,
+      return {
+        state: {
+          pending: source.slice(markerIndex),
+          pendingControl,
+          pendingCarriageReturn,
+          suppressPrompt,
+          shellReady,
+        },
+        visibleOutput,
         events,
-      });
+        timeline,
+      };
     }
 
     const payload = source.slice(markerIndex + MARKER_PREFIX.length, markerEnd.index);
@@ -88,44 +124,28 @@ export function consumeShellIntegrationChunk(
         shellReady = true;
       }
       events.push(event);
-    } else if (shellReady && !suppressPrompt && marker === null) {
-      rawVisibleOutput += source.slice(markerIndex, markerEnd.index + markerEnd.length);
+      timeline.push({
+        type: "event",
+        event,
+      });
+    } else if (marker === null) {
+      appendVisibleSlice(source.slice(markerIndex, markerEnd.index + markerEnd.length));
     }
 
     cursor = markerEnd.index + markerEnd.length;
   }
 
-  return finalizeVisibleOutput(state.pendingControl, state.pendingCarriageReturn, rawVisibleOutput, {
-    pending: "",
-    suppressPrompt,
-    shellReady,
-    events,
-  });
-}
-
-function finalizeVisibleOutput(
-  pendingControl: string,
-  pendingCarriageReturn: boolean,
-  rawVisibleOutput: string,
-  result: {
-    pending: string;
-    suppressPrompt: boolean;
-    shellReady: boolean;
-    events: ShellLifecycleEvent[];
-  },
-): ShellIntegrationChunkResult {
-  const sanitized = sanitizeVisibleTerminalOutput(pendingControl, pendingCarriageReturn, rawVisibleOutput);
-
   return {
     state: {
-      pending: result.pending,
-      pendingControl: sanitized.pendingControl,
-      pendingCarriageReturn: sanitized.pendingCarriageReturn,
-      suppressPrompt: result.suppressPrompt,
-      shellReady: result.shellReady,
+      pending: "",
+      pendingControl,
+      pendingCarriageReturn,
+      suppressPrompt,
+      shellReady,
     },
-    visibleOutput: sanitized.visibleOutput,
-    events: result.events,
+    visibleOutput,
+    events,
+    timeline,
   };
 }
 
