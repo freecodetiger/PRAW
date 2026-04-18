@@ -80,6 +80,12 @@ interface SettingsPanelCopy {
     enableProvider: string;
     apiKey: string;
     language: string;
+    preset: string;
+    presetOptions: {
+      default: string;
+      programmer: string;
+    };
+    presetSummary: string;
     languageOptions: {
       auto: string;
       zh: string;
@@ -175,6 +181,12 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       enableProvider: "Enable speech input",
       apiKey: "Speech API key",
       language: "Speech language",
+      preset: "Speech mode",
+      presetOptions: {
+        default: "General",
+        programmer: "Programmer",
+      },
+      presetSummary: "Programmer mode improves recognition for technical terms, commands, and mixed Chinese-English developer speech.",
       languageOptions: {
         auto: "Auto (Chinese + English)",
         zh: "Chinese",
@@ -268,6 +280,12 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       enableProvider: "启用语音输入",
       apiKey: "语音 API key",
       language: "语音语言",
+      preset: "识别模式",
+      presetOptions: {
+        default: "通用",
+        programmer: "程序员",
+      },
+      presetSummary: "程序员模式会优先优化技术词汇、命令行和中英混合开发语句的识别效果。",
       languageOptions: {
         auto: "自动（中文 + English）",
         zh: "中文",

@@ -49,6 +49,13 @@ const voiceApi = vi.hoisted(() => {
   let liveHandler: ((event: { sessionId: string; text: string }) => void) | null = null;
   let completedHandler: ((event: { sessionId: string; text: string }) => void) | null = null;
   let failedHandler: ((event: { sessionId: string; message: string }) => void) | null = null;
+  let programmerVocabularyStateHandler:
+    | ((event: {
+        programmerVocabularyId: string;
+        programmerVocabularyStatus: "idle" | "creating" | "ready" | "failed";
+        programmerVocabularyError: string;
+      }) => void)
+    | null = null;
 
   return {
     startVoiceTranscription: vi.fn(async () => ({ sessionId: "voice-session-1" })),
@@ -84,6 +91,14 @@ const voiceApi = vi.hoisted(() => {
         failedHandler = null;
       };
     }),
+    onVoiceProgrammerVocabularyState: vi.fn(
+      async (handler: typeof programmerVocabularyStateHandler extends infer T ? T : never) => {
+        programmerVocabularyStateHandler = handler as typeof programmerVocabularyStateHandler;
+        return () => {
+          programmerVocabularyStateHandler = null;
+        };
+      },
+    ),
     emitStarted(payload: { sessionId: string }) {
       startedHandler?.(payload);
     },
@@ -99,6 +114,13 @@ const voiceApi = vi.hoisted(() => {
     emitFailed(payload: { sessionId: string; message: string }) {
       failedHandler?.(payload);
     },
+    emitProgrammerVocabularyState(payload: {
+      programmerVocabularyId: string;
+      programmerVocabularyStatus: "idle" | "creating" | "ready" | "failed";
+      programmerVocabularyError: string;
+    }) {
+      programmerVocabularyStateHandler?.(payload);
+    },
     reset() {
       this.startVoiceTranscription.mockClear();
       this.stopVoiceTranscription.mockClear();
@@ -108,11 +130,13 @@ const voiceApi = vi.hoisted(() => {
       this.onVoiceTranscriptionLive.mockClear();
       this.onVoiceTranscriptionCompleted.mockClear();
       this.onVoiceTranscriptionFailed.mockClear();
+      this.onVoiceProgrammerVocabularyState.mockClear();
       startedHandler = null;
       statusHandler = null;
       liveHandler = null;
       completedHandler = null;
       failedHandler = null;
+      programmerVocabularyStateHandler = null;
     },
   };
 });
@@ -548,6 +572,7 @@ describe("AiWorkflowSurface", () => {
       enabled: true,
       apiKey: "speech-key",
       language: "zh",
+      preset: "programmer",
     });
 
     renderSurface(root, createAgentWorkflowPaneState(), {
@@ -565,6 +590,7 @@ describe("AiWorkflowSurface", () => {
     expect(voiceApi.startVoiceTranscription).toHaveBeenCalledWith({
       apiKey: "speech-key",
       language: "zh",
+      preset: "programmer",
       provider: "aliyun-paraformer-realtime",
     });
 
@@ -620,6 +646,25 @@ describe("AiWorkflowSurface", () => {
 
     expect(voiceApi.cancelVoiceTranscription).toHaveBeenCalledWith("voice-session-1");
     expect(input?.value).toBe("existing draft");
+  });
+
+  it("syncs programmer vocabulary cache state from backend events into the app config store", async () => {
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      voiceApi.emitProgrammerVocabularyState({
+        programmerVocabularyId: "vocab-user-123",
+        programmerVocabularyStatus: "ready",
+        programmerVocabularyError: "",
+      });
+    });
+
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyId).toBe("vocab-user-123");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyStatus).toBe("ready");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyError).toBe("");
   });
 
   it("does not render resume picker chrome in the raw-only AI surface", () => {
