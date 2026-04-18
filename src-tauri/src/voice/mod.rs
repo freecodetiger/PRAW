@@ -36,6 +36,7 @@ const ALIYUN_REALTIME_ENDPOINT: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/i
 const ALIYUN_CUSTOMIZATION_ENDPOINT: &str =
     "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/customization";
 const APP_CONFIG_PATH: &str = "config/app-config.json";
+const MAX_PENDING_AUDIO_CHUNKS: usize = 32;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -222,8 +223,16 @@ async fn run_voice_session(
     let mut audio_stream = Some(audio_capture.stream);
     let mut task_started = false;
     let mut finish_sent = false;
+    let mut stop_requested = false;
+    let mut pending_audio_chunks: Vec<Vec<u8>> = Vec::new();
     let mut finalized_chunks: Vec<String> = Vec::new();
     let mut current_chunk = String::new();
+
+    audio_stream
+        .as_ref()
+        .context("microphone stream missing before warmup")?
+        .play()
+        .context("failed to start microphone capture warmup")?;
 
     sink.send(Message::Text(
         build_run_task_message(
@@ -247,25 +256,31 @@ async fn run_voice_session(
                         return Ok(());
                     }
                     Some(VoiceSessionCommand::Stop) => {
+                        audio_stream.take();
                         if task_started && !finish_sent {
-                            audio_stream.take();
                             finish_sent = true;
                             emit_status(&app, &session_id, "Transcribing…");
                             sink.send(Message::Text(build_finish_task_message(&session_id).into()))
                                 .await
                                 .context("failed to send Bailian finish-task")?;
+                        } else {
+                            stop_requested = true;
                         }
                     }
                     None => return Ok(()),
                 }
             }
-            maybe_chunk = audio_receiver.recv(), if task_started && !finish_sent => {
+            maybe_chunk = audio_receiver.recv(), if !finish_sent => {
                 match maybe_chunk {
                     Some(chunk) => {
                         if !chunk.is_empty() {
-                            sink.send(Message::Binary(chunk.into()))
-                                .await
-                                .context("failed to stream microphone audio")?;
+                            if task_started {
+                                sink.send(Message::Binary(chunk.into()))
+                                    .await
+                                    .context("failed to stream microphone audio")?;
+                            } else {
+                                buffer_pending_audio_chunk(&mut pending_audio_chunks, chunk);
+                            }
                         }
                     }
                     None => {
@@ -288,13 +303,23 @@ async fn run_voice_session(
                     ServerMessage::TaskStarted => {
                         if !task_started {
                             task_started = true;
-                            audio_stream
-                                .as_ref()
-                                .context("microphone stream missing before start")?
-                                .play()
-                                .context("failed to start microphone capture")?;
-                            emit_started(&app, &session_id);
-                            emit_status(&app, &session_id, "Listening…");
+
+                            for chunk in take_pending_audio_chunks(&mut pending_audio_chunks) {
+                                sink.send(Message::Binary(chunk.into()))
+                                    .await
+                                    .context("failed to flush buffered microphone audio")?;
+                            }
+
+                            if stop_requested {
+                                finish_sent = true;
+                                emit_status(&app, &session_id, "Transcribing…");
+                                sink.send(Message::Text(build_finish_task_message(&session_id).into()))
+                                    .await
+                                    .context("failed to send deferred Bailian finish-task")?;
+                            } else {
+                                emit_started(&app, &session_id);
+                                emit_status(&app, &session_id, "Listening…");
+                            }
                         }
                     }
                     ServerMessage::ResultGenerated { text, sentence_end } => {
@@ -548,6 +573,21 @@ fn needs_ascii_space(existing: &str, next: &str) -> bool {
     let upcoming = next.chars().next();
     matches!(previous, Some(ch) if ch.is_ascii_alphanumeric())
         && matches!(upcoming, Some(ch) if ch.is_ascii_alphanumeric())
+}
+
+fn buffer_pending_audio_chunk(pending_chunks: &mut Vec<Vec<u8>>, chunk: Vec<u8>) {
+    if chunk.is_empty() {
+        return;
+    }
+
+    pending_chunks.push(chunk);
+    if pending_chunks.len() > MAX_PENDING_AUDIO_CHUNKS {
+        pending_chunks.remove(0);
+    }
+}
+
+fn take_pending_audio_chunks(pending_chunks: &mut Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    std::mem::take(pending_chunks)
 }
 
 fn build_audio_capture() -> Result<AudioCapture> {
@@ -907,6 +947,36 @@ mod tests {
             prefix.len()
         );
         assert!(prefix.starts_with("praw"));
+    }
+
+    #[test]
+    fn buffers_early_audio_chunks_in_order_until_the_task_starts() {
+        let mut pending = Vec::new();
+
+        super::buffer_pending_audio_chunk(&mut pending, vec![1, 2]);
+        super::buffer_pending_audio_chunk(&mut pending, vec![3, 4]);
+
+        assert_eq!(
+            super::take_pending_audio_chunks(&mut pending),
+            vec![vec![1, 2], vec![3, 4]]
+        );
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn drops_oldest_early_audio_when_pending_buffer_reaches_capacity() {
+        let mut pending = Vec::new();
+
+        for index in 0..(super::MAX_PENDING_AUDIO_CHUNKS + 2) {
+            super::buffer_pending_audio_chunk(&mut pending, vec![index as u8]);
+        }
+
+        assert_eq!(pending.len(), super::MAX_PENDING_AUDIO_CHUNKS);
+        assert_eq!(pending.first(), Some(&vec![2]));
+        assert_eq!(
+            pending.last(),
+            Some(&vec![(super::MAX_PENDING_AUDIO_CHUNKS as u8) + 1])
+        );
     }
 
     #[test]
