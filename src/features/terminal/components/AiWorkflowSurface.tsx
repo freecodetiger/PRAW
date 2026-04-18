@@ -84,6 +84,7 @@ export function AiWorkflowSurface({
   const showsBypassCapsule = true;
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
+  const voicePermissionPrimedRef = useRef(false);
   const bypassPromptOpenRef = useRef(false);
   const composerDisabledRef = useRef(false);
   const handledVoiceBypassRequestKeyRef = useRef(0);
@@ -392,8 +393,13 @@ ${transcript}` : transcript));
     setVoiceStatus("Starting microphone…");
 
     try {
-      if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+      if (
+        !voicePermissionPrimedRef.current &&
+        typeof navigator !== "undefined" &&
+        navigator.mediaDevices
+      ) {
         await requestBrowserMicrophoneAccess();
+        voicePermissionPrimedRef.current = true;
       }
       const session = await startVoiceTranscription({
         provider: speechConfig.provider,

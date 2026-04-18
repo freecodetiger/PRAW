@@ -36,7 +36,7 @@ const ALIYUN_REALTIME_ENDPOINT: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/i
 const ALIYUN_CUSTOMIZATION_ENDPOINT: &str =
     "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/customization";
 const APP_CONFIG_PATH: &str = "config/app-config.json";
-const MAX_PENDING_AUDIO_CHUNKS: usize = 32;
+const MAX_PENDING_AUDIO_CHUNKS: usize = 256;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -204,19 +204,6 @@ async fn run_voice_session(
     mut command_rx: mpsc::UnboundedReceiver<VoiceSessionCommand>,
 ) -> Result<()> {
     let preset = SpeechPreset::parse(&request.preset);
-    let vocabulary_id =
-        ensure_programmer_vocabulary(&app, &session_id, &request.api_key, preset).await;
-
-    if vocabulary_id.is_some() || preset != SpeechPreset::Programmer {
-        emit_status(&app, &session_id, "Connecting to Bailian…");
-    }
-
-    let websocket_request = build_websocket_request(&request.api_key)?;
-    let (websocket, _) = connect_async(websocket_request)
-        .await
-        .context("failed to connect to Bailian realtime websocket")?;
-    let (mut sink, mut stream) = websocket.split();
-
     let audio_capture = build_audio_capture()?;
     let sample_rate = audio_capture.sample_rate;
     let mut audio_receiver = audio_capture.receiver;
@@ -233,6 +220,19 @@ async fn run_voice_session(
         .context("microphone stream missing before warmup")?
         .play()
         .context("failed to start microphone capture warmup")?;
+
+    let vocabulary_id =
+        ensure_programmer_vocabulary(&app, &session_id, &request.api_key, preset).await;
+
+    if vocabulary_id.is_some() || preset != SpeechPreset::Programmer {
+        emit_status(&app, &session_id, "Connecting to Bailian…");
+    }
+
+    let websocket_request = build_websocket_request(&request.api_key)?;
+    let (websocket, _) = connect_async(websocket_request)
+        .await
+        .context("failed to connect to Bailian realtime websocket")?;
+    let (mut sink, mut stream) = websocket.split();
 
     sink.send(Message::Text(
         build_run_task_message(
@@ -452,7 +452,9 @@ enum ServerMessage {
         sentence_end: bool,
     },
     TaskFinished,
-    TaskFailed { message: String },
+    TaskFailed {
+        message: String,
+    },
     Ignore,
 }
 
@@ -749,7 +751,8 @@ async fn ensure_programmer_vocabulary(
         return None;
     }
 
-    let mut config = storage::load_or_default::<_, AppConfig>(app, APP_CONFIG_PATH).unwrap_or_default();
+    let mut config =
+        storage::load_or_default::<_, AppConfig>(app, APP_CONFIG_PATH).unwrap_or_default();
     let cached_id = config.speech.programmer_vocabulary_id.trim().to_string();
     if !cached_id.is_empty() {
         config.speech.programmer_vocabulary_status = "ready".to_string();
@@ -842,7 +845,10 @@ mod tests {
             .expect("websocket request should include auth and client handshake headers");
 
         assert_eq!(
-            request.headers().get("Authorization").and_then(|value| value.to_str().ok()),
+            request
+                .headers()
+                .get("Authorization")
+                .and_then(|value| value.to_str().ok()),
             Some("Bearer test-key")
         );
         assert!(request.headers().contains_key("sec-websocket-key"));
@@ -908,8 +914,8 @@ mod tests {
             SpeechPreset::Programmer,
             Some("vocab-user-123"),
         );
-        let value: Value =
-            serde_json::from_str(&message).expect("programmer run-task payload should be valid json");
+        let value: Value = serde_json::from_str(&message)
+            .expect("programmer run-task payload should be valid json");
 
         assert_eq!(
             value
@@ -928,9 +934,13 @@ mod tests {
 
     #[test]
     fn programmer_vocabulary_create_payload_targets_realtime_v2() {
-        let payload = crate::voice::vocabulary::build_programmer_vocabulary_create_payload("progx-auto");
+        let payload =
+            crate::voice::vocabulary::build_programmer_vocabulary_create_payload("progx-auto");
         assert_eq!(payload["model"].as_str(), Some("speech-biasing"));
-        assert_eq!(payload["input"]["action"].as_str(), Some("create_vocabulary"));
+        assert_eq!(
+            payload["input"]["action"].as_str(),
+            Some("create_vocabulary")
+        );
         assert_eq!(
             payload["input"]["target_model"].as_str(),
             Some("paraformer-realtime-v2")
@@ -1001,13 +1011,25 @@ mod tests {
         let mut finalized_chunks = Vec::new();
         let mut current_chunk = String::new();
 
-        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "你好", true);
+        let first =
+            accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "你好", true);
         assert_eq!(first, "你好");
-        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好");
+        assert_eq!(
+            compose_transcript(&finalized_chunks, Some(current_chunk.as_str())),
+            "你好"
+        );
 
-        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "继续说", false);
+        let second = accumulate_transcript_update(
+            &mut finalized_chunks,
+            &mut current_chunk,
+            "继续说",
+            false,
+        );
         assert_eq!(second, "你好继续说");
-        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好继续说");
+        assert_eq!(
+            compose_transcript(&finalized_chunks, Some(current_chunk.as_str())),
+            "你好继续说"
+        );
     }
 
     #[test]
@@ -1015,10 +1037,16 @@ mod tests {
         let mut finalized_chunks = Vec::new();
         let mut current_chunk = String::new();
 
-        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "hello world", true);
+        let first = accumulate_transcript_update(
+            &mut finalized_chunks,
+            &mut current_chunk,
+            "hello world",
+            true,
+        );
         assert_eq!(first, "hello world");
 
-        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "again", false);
+        let second =
+            accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "again", false);
         assert_eq!(second, "hello world again");
     }
 
@@ -1066,7 +1094,10 @@ mod tests {
             super::preset::SpeechPreset::Programmer,
         );
 
-        assert_eq!(normalized, "用 TypeScript 写一个 React hook 然后运行 pnpm dev");
+        assert_eq!(
+            normalized,
+            "用 TypeScript 写一个 React hook 然后运行 pnpm dev"
+        );
     }
 
     #[test]
@@ -1133,7 +1164,10 @@ mod tests {
         };
         validate_start_request(&request).expect("request should be accepted");
         assert_eq!(language_hints("en", SpeechPreset::Default), vec!["en"]);
-        assert_eq!(language_hints("zh", SpeechPreset::Programmer), vec!["zh", "en"]);
+        assert_eq!(
+            language_hints("zh", SpeechPreset::Programmer),
+            vec!["zh", "en"]
+        );
     }
 
     #[test]

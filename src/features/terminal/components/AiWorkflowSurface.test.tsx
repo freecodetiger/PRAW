@@ -679,6 +679,46 @@ describe("AiWorkflowSurface", () => {
     expect(host.textContent).toContain("Check microphone permission and try again");
   });
 
+  it("does not repeat browser microphone warmup after one successful permission preflight", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+    expect(voiceButton).not.toBeNull();
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    await act(async () => {
+      voiceApi.emitStarted({ sessionId: "voice-session-1" });
+      voiceApi.emitCompleted({ sessionId: "voice-session-1", text: "first take" });
+    });
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(2);
+  });
+
   it("cancels active recording on escape and preserves any existing typed draft", async () => {
     useAppConfigStore.getState().patchSpeechConfig({
       enabled: true,
