@@ -11,10 +11,11 @@ import {
 describe("terminal shortcut config", () => {
   it("provides the approved default pane action bindings", () => {
     expect(DEFAULT_TERMINAL_SHORTCUTS).toEqual({
-      splitRight: { key: "[", ctrl: true, alt: true, shift: false, meta: false },
-      splitDown: { key: "]", ctrl: true, alt: true, shift: false, meta: false },
-      editNote: { key: "\\", ctrl: true, alt: true, shift: false, meta: false },
-      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      splitRight: { key: "[", code: "BracketLeft", ctrl: true, alt: true, shift: false, meta: false },
+      splitDown: { key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false },
+      editNote: { key: "\\", code: "Backslash", ctrl: true, alt: true, shift: false, meta: false },
+      toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleAiVoiceBypass: { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
     });
   });
 
@@ -36,7 +37,7 @@ describe("terminal shortcut config", () => {
 
   it("formats a binding for settings display", () => {
     expect(
-      formatShortcutBinding({ key: "]", ctrl: true, alt: true, shift: false, meta: false }),
+      formatShortcutBinding({ key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false }),
     ).toBe("Ctrl+Alt+]");
   });
 
@@ -48,6 +49,16 @@ describe("terminal shortcut config", () => {
         "splitRight",
       ),
     ).toBe("splitDown");
+  });
+
+  it("finds conflicts involving the AI voice bypass shortcut", () => {
+    expect(
+      findShortcutConflict(
+        DEFAULT_TERMINAL_SHORTCUTS,
+        { key: "a", ctrl: false, alt: true, shift: false, meta: false },
+        "splitRight",
+      ),
+    ).toBe("toggleAiVoiceBypass");
   });
 
   it("ignores modifier-only and ime keys when recording a shortcut", () => {
@@ -72,6 +83,29 @@ describe("terminal shortcut config", () => {
     ).toBeNull();
   });
 
+  it("captures letter shortcuts using a stable physical key code", () => {
+    expect(
+      toShortcutBinding({
+        key: "A",
+        code: "KeyA",
+        ctrlKey: false,
+        altKey: true,
+        shiftKey: false,
+        metaKey: false,
+      }),
+    ).toEqual({ key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false });
+  });
+
+  it("finds conflicts for the AI voice bypass shortcut using alt+a", () => {
+    expect(
+      findShortcutConflict(
+        DEFAULT_TERMINAL_SHORTCUTS,
+        { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
+        "splitRight",
+      ),
+    ).toBe("toggleAiVoiceBypass");
+  });
+
   it("captures a normalized binding from a keyboard event shape", () => {
     expect(
       toShortcutBinding({
@@ -81,6 +115,6 @@ describe("terminal shortcut config", () => {
         shiftKey: false,
         metaKey: false,
       }),
-    ).toEqual({ key: "]", ctrl: true, alt: true, shift: false, meta: false });
+    ).toEqual({ key: "]", code: "BracketRight", ctrl: true, alt: true, shift: false, meta: false });
   });
 });

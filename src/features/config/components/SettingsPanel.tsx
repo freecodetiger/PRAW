@@ -9,7 +9,7 @@ import {
   type TerminalShortcutConfigKey,
 } from "../../../domain/config/terminal-shortcuts";
 import type { CompletionProvider, AiConnectionTestResult } from "../../../domain/ai/types";
-import type { AiConfig } from "../../../domain/config/types";
+import type { AiConfig, SpeechConfig } from "../../../domain/config/types";
 import { THEME_PRESET_OPTIONS, type ThemePresetId } from "../../../domain/theme/presets";
 import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
 import { testAiConnection } from "../../../lib/tauri/ai";
@@ -19,7 +19,7 @@ import { useAppConfigStore } from "../state/app-config-store";
 import { ShortcutRecorder } from "./ShortcutRecorder";
 
 const CLASSIC_FONT_FAMILY = "CaskaydiaCove Nerd Font Mono";
-const SHORTCUT_KEYS: TerminalShortcutConfigKey[] = ["splitRight", "splitDown", "editNote", "toggleFocusPane"];
+const SHORTCUT_KEYS: TerminalShortcutConfigKey[] = ["splitRight", "splitDown", "editNote", "toggleFocusPane", "toggleAiVoiceBypass"];
 
 function formatRuntimeSummary(template: string, values: Record<string, number | string>) {
   return Object.entries(values).reduce(
@@ -32,6 +32,7 @@ export function SettingsPanel() {
   const config = useAppConfigStore((state) => state.config);
   const patchTerminalConfig = useAppConfigStore((state) => state.patchTerminalConfig);
   const patchAiConfig = useAppConfigStore((state) => state.patchAiConfig);
+  const patchSpeechConfig = useAppConfigStore((state) => state.patchSpeechConfig);
   const patchUiConfig = useAppConfigStore((state) => state.patchUiConfig);
   const [isOpen, setIsOpen] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -69,6 +70,23 @@ export function SettingsPanel() {
   const patchAi = (partial: Partial<AiConfig>) => {
     patchAiConfig(partial);
     setConnectionResult(null);
+  };
+
+  const patchSpeech = (partial: Partial<SpeechConfig>) => {
+    const nextApiKey = partial.apiKey;
+    const apiKeyChanged =
+      typeof nextApiKey === "string" && nextApiKey.trim() !== config.speech.apiKey.trim();
+
+    patchSpeechConfig({
+      ...partial,
+      ...(apiKeyChanged
+        ? {
+            programmerVocabularyId: "",
+            programmerVocabularyStatus: "idle",
+            programmerVocabularyError: "",
+          }
+        : {}),
+    });
   };
 
   const shortcutLabels = copy.terminal.shortcutLabels;
@@ -460,6 +478,58 @@ export function SettingsPanel() {
                 onChange={(event) => patchAi({ themeColor: event.target.value })}
               />
             </label>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section__title">
+              <strong>{copy.speech.sectionTitle}</strong>
+              <p>{copy.speech.sectionDescription}</p>
+            </div>
+
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={config.speech.enabled}
+                onChange={(event) => patchSpeech({ enabled: event.target.checked })}
+              />
+              <span>{copy.speech.enableProvider}</span>
+            </label>
+
+            <label className="settings-field">
+              <span>{copy.speech.apiKey}</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={config.speech.apiKey}
+                onChange={(event) => patchSpeech({ apiKey: event.target.value })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span>{copy.speech.language}</span>
+              <select
+                value={config.speech.language}
+                onChange={(event) => patchSpeech({ language: event.target.value as "auto" | "zh" | "en" })}
+              >
+                <option value="auto">{copy.speech.languageOptions.auto}</option>
+                <option value="zh">{copy.speech.languageOptions.zh}</option>
+                <option value="en">{copy.speech.languageOptions.en}</option>
+              </select>
+            </label>
+
+            <label className="settings-field">
+              <span>{copy.speech.preset}</span>
+              <select
+                value={config.speech.preset}
+                onChange={(event) => patchSpeech({ preset: event.target.value as SpeechConfig["preset"] })}
+              >
+                <option value="default">{copy.speech.presetOptions.default}</option>
+                <option value="programmer">{copy.speech.presetOptions.programmer}</option>
+              </select>
+            </label>
+
+            <p className="settings-panel__summary">{copy.speech.presetSummary}</p>
+            <p className="settings-panel__summary">{copy.speech.localKeySummary}</p>
           </section>
         </div>
       </aside>

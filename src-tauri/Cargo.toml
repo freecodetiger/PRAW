@@ -2,7 +2,7 @@
 name = "praw"
 version = "0.1.0"
 description = "PRAW intelligent terminal for Ubuntu"
-authors = ["zpc"]
+authors = ["freecodetiger <2388387947@qq.com>"]
 edition = "2021"
 license = "Apache-2.0"
 
@@ -19,6 +19,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+cpal = "0.15"
+futures-util = "0.3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 anyhow = "1"
 async-trait = "0.1"
 portable-pty = "0.9.0"

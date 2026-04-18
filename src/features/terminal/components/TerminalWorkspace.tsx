@@ -12,6 +12,7 @@ export function TerminalWorkspace() {
   const focusAdjacentTab = useWorkspaceStore((state) => state.focusAdjacentTab);
   const splitActiveTab = useWorkspaceStore((state) => state.splitActiveTab);
   const requestEditNoteForActiveTab = useWorkspaceStore((state) => state.requestEditNoteForActiveTab);
+  const requestAiVoiceBypassForActiveTab = useWorkspaceStore((state) => state.requestAiVoiceBypassForActiveTab);
   const toggleFocusMode = useWorkspaceStore((state) => state.toggleFocusMode);
   const isFocusModeActive = useWorkspaceStore((state) => state.focusMode !== null);
   const shortcuts = useAppConfigStore((state) => state.config.terminal.shortcuts);
@@ -25,6 +26,9 @@ export function TerminalWorkspace() {
     focusAdjacentTab,
     splitActiveTab,
     requestEditNoteForActiveTab,
+    toggleAiVoiceBypass: () => {
+      requestAiVoiceBypassForActiveTab();
+    },
     toggleFocusPane: () => {
       if (!activeTabId) {
         return;

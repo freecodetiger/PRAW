@@ -5,13 +5,14 @@ import {
   resolveAppConfig,
   type AppConfigInput,
 } from "../../../domain/config/model";
-import type { AiConfig, AppConfig, TerminalConfig, UiConfig } from "../../../domain/config/types";
+import type { AiConfig, AppConfig, SpeechConfig, TerminalConfig, UiConfig } from "../../../domain/config/types";
 
 interface AppConfigStore {
   config: AppConfig;
   hydrateConfig: (config: AppConfigInput | null | undefined) => void;
   patchTerminalConfig: (config: Partial<TerminalConfig>) => void;
   patchAiConfig: (config: Partial<AiConfig>) => void;
+  patchSpeechConfig: (config: Partial<SpeechConfig>) => void;
   patchUiConfig: (config: Partial<UiConfig>) => void;
 }
 
@@ -41,6 +42,17 @@ export const useAppConfigStore = create<AppConfigStore>((set) => ({
         ai: {
           ...state.config.ai,
           ...ai,
+        },
+      }),
+    })),
+
+  patchSpeechConfig: (speech) =>
+    set((state) => ({
+      config: resolveAppConfig({
+        ...state.config,
+        speech: {
+          ...state.config.speech,
+          ...speech,
         },
       }),
     })),

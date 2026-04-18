@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use anyhow::{Context, Result};
@@ -21,6 +21,26 @@ use super::{
     TerminalSemanticDetector,
 };
 
+
+static TERMINAL_DEBUG_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn terminal_debug_enabled() -> bool {
+    *TERMINAL_DEBUG_ENABLED.get_or_init(|| {
+        let value = std::env::var("PRAW_TERMINAL_DEBUG").ok();
+        parse_terminal_debug_flag(value.as_deref())
+    })
+}
+
+fn parse_terminal_debug_flag(value: Option<&str>) -> bool {
+    matches!(
+        value.map(str::trim).filter(|value| !value.is_empty()),
+        Some(value) if value.eq_ignore_ascii_case("1")
+            || value.eq_ignore_ascii_case("true")
+            || value.eq_ignore_ascii_case("yes")
+            || value.eq_ignore_ascii_case("on")
+    )
+}
+
 pub struct TerminalManager {
     sessions: Mutex<HashMap<String, Arc<TerminalSession>>>,
 }
@@ -39,10 +59,12 @@ impl TerminalManager {
         app: AppHandle,
         request: CreateTerminalSessionRequest,
     ) -> Result<CreateTerminalSessionResponse> {
-        eprintln!(
-            "[praw-terminal] create_session id={} shell={:?} cwd={:?}",
-            request.session_id, request.shell, request.cwd
-        );
+        if terminal_debug_enabled() {
+            eprintln!(
+                "[praw-terminal] create_session id={} shell={:?} cwd={:?}",
+                request.session_id, request.shell, request.cwd
+            );
+        }
         let app_bin = std::env::current_exe()
             .context("failed to resolve current executable for agent host wrappers")?;
         let shell = resolve_shell(request.shell);
@@ -136,12 +158,14 @@ impl TerminalManager {
     }
 
     pub fn write(&self, session_id: &str, data: &str) -> Result<()> {
-        eprintln!(
-            "[praw-terminal] write id={} bytes={} preview={:?}",
-            session_id,
-            data.len(),
-            data.chars().take(40).collect::<String>()
-        );
+        if terminal_debug_enabled() {
+            eprintln!(
+                "[praw-terminal] write id={} bytes={} preview={:?}",
+                session_id,
+                data.len(),
+                data.chars().take(40).collect::<String>()
+            );
+        }
         let session = self
             .get(session_id)
             .with_context(|| format!("terminal session {session_id} not found"))?;
@@ -149,10 +173,12 @@ impl TerminalManager {
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<()> {
-        eprintln!(
-            "[praw-terminal] resize id={} cols={} rows={}",
-            session_id, cols, rows
-        );
+        if terminal_debug_enabled() {
+            eprintln!(
+                "[praw-terminal] resize id={} cols={} rows={}",
+                session_id, cols, rows
+            );
+        }
         let session = self
             .get(session_id)
             .with_context(|| format!("terminal session {session_id} not found"))?;
@@ -196,12 +222,14 @@ impl TerminalManager {
                             continue;
                         }
 
-                        eprintln!(
-                            "[praw-terminal] output id={} bytes={} preview={:?}",
-                            session_id,
-                            read,
-                            data.chars().take(80).collect::<String>()
-                        );
+                        if terminal_debug_enabled() {
+                            eprintln!(
+                                "[praw-terminal] output id={} bytes={} preview={:?}",
+                                session_id,
+                                read,
+                                data.chars().take(80).collect::<String>()
+                            );
+                        }
 
                         for semantic_event in semantic_detector.consume(&session_id, &data) {
                             let _ = app.emit(TERMINAL_SEMANTIC_EVENT, semantic_event);
@@ -251,10 +279,12 @@ impl TerminalManager {
                 .expect("terminal manager mutex poisoned")
                 .remove(&session_id);
 
-            eprintln!(
-                "[praw-terminal] exit id={} code={:?} signal={:?} error={:?}",
-                payload.session_id, payload.exit_code, payload.signal, payload.error
-            );
+            if terminal_debug_enabled() {
+                eprintln!(
+                    "[praw-terminal] exit id={} code={:?} signal={:?} error={:?}",
+                    payload.session_id, payload.exit_code, payload.signal, payload.error
+                );
+            }
             let _ = app.emit(TERMINAL_EXIT_EVENT, payload);
         });
     }
@@ -344,7 +374,7 @@ fn build_session_path(path: Option<&str>, home: Option<&str>) -> Option<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::build_session_path;
+    use super::{build_session_path, parse_terminal_debug_flag};
 
     #[test]
     fn enriches_sparse_gui_session_paths_with_user_and_homebrew_bins() {
@@ -381,5 +411,23 @@ mod tests {
             segments.iter().filter(|segment| **segment == "/usr/local/bin").count(),
             1
         );
+    }
+
+    #[test]
+    fn terminal_debug_flag_defaults_to_disabled() {
+        assert!(!parse_terminal_debug_flag(None));
+        assert!(!parse_terminal_debug_flag(Some("")));
+        assert!(!parse_terminal_debug_flag(Some("0")));
+        assert!(!parse_terminal_debug_flag(Some("false")));
+        assert!(!parse_terminal_debug_flag(Some("off")));
+    }
+
+    #[test]
+    fn terminal_debug_flag_accepts_common_truthy_values() {
+        assert!(parse_terminal_debug_flag(Some("1")));
+        assert!(parse_terminal_debug_flag(Some("true")));
+        assert!(parse_terminal_debug_flag(Some("TRUE")));
+        assert!(parse_terminal_debug_flag(Some("yes")));
+        assert!(parse_terminal_debug_flag(Some("on")));
     }
 }

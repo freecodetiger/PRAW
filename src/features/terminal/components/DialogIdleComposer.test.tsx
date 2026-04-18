@@ -10,6 +10,30 @@ import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { DialogIdleComposer } from "./DialogIdleComposer";
 
+const tauriWindowApi = vi.hoisted(() => {
+  let dragDropHandler: ((event: { payload: unknown }) => void) | null = null;
+
+  return {
+    getCurrentWindow: vi.fn(() => ({
+      onDragDropEvent: vi.fn(async (handler: typeof dragDropHandler extends infer T ? T : never) => {
+        dragDropHandler = handler as typeof dragDropHandler;
+        return () => {
+          if (dragDropHandler === handler) {
+            dragDropHandler = null;
+          }
+        };
+      }),
+    })),
+    emitDragDropEvent(payload: unknown) {
+      dragDropHandler?.({ payload });
+    },
+    reset() {
+      this.getCurrentWindow.mockClear();
+      dragDropHandler = null;
+    },
+  };
+});
+
 const { requestAiRecoverySuggestions, requestAiInlineSuggestions, requestLocalCompletion } = vi.hoisted(() => ({
   requestAiRecoverySuggestions: vi.fn(),
   requestAiInlineSuggestions: vi.fn(),
@@ -24,6 +48,8 @@ vi.mock("../../../lib/tauri/ai", () => ({
 vi.mock("../../../lib/tauri/completion", () => ({
   requestLocalCompletion,
 }));
+
+vi.mock("@tauri-apps/api/window", () => tauriWindowApi);
 
 function resetConfigStore() {
   useAppConfigStore.setState({
@@ -77,12 +103,14 @@ async function flush() {
 describe("DialogIdleComposer", () => {
   let host: HTMLDivElement;
   let root: Root;
+  let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     resetConfigStore();
     requestAiRecoverySuggestions.mockReset();
+    tauriWindowApi.reset();
     requestAiInlineSuggestions.mockReset();
     requestLocalCompletion.mockReset();
     requestAiInlineSuggestions.mockResolvedValue(null);
@@ -106,6 +134,19 @@ describe("DialogIdleComposer", () => {
       latencyMs: 42,
     });
 
+    getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => ({
+      left: 100,
+      top: 40,
+      right: 420,
+      bottom: 140,
+      width: 320,
+      height: 100,
+      x: 100,
+      y: 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect));
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -115,8 +156,81 @@ describe("DialogIdleComposer", () => {
     act(() => {
       root.unmount();
     });
+    getBoundingClientRectSpy.mockRestore();
     host.remove();
     vi.useRealTimers();
+  });
+
+  it("shows the dashed drop target only while files are dragged over the idle composer", async () => {
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    await flush();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[aria-label="Dialog file drop target"]')).toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "enter",
+        paths: ["/tmp/demo.png"],
+        position: { x: 30, y: 20 },
+      });
+    });
+
+    expect(host.querySelector('[aria-label="Dialog file drop target"]')).toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "enter",
+        paths: ["/tmp/demo.png"],
+        position: { x: 240, y: 80 },
+      });
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[aria-label="Dialog file drop target"]')).not.toBeNull();
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({ type: "leave" });
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[aria-label="Dialog file drop target"]')).toBeNull();
+  });
+
+  it("inserts dropped file paths into the idle dialog composer draft", async () => {
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    await flush();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "drop",
+        paths: ["/tmp/demo.png", "/tmp/it's here.png"],
+        position: { x: 240, y: 80 },
+      });
+    });
+
+    expect((host.querySelector('textarea') as HTMLTextAreaElement | null)?.value).toBe(
+      "'/tmp/demo.png' '/tmp/it'\"'\"'s here.png'",
+    );
   });
 
   it("shows recovery suggestions for a failed command and fills the input when accepted", async () => {

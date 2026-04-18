@@ -51,6 +51,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const [noteDraft, setNoteDraft] = useState("");
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [quickPromptRequestKey, setQuickPromptRequestKey] = useState(0);
+  const [voiceBypassToggleRequestKey, setVoiceBypassToggleRequestKey] = useState(0);
   const paneRef = useRef<HTMLElement | null>(null);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -188,6 +189,8 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
 
   const noteEditorTabId = useWorkspaceStore((state) => state.noteEditorTabId);
   const clearNoteEditorRequest = useWorkspaceStore((state) => state.clearNoteEditorRequest);
+  const voiceBypassTabId = useWorkspaceStore((state) => state.voiceBypassTabId);
+  const clearAiVoiceBypassRequest = useWorkspaceStore((state) => state.clearAiVoiceBypassRequest);
   const paneActions = resolvePaneActions({
     canClose,
     isFocusModeActive,
@@ -216,6 +219,26 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     setIsEditingNote(true);
     clearNoteEditorRequest(tabId);
   }, [clearNoteEditorRequest, noteEditorTabId, tab, tabId]);
+  useEffect(() => {
+    if (tabState?.presentation === "agent-workflow") {
+      return;
+    }
+
+    setVoiceBypassToggleRequestKey(0);
+  }, [tabState?.presentation]);
+
+  useEffect(() => {
+    if (voiceBypassTabId !== tabId) {
+      return;
+    }
+
+    if (tabState?.presentation === "agent-workflow") {
+      setVoiceBypassToggleRequestKey((value) => value + 1);
+    }
+
+    clearAiVoiceBypassRequest(tabId);
+  }, [clearAiVoiceBypassRequest, tabId, tabState?.presentation, voiceBypassTabId]);
+
 
   const submitAiPrompt = async (prompt: string) => {
     recordAiPrompt(tabId, prompt);
@@ -361,6 +384,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
             }}
             onSubmitAiInput={handleAiComposerInput}
             quickPromptOpenRequestKey={quickPromptRequestKey}
+            voiceBypassToggleRequestKey={voiceBypassToggleRequestKey}
           />
         ) : (
           <div className="empty-state">Terminal state not ready.</div>

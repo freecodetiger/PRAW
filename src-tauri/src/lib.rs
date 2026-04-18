@@ -6,6 +6,7 @@ mod config;
 mod events;
 mod storage;
 mod terminal;
+mod voice;
 mod workspace;
 
 use app_state::AppState;
@@ -18,6 +19,9 @@ use commands::completion::request_local_completion;
 use commands::terminal::{
     close_terminal_session, create_terminal_session, resize_terminal_session,
     write_terminal_session,
+};
+use commands::voice::{
+    cancel_voice_transcription, start_voice_transcription, stop_voice_transcription,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -37,7 +41,10 @@ pub fn run() {
             request_ai_inline_suggestions,
             request_ai_recovery_suggestions,
             test_ai_connection,
-            request_local_completion
+            request_local_completion,
+            start_voice_transcription,
+            stop_voice_transcription,
+            cancel_voice_transcription
         ])
         .run(tauri::generate_context!())
         .expect("error while running PRAW");

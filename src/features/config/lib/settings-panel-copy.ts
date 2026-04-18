@@ -1,4 +1,5 @@
 import type { SettingsPanelLanguage } from "../../../domain/config/settings-panel-language";
+import type { TerminalShortcutConfigKey } from "../../../domain/config/terminal-shortcuts";
 
 interface SettingsPanelCopy {
   header: {
@@ -35,12 +36,7 @@ interface SettingsPanelCopy {
     workspaceFontFamily: string;
     shortcutsTitle: string;
     shortcutsDescription: string;
-    shortcutLabels: {
-      splitRight: string;
-      splitDown: string;
-      editNote: string;
-      toggleFocusPane: string;
-    };
+    shortcutLabels: Record<TerminalShortcutConfigKey, string>;
     shortcutConflictWith: (label: string) => string;
     recorder: {
       pressKeys: string;
@@ -77,6 +73,25 @@ interface SettingsPanelCopy {
     appearanceTitle: string;
     appearanceDescription: string;
     themeColor: string;
+  };
+  speech: {
+    sectionTitle: string;
+    sectionDescription: string;
+    enableProvider: string;
+    apiKey: string;
+    language: string;
+    preset: string;
+    presetOptions: {
+      default: string;
+      programmer: string;
+    };
+    presetSummary: string;
+    languageOptions: {
+      auto: string;
+      zh: string;
+      en: string;
+    };
+    localKeySummary: string;
   };
 }
 
@@ -121,6 +136,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
         splitDown: "Split Down",
         editNote: "Edit Note",
         toggleFocusPane: "Toggle Focus Pane",
+        toggleAiVoiceBypass: "Toggle AI Voice Bypass",
       },
       shortcutConflictWith: (label) => `Conflicts with ${label}.`,
       recorder: {
@@ -158,6 +174,25 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       appearanceTitle: "AI Appearance",
       appearanceDescription: "AI workflow panes follow the active theme. Accent color remains configurable.",
       themeColor: "Theme color",
+    },
+    speech: {
+      sectionTitle: "Speech Input",
+      sectionDescription: "Press-and-hold voice input in AI bypass uses an independent Bailian realtime key.",
+      enableProvider: "Enable speech input",
+      apiKey: "Speech API key",
+      language: "Speech language",
+      preset: "Speech mode",
+      presetOptions: {
+        default: "General",
+        programmer: "Programmer",
+      },
+      presetSummary: "Programmer mode improves recognition for technical terms, commands, and mixed Chinese-English developer speech.",
+      languageOptions: {
+        auto: "Auto (Chinese + English)",
+        zh: "Chinese",
+        en: "English",
+      },
+      localKeySummary: "This speech key is stored separately from the main AI provider key.",
     },
   },
   "zh-CN": {
@@ -200,6 +235,7 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
         splitDown: "向下分屏",
         editNote: "Edit Note",
         toggleFocusPane: "切换聚焦分屏",
+        toggleAiVoiceBypass: "切换 AI 语音旁路",
       },
       shortcutConflictWith: (label) => `与 ${label} 冲突。`,
       recorder: {
@@ -237,6 +273,25 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       appearanceTitle: "AI Appearance",
       appearanceDescription: "AI workflow pane 会跟随当前主题，accent color 仍可单独配置。",
       themeColor: "Theme color",
+    },
+    speech: {
+      sectionTitle: "Speech Input",
+      sectionDescription: "按住 AI 旁路输入里的语音按钮时，会使用独立的百炼实时语音 key。",
+      enableProvider: "启用语音输入",
+      apiKey: "语音 API key",
+      language: "语音语言",
+      preset: "识别模式",
+      presetOptions: {
+        default: "通用",
+        programmer: "程序员",
+      },
+      presetSummary: "程序员模式会优先优化技术词汇、命令行和中英混合开发语句的识别效果。",
+      languageOptions: {
+        auto: "自动（中文 + English）",
+        zh: "中文",
+        en: "English",
+      },
+      localKeySummary: "这个语音 key 与主 AI provider key 分开存储。",
     },
   },
 };

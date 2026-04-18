@@ -1,5 +1,6 @@
 import type { ThemePresetId } from "../theme/presets";
 import type { SettingsPanelLanguage } from "./settings-panel-language";
+import type { SpeechPreset } from "./speech-preset";
 import type { TerminalShortcutConfig } from "./terminal-shortcuts";
 
 export type TerminalPreferredMode = "dialog" | "classic";
@@ -27,6 +28,20 @@ export interface AiConfig {
   backgroundColor: string;
 }
 
+export type SpeechLanguage = "auto" | "zh" | "en";
+export type SpeechVocabularyStatus = "idle" | "creating" | "ready" | "failed";
+
+export interface SpeechConfig {
+  enabled: boolean;
+  provider: string;
+  apiKey: string;
+  language: SpeechLanguage;
+  preset: SpeechPreset;
+  programmerVocabularyId: string;
+  programmerVocabularyStatus: SpeechVocabularyStatus;
+  programmerVocabularyError: string;
+}
+
 export interface UiConfig {
   settingsPanelLanguage: SettingsPanelLanguage;
 }
@@ -34,5 +49,6 @@ export interface UiConfig {
 export interface AppConfig {
   terminal: TerminalConfig;
   ai: AiConfig;
+  speech: SpeechConfig;
   ui: UiConfig;
 }

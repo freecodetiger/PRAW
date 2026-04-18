@@ -10,6 +10,7 @@ describe("app-config-store", () => {
       hydrateConfig: useAppConfigStore.getState().hydrateConfig,
       patchTerminalConfig: useAppConfigStore.getState().patchTerminalConfig,
       patchAiConfig: useAppConfigStore.getState().patchAiConfig,
+      patchSpeechConfig: useAppConfigStore.getState().patchSpeechConfig,
       patchUiConfig: useAppConfigStore.getState().patchUiConfig,
     });
   });
@@ -98,11 +99,58 @@ describe("app-config-store", () => {
     });
 
     expect(useAppConfigStore.getState().config.terminal.shortcuts).toEqual({
-      splitRight: { key: "=", ctrl: true, alt: true, shift: false, meta: false },
-      splitDown: { key: "-", ctrl: true, alt: true, shift: false, meta: false },
+      splitRight: { key: "=", code: "Equal", ctrl: true, alt: true, shift: false, meta: false },
+      splitDown: { key: "-", code: "Minus", ctrl: true, alt: true, shift: false, meta: false },
       editNote: null,
-      toggleFocusPane: { key: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleFocusPane: { key: "Enter", code: "Enter", ctrl: true, alt: true, shift: false, meta: false },
+      toggleAiVoiceBypass: { key: "a", code: "KeyA", ctrl: false, alt: true, shift: false, meta: false },
     });
+  });
+
+  it("patches speech settings without disturbing terminal and ai config", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      provider: "aliyun-paraformer-realtime",
+      apiKey: "speech-key",
+      language: "zh",
+      preset: "default",
+    });
+
+    expect(useAppConfigStore.getState().config.speech).toEqual({
+      enabled: true,
+      provider: "aliyun-paraformer-realtime",
+      apiKey: "speech-key",
+      language: "zh",
+      preset: "default",
+      programmerVocabularyId: "",
+      programmerVocabularyStatus: "idle",
+      programmerVocabularyError: "",
+    });
+    expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
+    expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
+  });
+
+  it("patches speech preset without disturbing other speech settings", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      preset: "programmer",
+    });
+
+    expect(useAppConfigStore.getState().config.speech).toEqual({
+      ...DEFAULT_APP_CONFIG.speech,
+      preset: "programmer",
+    });
+  });
+
+  it("preserves programmer vocabulary cache fields when patching speech config", () => {
+    useAppConfigStore.getState().patchSpeechConfig({
+      programmerVocabularyId: "vocab-123",
+      programmerVocabularyStatus: "ready",
+      programmerVocabularyError: "",
+    } as never);
+
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyId).toBe("vocab-123");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyStatus).toBe("ready");
+    expect(useAppConfigStore.getState().config.speech.programmerVocabularyError).toBe("");
   });
 
   it("patches ui settings without disturbing terminal and ai config", () => {
@@ -113,5 +161,6 @@ describe("app-config-store", () => {
     expect(useAppConfigStore.getState().config.ui.settingsPanelLanguage).toBe("zh-CN");
     expect(useAppConfigStore.getState().config.terminal).toEqual(DEFAULT_APP_CONFIG.terminal);
     expect(useAppConfigStore.getState().config.ai).toEqual(DEFAULT_APP_CONFIG.ai);
+    expect(useAppConfigStore.getState().config.speech).toEqual(DEFAULT_APP_CONFIG.speech);
   });
 });

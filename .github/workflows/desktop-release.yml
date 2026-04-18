@@ -62,6 +62,7 @@ jobs:
             wget \
             file \
             libwebkit2gtk-4.1-dev \
+            libasound2-dev \
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \

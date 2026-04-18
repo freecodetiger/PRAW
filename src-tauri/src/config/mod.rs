@@ -20,6 +20,8 @@ pub struct TerminalShortcutConfig {
     pub split_right: Option<ShortcutBinding>,
     pub split_down: Option<ShortcutBinding>,
     pub edit_note: Option<ShortcutBinding>,
+    pub toggle_focus_pane: Option<ShortcutBinding>,
+    pub toggle_ai_voice_bypass: Option<ShortcutBinding>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +62,42 @@ pub struct AiConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SpeechConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_speech_provider")]
+    pub provider: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_speech_language")]
+    pub language: String,
+    #[serde(default = "default_speech_preset")]
+    pub preset: String,
+    #[serde(default)]
+    pub programmer_vocabulary_id: String,
+    #[serde(default = "default_programmer_vocabulary_status")]
+    pub programmer_vocabulary_status: String,
+    #[serde(default)]
+    pub programmer_vocabulary_error: String,
+}
+
+impl Default for SpeechConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: default_speech_provider(),
+            api_key: String::new(),
+            language: default_speech_language(),
+            preset: default_speech_preset(),
+            programmer_vocabulary_id: String::new(),
+            programmer_vocabulary_status: default_programmer_vocabulary_status(),
+            programmer_vocabulary_error: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UiConfig {
     #[serde(default = "default_settings_panel_language")]
     pub settings_panel_language: String,
@@ -78,6 +116,8 @@ impl Default for UiConfig {
 pub struct AppConfig {
     pub terminal: TerminalConfig,
     pub ai: AiConfig,
+    #[serde(default)]
+    pub speech: SpeechConfig,
     #[serde(default)]
     pub ui: UiConfig,
 }
@@ -121,6 +161,20 @@ fn default_terminal_shortcuts() -> TerminalShortcutConfig {
             shift: false,
             meta: false,
         }),
+        toggle_focus_pane: Some(ShortcutBinding {
+            key: "Enter".to_string(),
+            ctrl: true,
+            alt: true,
+            shift: false,
+            meta: false,
+        }),
+        toggle_ai_voice_bypass: Some(ShortcutBinding {
+            key: "a".to_string(),
+            ctrl: false,
+            alt: true,
+            shift: false,
+            meta: false,
+        }),
     }
 }
 
@@ -130,6 +184,22 @@ fn default_smart_suggestion_bubble() -> bool {
 
 fn default_settings_panel_language() -> String {
     "en".to_string()
+}
+
+fn default_speech_provider() -> String {
+    "aliyun-paraformer-realtime".to_string()
+}
+
+fn default_speech_language() -> String {
+    "auto".to_string()
+}
+
+fn default_speech_preset() -> String {
+    "default".to_string()
+}
+
+fn default_programmer_vocabulary_status() -> String {
+    "idle".to_string()
 }
 
 fn fallback_default_shell(is_macos: bool) -> String {
@@ -168,6 +238,7 @@ impl Default for AppConfig {
                 theme_color: "#1f5eff".to_string(),
                 background_color: "#eef4ff".to_string(),
             },
+            speech: SpeechConfig::default(),
             ui: UiConfig::default(),
         }
     }
@@ -224,8 +295,119 @@ mod tests {
         assert_eq!(config.ai.theme_color, "#1f5eff");
         assert_eq!(config.ai.background_color, "#eef4ff");
         assert_eq!(config.ui.settings_panel_language, "zh-CN");
+        assert!(!config.speech.enabled);
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.language, "auto");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
         assert!(config.terminal.phrases.is_empty());
         assert!(config.terminal.phrase_usage.is_empty());
+    }
+
+    #[test]
+    fn deserializes_speech_config_shape() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "dialogFontFamily": "CaskaydiaCove Nerd Font",
+                    "dialogFontSize": 14,
+                    "preferredMode": "dialog",
+                    "themePreset": "light"
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "baseUrl": "",
+                    "enabled": false,
+                    "smartSuggestionBubble": true,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                },
+                "speech": {
+                    "enabled": true,
+                    "provider": "aliyun-paraformer-realtime",
+                    "apiKey": "speech-key",
+                    "language": "zh"
+                },
+                "ui": {
+                    "settingsPanelLanguage": "en"
+                }
+            }"##,
+        )
+        .expect("config should deserialize speech settings");
+
+        assert!(config.speech.enabled);
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.api_key, "speech-key");
+        assert_eq!(config.speech.language, "zh");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
+    }
+
+    #[test]
+    fn speech_config_defaults_to_default_preset() {
+        let config = AppConfig::default();
+        assert_eq!(config.speech.preset, "default");
+    }
+
+    #[test]
+    fn speech_config_defaults_vocabulary_cache_state() {
+        let config = AppConfig::default();
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
+    }
+
+    #[test]
+    fn deserializes_speech_preset_from_json() {
+        let config = serde_json::from_str::<AppConfig>(
+            r##"{
+                "terminal": {
+                    "defaultShell": "/bin/bash",
+                    "defaultCwd": "~",
+                    "dialogFontFamily": "CaskaydiaCove Nerd Font",
+                    "dialogFontSize": 14,
+                    "preferredMode": "dialog",
+                    "themePreset": "light"
+                },
+                "ai": {
+                    "provider": "",
+                    "model": "",
+                    "baseUrl": "",
+                    "enabled": false,
+                    "smartSuggestionBubble": true,
+                    "apiKey": "",
+                    "themeColor": "#1f5eff",
+                    "backgroundColor": "#eef4ff"
+                },
+                "speech": {
+                    "enabled": true,
+                    "provider": "aliyun-paraformer-realtime",
+                    "apiKey": "speech-key",
+                    "language": "auto",
+                    "preset": "programmer",
+                    "programmerVocabularyId": "vocab-123",
+                    "programmerVocabularyStatus": "ready",
+                    "programmerVocabularyError": ""
+                },
+                "ui": {
+                    "settingsPanelLanguage": "en"
+                }
+            }"##,
+        )
+        .expect("config should deserialize speech preset");
+
+        assert_eq!(config.speech.preset, "programmer");
+        assert_eq!(config.speech.programmer_vocabulary_id, "vocab-123");
+        assert_eq!(config.speech.programmer_vocabulary_status, "ready");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
     }
 
     #[test]
@@ -315,10 +497,41 @@ mod tests {
     }
 
     #[test]
+    fn serializes_full_shortcut_configuration() {
+        let json = serde_json::to_value(AppConfig::default()).expect("config should serialize");
+        let terminal = json.get("terminal").expect("terminal should exist");
+        let shortcuts = terminal.get("shortcuts").expect("shortcuts should exist");
+
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("key"))
+                .and_then(|value| value.as_str()),
+            Some("a")
+        );
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("alt"))
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            shortcuts
+                .get("toggleAiVoiceBypass")
+                .and_then(|value| value.get("ctrl"))
+                .and_then(|value| value.as_bool()),
+            Some(false)
+        );
+        assert!(shortcuts.get("toggleFocusPane").is_some());
+    }
+
+    #[test]
     fn serializes_dialog_only_font_keys() {
         let json = serde_json::to_value(AppConfig::default()).expect("config should serialize");
         let terminal = json.get("terminal").expect("terminal should exist");
         let ai = json.get("ai").expect("ai should exist");
+        let speech = json.get("speech").expect("speech should exist");
         let ui = json.get("ui").expect("ui should exist");
 
         assert!(terminal.get("dialogFontFamily").is_some());
@@ -330,7 +543,38 @@ mod tests {
         assert!(ai.get("baseUrl").is_some());
         assert!(ai.get("smartSuggestionBubble").is_some());
         assert_eq!(
-            ui.get("settingsPanelLanguage").and_then(|value| value.as_str()),
+            speech.get("provider").and_then(|value| value.as_str()),
+            Some("aliyun-paraformer-realtime")
+        );
+        assert_eq!(
+            speech.get("language").and_then(|value| value.as_str()),
+            Some("auto")
+        );
+        assert_eq!(
+            speech.get("preset").and_then(|value| value.as_str()),
+            Some("default")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyId")
+                .and_then(|value| value.as_str()),
+            Some("")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyStatus")
+                .and_then(|value| value.as_str()),
+            Some("idle")
+        );
+        assert_eq!(
+            speech
+                .get("programmerVocabularyError")
+                .and_then(|value| value.as_str()),
+            Some("")
+        );
+        assert_eq!(
+            ui.get("settingsPanelLanguage")
+                .and_then(|value| value.as_str()),
             Some("en")
         );
     }
@@ -342,5 +586,11 @@ mod tests {
         assert_eq!(config.ai.provider, "");
         assert_eq!(config.ai.model, "");
         assert_eq!(config.ai.base_url, "");
+        assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
+        assert_eq!(config.speech.language, "auto");
+        assert_eq!(config.speech.preset, "default");
+        assert_eq!(config.speech.programmer_vocabulary_id, "");
+        assert_eq!(config.speech.programmer_vocabulary_status, "idle");
+        assert_eq!(config.speech.programmer_vocabulary_error, "");
     }
 }

@@ -64,6 +64,36 @@ describe("DialogTranscript", () => {
     expect(host.querySelector(".command-block__status")).toBeNull();
   });
 
+  it("renders command metadata inside a shrinkable main column so long entries can reflow", () => {
+    const blocks: CommandBlock[] = [
+      {
+        id: "cmd:wrap",
+        kind: "command",
+        cwd: "/workspace/projects/really-long-path-segment-that-needs-to-wrap",
+        command: "git remote set-url origin https://example.com/some/really/long/repository/name",
+        output: "ok\n",
+        status: "completed",
+        interactive: false,
+        exitCode: 0,
+      },
+    ];
+
+    act(() => {
+      root.render(
+        <DialogTranscript
+          blocks={blocks}
+          scrollRef={{ current: null }}
+          onScroll={() => undefined}
+        />,
+      );
+    });
+
+    const metaMain = host.querySelector('.command-block__meta-main');
+    expect(metaMain).not.toBeNull();
+    expect(metaMain?.querySelector('.command-block__header')).not.toBeNull();
+    expect(host.querySelector('.command-block__copy')).not.toBeNull();
+  });
+
   it("copies an entire command block from an explicit block action", async () => {
     const blocks: CommandBlock[] = [
       {

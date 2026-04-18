@@ -730,6 +730,31 @@ button {
   font-size: var(--dialog-terminal-font-size);
 }
 
+.ai-workflow__file-drop-target {
+  position: absolute;
+  inset: 18px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.ai-workflow__file-drop-frame {
+  display: grid;
+  place-items: center;
+  width: min(560px, calc(100% - 32px));
+  min-height: clamp(132px, 28%, 210px);
+  padding: 18px 24px;
+  border: 1.5px dashed color-mix(in srgb, var(--ai-theme-color) 58%, var(--border));
+  background: color-mix(in srgb, var(--surface) 78%, var(--ai-background-color));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--ai-theme-color));
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--surface) 70%, transparent);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .ai-workflow__history-shell {
   position: relative;
   display: flex;
@@ -923,6 +948,13 @@ button {
   padding: 0;
 }
 
+.ai-workflow__bypass-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .ai-workflow__bypass-input {
   min-height: 40px;
   max-height: 160px;
@@ -931,6 +963,35 @@ button {
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 98%, var(--ai-background-color));
   resize: none;
+}
+
+.ai-workflow__bypass-voice {
+  min-width: 72px;
+  min-height: 40px;
+  align-self: stretch;
+}
+
+.ai-workflow__bypass-voice--active {
+  border-color: color-mix(in srgb, var(--ai-theme-color) 56%, var(--border));
+  background: color-mix(in srgb, var(--ai-theme-color) 14%, var(--surface));
+  color: var(--text-primary);
+}
+
+.ai-workflow__bypass-voice--pending {
+  opacity: 0.8;
+  cursor: progress;
+}
+
+.ai-workflow__bypass-live {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ai-theme-color) 14%, var(--border-muted));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--ai-background-color));
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .ai-workflow__bypass-panel .ai-workflow__prompt-input-shell {
@@ -1250,23 +1311,54 @@ button {
 
 .dialog-terminal__composer {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, max-content) minmax(120px, 1fr);
   align-items: center;
   gap: 10px;
+  min-width: 0;
   padding: 8px 12px 12px;
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
 
 .dialog-terminal__prompt {
-  font-size: var(--dialog-terminal-font-size);
+  display: block;
+  min-width: 0;
+  max-width: min(32vw, 320px);
+  overflow: hidden;
   color: var(--text-muted);
+  font-size: var(--dialog-terminal-font-size);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dialog-terminal__input-column {
   position: relative;
   min-width: 0;
+}
+
+.dialog-terminal__file-drop-target {
+  position: absolute;
+  inset: -6px 0 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.dialog-terminal__file-drop-frame {
+  display: grid;
+  place-items: center;
+  width: min(520px, calc(100% - 8px));
+  min-height: 54px;
+  padding: 10px 14px;
+  border: 1.5px dashed color-mix(in srgb, var(--text-primary) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-primary));
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--surface) 65%, transparent);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .dialog-terminal__input-shell {
@@ -1521,10 +1613,15 @@ button {
 }
 
 .command-block__meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+.command-block__meta-main {
+  min-width: 0;
 }
 
 .command-block__divider {
@@ -1542,7 +1639,16 @@ button {
 
 .command-block__header {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+}
+
+.command-block__command-text {
+  min-width: 0;
+  flex: 1 1 240px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .command-block__cwd,
@@ -1552,10 +1658,17 @@ button {
   color: var(--text-muted);
 }
 
+.command-block__cwd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .command-block__output {
   margin: 0;
+  min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--text-primary);
   font-size: var(--dialog-terminal-font-size);
   line-height: 1.45;

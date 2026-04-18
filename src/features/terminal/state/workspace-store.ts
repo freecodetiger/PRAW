@@ -40,6 +40,7 @@ interface WorkspaceStore {
   dragState: { sourceTabId: string } | null;
   dragPreview: PaneDragPreview | null;
   noteEditorTabId: string | null;
+  voiceBypassTabId: string | null;
   bootstrapWindow: (options: BootstrapWindowOptions) => void;
   hydrateWindow: (snapshot: WindowSnapshot) => void;
   setActiveTab: (tabId: string) => void;
@@ -55,6 +56,8 @@ interface WorkspaceStore {
   clearPaneDrag: () => void;
   requestEditNoteForActiveTab: () => void;
   clearNoteEditorRequest: (tabId: string) => void;
+  requestAiVoiceBypassForActiveTab: () => void;
+  clearAiVoiceBypassRequest: (tabId: string) => void;
   enterFocusMode: (tabId: string) => void;
   exitFocusMode: () => void;
   toggleFocusMode: (tabId: string) => void;
@@ -76,6 +79,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   dragState: null,
   dragPreview: null,
   noteEditorTabId: null,
+  voiceBypassTabId: null,
 
   bootstrapWindow: ({ shell, cwd }) =>
     set(() => ({
@@ -84,6 +88,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
+      voiceBypassTabId: null,
     })),
 
   hydrateWindow: (snapshot) =>
@@ -93,6 +98,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
+      voiceBypassTabId: null,
     })),
 
   setActiveTab: (tabId) =>
@@ -284,6 +290,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       noteEditorTabId: state.noteEditorTabId === tabId ? null : state.noteEditorTabId,
     })),
 
+  requestAiVoiceBypassForActiveTab: () =>
+    set((state) => {
+      if (!state.window || state.focusMode) {
+        return state;
+      }
+
+      return {
+        voiceBypassTabId: state.window.activeTabId,
+      };
+    }),
+
+  clearAiVoiceBypassRequest: (tabId) =>
+    set((state) => ({
+      voiceBypassTabId: state.voiceBypassTabId === tabId ? null : state.voiceBypassTabId,
+    })),
+
   enterFocusMode: (tabId) =>
     set((state) => {
       if (!state.window?.tabs[tabId] || state.focusMode) {
@@ -473,6 +495,7 @@ function splitWindowTab(state: WorkspaceStore, tabId: string, axis: SplitAxis): 
     dragState: null,
     dragPreview: null,
     noteEditorTabId: null,
+    voiceBypassTabId: null,
   };
 }
 

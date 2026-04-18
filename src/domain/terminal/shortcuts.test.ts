@@ -71,6 +71,20 @@ describe("workspace shortcuts", () => {
         DEFAULT_TERMINAL_SHORTCUTS,
       ),
     ).toEqual({ type: "toggle-focus-pane" });
+
+    expect(
+      resolveWorkspaceShortcut(
+        {
+          key: "a",
+          code: "KeyA",
+          ctrlKey: false,
+          altKey: true,
+          shiftKey: false,
+          metaKey: false,
+        },
+        DEFAULT_TERMINAL_SHORTCUTS,
+      ),
+    ).toEqual({ type: "toggle-ai-voice-bypass" });
   });
 
   it("ignores legacy tab-management shortcuts in the single-workspace shell", () => {
