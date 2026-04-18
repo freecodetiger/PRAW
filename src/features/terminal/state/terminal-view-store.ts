@@ -63,12 +63,12 @@ export interface TerminalTabViewState extends DialogState {
   aiSession?: AiSessionState | null;
   transcriptViewport?: TranscriptViewportState;
   activeArchiveBaseline?: string | null;
-  archiveOwner?: TerminalArchiveOwner;
-  pendingArchiveResetAfterAgentWorkflow?: boolean;
+  activeCapturedOutput?: string | null;
+  activeCommandCaptureStarted?: boolean;
+  activePreStartCapturedOutput?: string | null;
 }
 
 export type AiSessionProvider = "codex" | "claude" | "qwen" | "unknown";
-type TerminalArchiveOwner = "dialog" | "agent-workflow";
 
 export interface AiSessionState {
   provider: AiSessionProvider;
@@ -111,16 +111,13 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         return state;
       }
 
-      if (tabState.pendingArchiveResetAfterAgentWorkflow) {
-        resetDirect(tabId);
-      }
-
       const nextTabState = {
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
         activeArchiveBaseline: exportTerminalArchive(tabId) ?? "",
-        archiveOwner: "dialog" as const,
-        pendingArchiveResetAfterAgentWorkflow: false,
+        activeCapturedOutput: "",
+        activeCommandCaptureStarted: false,
+        activePreStartCapturedOutput: "",
       };
 
       return {
@@ -211,30 +208,71 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         parserState: parsed.state,
       };
 
-      const normalizedOutput = normalizeDialogOutput(parsed.visibleOutput);
-      const shouldCaptureVisibleOutput =
-        nextState.dialogPhase !== "live-console" &&
-        nextState.captureActiveOutputInTranscript &&
-        nextState.presentation !== "agent-workflow" &&
-        nextState.archiveOwner === "dialog";
+      const chunkHasCommandStart = parsed.events.some((event) => event.type === "command-start");
 
-      if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
-        nextState = {
-          ...nextState,
-          ...appendDialogOutput(nextState, normalizedOutput),
-        };
-      }
+      for (const entry of parsed.timeline) {
+        if (entry.type === "output") {
+          const normalizedOutput = normalizeDialogOutput(entry.text);
+          if (normalizedOutput.length === 0) {
+            continue;
+          }
 
-      for (const event of parsed.events) {
+          const shouldCaptureActiveCommandOutput =
+            nextState.activeCommandBlockId !== null &&
+            nextState.presentation !== "agent-workflow";
+
+          if (shouldCaptureActiveCommandOutput) {
+            if (nextState.activeCommandCaptureStarted) {
+              nextState = {
+                ...nextState,
+                activeCapturedOutput: `${nextState.activeCapturedOutput ?? ""}${normalizedOutput}`,
+              };
+            } else if (!chunkHasCommandStart) {
+              nextState = {
+                ...nextState,
+                activePreStartCapturedOutput: `${nextState.activePreStartCapturedOutput ?? ""}${normalizedOutput}`,
+              };
+            }
+          }
+
+          const shouldCaptureVisibleOutput =
+            nextState.dialogPhase !== "live-console" &&
+            nextState.captureActiveOutputInTranscript &&
+            nextState.presentation !== "agent-workflow";
+
+          if (shouldCaptureVisibleOutput) {
+            nextState = {
+              ...nextState,
+              ...appendDialogOutput(nextState, normalizedOutput),
+            };
+          }
+
+          continue;
+        }
+
+        const event = entry.event;
         if (event.type === "prompt-state") {
           promptCwd = event.cwd;
         }
 
+        const activeCommand =
+          event.type === "command-end" && nextState.activeCommandBlockId !== null
+            ? nextState.blocks.find((block) => block.id === nextState.activeCommandBlockId)
+            : null;
+        const exitingAgentWorkflow =
+          event.type === "command-end" && nextState.presentation === "agent-workflow";
+        const finalizedOutputSource =
+          (nextState.activeCapturedOutput?.length ?? 0) > 0
+            ? (nextState.activeCapturedOutput ?? undefined)
+            : (nextState.activePreStartCapturedOutput?.length ?? 0) > 0
+              ? (nextState.activePreStartCapturedOutput ?? undefined)
+            : (computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline) ?? undefined);
         const archivedOutput =
-          event.type === "command-end" &&
-          nextState.presentation !== "agent-workflow" &&
-          nextState.archiveOwner === "dialog"
-            ? computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline)
+          event.type === "command-end" && nextState.presentation !== "agent-workflow"
+            ? sanitizeArchivedCommandOutput(
+                finalizedOutputSource,
+                activeCommand?.command ?? null,
+              )
             : undefined;
 
         nextState = {
@@ -244,12 +282,26 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
             event.type === "command-end" ? { ...event, archivedOutput } : event,
           ),
           activeArchiveBaseline: event.type === "command-end" ? null : nextState.activeArchiveBaseline,
+          activeCapturedOutput: event.type === "command-end" ? null : nextState.activeCapturedOutput,
+          activeCommandCaptureStarted:
+            event.type === "command-start"
+              ? true
+              : event.type === "command-end"
+                ? false
+                : nextState.activeCommandCaptureStarted,
+          activePreStartCapturedOutput:
+            event.type === "command-start" || event.type === "command-end"
+              ? null
+              : nextState.activePreStartCapturedOutput,
         };
+
+        if (exitingAgentWorkflow) {
+          resetDirect(tabId);
+        }
 
         if (
           event.type === "command-end" &&
           nextState.presentation !== "agent-workflow" &&
-          nextState.archiveOwner === "dialog" &&
           (nextState.aiTranscript?.entries.length ?? 0) > 0
         ) {
           nextState = {
@@ -290,9 +342,6 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
             provider: resolveAgentProvider(event.commandEntry),
             rawOnly: true,
           },
-          archiveOwner: "agent-workflow",
-          activeArchiveBaseline: null,
-          pendingArchiveResetAfterAgentWorkflow: true,
         };
       }
 
@@ -394,17 +443,23 @@ export function selectTranscriptViewportState(
 }
 
 function createTabViewState(shell: string, cwd: string, preferredMode: PaneRenderMode): TerminalTabViewState {
+  const supported = isDialogShellSupported(shell);
+
   return {
     ...createDialogState(shell, cwd, preferredMode),
     shell,
     workspaceCwd: cwd,
-    parserState: createShellIntegrationParserState(),
+    parserState: {
+      ...createShellIntegrationParserState(),
+      shellReady: !supported,
+    },
     aiTranscript: createAiTranscriptState(),
     aiSession: null,
     transcriptViewport: createTranscriptViewportState(),
     activeArchiveBaseline: null,
-    archiveOwner: "dialog",
-    pendingArchiveResetAfterAgentWorkflow: false,
+    activeCapturedOutput: null,
+    activeCommandCaptureStarted: false,
+    activePreStartCapturedOutput: null,
   };
 }
 
@@ -459,8 +514,9 @@ function reconcileShellState(
     aiSession: state.aiSession,
     transcriptViewport: state.transcriptViewport,
     activeArchiveBaseline: state.activeArchiveBaseline,
-    archiveOwner: state.archiveOwner,
-    pendingArchiveResetAfterAgentWorkflow: state.pendingArchiveResetAfterAgentWorkflow,
+    activeCapturedOutput: state.activeCapturedOutput,
+    activeCommandCaptureStarted: state.activeCommandCaptureStarted,
+    activePreStartCapturedOutput: state.activePreStartCapturedOutput,
   };
 }
 
@@ -476,6 +532,26 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   if (!nextArchive.startsWith(baseline)) {
+    const baselineIndex = nextArchive.indexOf(baseline);
+    if (baselineIndex >= 0) {
+      const delta = nextArchive.slice(baselineIndex + baseline.length);
+      if (delta.startsWith("\n")) {
+        return delta.slice(1) || undefined;
+      }
+
+      return delta || undefined;
+    }
+
+    const overlap = findSuffixPrefixOverlap(baseline, nextArchive);
+    if (overlap >= 8) {
+      const delta = nextArchive.slice(overlap);
+      if (delta.startsWith("\n")) {
+        return delta.slice(1) || undefined;
+      }
+
+      return delta || undefined;
+    }
+
     return nextArchive;
   }
 
@@ -485,6 +561,82 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   return delta || undefined;
+}
+
+function findSuffixPrefixOverlap(previous: string, next: string): number {
+  const maxOverlap = Math.min(previous.length, next.length);
+
+  for (let length = maxOverlap; length > 0; length -= 1) {
+    if (previous.endsWith(next.slice(0, length))) {
+      return length;
+    }
+  }
+
+  return 0;
+}
+
+function sanitizeArchivedCommandOutput(archiveText: string | undefined, command: string | null): string | undefined {
+  if (!archiveText) {
+    return undefined;
+  }
+
+  const normalized = archiveText.replace(/\r\n/g, "\n");
+  const trimmedLeading = normalized.replace(/^\n+/, "").replace(/(?:\n[ \t]*)+$/u, "");
+  if (!command) {
+    return trimmedLeading || undefined;
+  }
+
+  const normalizedCommand = command.trim();
+  const extractedFromLastEcho = stripPromptEchoThroughLastCommand(trimmedLeading, normalizedCommand);
+  if (extractedFromLastEcho) {
+    return extractedFromLastEcho;
+  }
+
+  const lines = trimmedLeading.split("\n");
+  const firstLine = lines[0]?.trim() ?? "";
+
+  if (looksLikePromptEcho(firstLine, normalizedCommand)) {
+    const remaining = lines.slice(1).join("\n").replace(/^\n+/, "");
+    return remaining || undefined;
+  }
+
+  return trimmedLeading || undefined;
+}
+
+function stripPromptEchoThroughLastCommand(archiveText: string, command: string): string | undefined {
+  const lines = archiveText.split("\n");
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (looksLikePromptEcho(line, command)) {
+      const remaining = lines.slice(index + 1).join("\n").replace(/^\n+/, "");
+      return remaining || undefined;
+    }
+
+    if (line === command && looksLikeStandalonePromptLine(lines[index - 1])) {
+      const remaining = lines.slice(index + 1).join("\n").replace(/^\n+/, "");
+      return remaining || undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function looksLikePromptEcho(line: string, command: string): boolean {
+  if (!line || !command) {
+    return false;
+  }
+
+  if (line === command) {
+    return true;
+  }
+
+  return ["$ ", "% ", "# ", "> ", "› ", "❯ "].some((promptSuffix) => line.endsWith(`${promptSuffix}${command}`));
+}
+
+function looksLikeStandalonePromptLine(line: string | undefined): boolean {
+  const trimmed = line?.trim() ?? "";
+  return trimmed === "$" || trimmed === "%" || trimmed === "#" || trimmed === ">" || trimmed === "›" || trimmed === "❯";
 }
 function createTranscriptViewportState(): TranscriptViewportState {
   return {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { clearRegistry, writeDirect } from "../lib/terminal-registry";
+import { clearRegistry, resetDirect, writeDirect } from "../lib/terminal-registry";
 import { selectTerminalTabState, selectTranscriptViewportState, useTerminalViewStore } from "./terminal-view-store";
 
 describe("terminal-view-store AI transcript", () => {
@@ -133,19 +133,14 @@ describe("terminal-view-store AI transcript", () => {
     },
   );
 
-  it("captures idle output into DOM blocks even when legacy mode state says classic", () => {
+  it("ignores idle output instead of creating session blocks even when legacy mode state says classic", () => {
     const store = useTerminalViewStore.getState();
 
     store.syncTabState("tab:1", "/usr/bin/fish", "/workspace", "dialog");
     store.consumeOutput("tab:1", "unsupported shell output\n");
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
-    expect(tabState?.blocks).toEqual([
-      expect.objectContaining({
-        kind: "session",
-        output: "unsupported shell output\n",
-      }),
-    ]);
+    expect(tabState?.blocks).toEqual([]);
   });
 
   it("keeps prompt-reported cwd when a stale workspace sync runs after pane focus changes", () => {
@@ -158,6 +153,21 @@ describe("terminal-view-store AI transcript", () => {
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
     expect(promptCwd).toBe("/home/zpc/projects/praw");
     expect(tabState?.cwd).toBe("/home/zpc/projects/praw");
+  });
+
+  it("ignores pre-prompt startup noise before the first shell-ready marker arrives", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/zsh", "/Users/s", "dialog");
+    const promptCwd = store.consumeOutput(
+      "tab:1",
+      "/Users/s/.zshrc:1: command not found: fnm\r\n\x1b]133;P;cwd=/Users/s\x07",
+    );
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(promptCwd).toBe("/Users/s");
+    expect(tabState?.cwd).toBe("/Users/s");
+    expect(tabState?.blocks).toEqual([]);
   });
 
   it("does not create a session output block for prompt-only whitespace after a command ends", () => {
@@ -272,11 +282,185 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
-  it("does not archive stale agent-workflow mirror text into the next dialog command block", () => {
+  it("does not let a trailing shell prompt in the archive baseline force the next ls to reuse the full transcript", () => {
+    const store = useTerminalViewStore.getState();
+    const prompt = "\x1b]133;P;cwd=/Users/s\x07\x1b]133;A\x07/Users/s\n$ \x1b]133;B\x07";
+    const firstListing = "Applications\nDesktop\n";
+    const secondListing = "Code\nDownloads\n";
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+
+    writeDirect("tab:1", prompt);
+    store.consumeOutput("tab:1", prompt);
+
+    store.submitCommand("tab:1", "ls");
+    const firstCommand = `\x1b]133;C;entry=ls\x07ls\r\n${firstListing}\x1b]133;D;0\x07${prompt}`;
+    writeDirect("tab:1", firstCommand);
+    store.consumeOutput("tab:1", firstCommand);
+
+    store.submitCommand("tab:1", "ls");
+    const secondCommand = `\x1b]133;C;entry=ls\x07ls\r\n${secondListing}\x1b]133;D;0\x07${prompt}`;
+    writeDirect("tab:1", secondCommand);
+    store.consumeOutput("tab:1", secondCommand);
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "Applications\nDesktop",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "Code\nDownloads",
+      }),
+    ]);
+  });
+
+  it("ignores pre-command residue and post-command prompt tails when capturing command-scoped output", () => {
+    const store = useTerminalViewStore.getState();
+    const promptTail = "/Users/s\n\x1b]133;A\x07$ \x1b]133;B\x07";
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+    store.consumeOutput("tab:1", "\x1b]133;P;cwd=/Users/s\x07\x1b]133;A\x07$ \x1b]133;B\x07");
+
+    store.submitCommand("tab:1", "ls");
+    const lsChunk = `l\x1b]133;C;entry=ls\x07ls\r\nApplications\nDesktop\n\x1b]133;D;0\x07${promptTail}`;
+    writeDirect("tab:1", lsChunk);
+    store.consumeOutput("tab:1", lsChunk);
+
+    store.submitCommand("tab:1", "echo e");
+    const echoChunk = `e\x1b]133;C;entry=echo e\x07echo e\r\ne\n\x1b]133;D;0\x07${promptTail}`;
+    writeDirect("tab:1", echoChunk);
+    store.consumeOutput("tab:1", echoChunk);
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "Applications\nDesktop",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "echo e",
+        output: "e",
+      }),
+    ]);
+  });
+
+  it("drops visible residue that arrives before command-start in an earlier chunk", () => {
+    const store = useTerminalViewStore.getState();
+    const promptTail = "/Users/s\n\x1b]133;A\x07$ \x1b]133;B\x07";
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+    store.consumeOutput("tab:1", "\x1b]133;P;cwd=/Users/s\x07\x1b]133;A\x07$ \x1b]133;B\x07");
+
+    store.submitCommand("tab:1", "cd .");
+    store.consumeOutput("tab:1", "c");
+    const cdChunk = `\x1b]133;C;entry=cd .\x07cd .\r\n\x1b]133;D;0\x07${promptTail}`;
+    writeDirect("tab:1", `c${cdChunk}`);
+    store.consumeOutput("tab:1", cdChunk);
+
+    store.submitCommand("tab:1", "echo hi");
+    store.consumeOutput("tab:1", "e");
+    const echoChunk = `\x1b]133;C;entry=echo hi\x07echo hi\r\nhi\n\x1b]133;D;0\x07${promptTail}`;
+    writeDirect("tab:1", `e${echoChunk}`);
+    store.consumeOutput("tab:1", echoChunk);
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "cd .",
+        output: "",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "echo hi",
+        output: "hi",
+      }),
+    ]);
+  });
+
+  it("does not reuse an earlier ls transcript when the mirror is rebuilt before the next command", () => {
+    const store = useTerminalViewStore.getState();
+    const listing = "Applications\tDownloads\tMusic\nCode\tDesktop\tPictures";
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", `${listing}\n`);
+    store.consumeOutput("tab:1", `${listing}\n\x1b]133;D;0\x07`);
+
+    store.submitCommand("tab:1", "ls");
+    resetDirect("tab:1");
+    writeDirect("tab:1", `/Users/s\n$\nls\n${listing}\n\n${listing}\n`);
+    store.consumeOutput("tab:1", `${listing}\n\x1b]133;D;0\x07`);
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: listing,
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: listing,
+      }),
+    ]);
+  });
+
+  it("strips a multiline prompt echo from the last matching command when archive fallback includes older ls transcripts", () => {
+    const store = useTerminalViewStore.getState();
+    const listing = "Applications\tDownloads\tMusic\nCode\tDesktop\tPictures";
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+
+    resetDirect("tab:1");
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", `/Users/s\n$\nls\n${listing}\n/Users/s\n$\nls\n${listing}\n`);
+    store.consumeOutput("tab:1", `${listing}\n\x1b]133;D;0\x07`);
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: listing,
+      }),
+    ]);
+  });
+
+  it("does not reuse visible history when the archive baseline was top-trimmed between commands", () => {
     const store = useTerminalViewStore.getState();
 
-    store.syncTabState("tab:1", "/bin/bash", "/home/zpc/projects/praw", "dialog");
-    store.submitCommand("tab:1", "codex --dangerously-bypass-approvals-and-sandbox");
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+
+    writeDirect("tab:1", "header that scrolled away\nApplications\nDesktop\n");
+    store.submitCommand("tab:1", "echo a");
+    resetDirect("tab:1");
+    writeDirect("tab:1", "Applications\nDesktop\n/Users/s $ echo a\r\na\n");
+    store.consumeOutput("tab:1", "/Users/s $ echo a\r\na\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "echo a",
+        output: "a",
+      }),
+    ]);
+  });
+
+  it("clears raw AI archive state after codex exits so the next ls only captures its own output", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "codex");
     store.consumeSemantic("tab:1", {
       sessionId: "session-1",
       kind: "agent-workflow",
@@ -285,24 +469,59 @@ describe("terminal-view-store AI transcript", () => {
       commandEntry: "codex",
     });
 
-    writeDirect("tab:1", "OpenAI Codex (v0.121.0)\nLoading sessions");
-    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+    writeDirect("tab:1", "OpenAI Codex\nassistant: hello\n");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07");
 
-    store.submitCommand("tab:1", "cd ..");
-    writeDirect("tab:1", "\r/home/zpc/projects/praw $ cd ..\n/home/zpc/projects $");
-    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "file-a\nfile-b\n");
+    store.consumeOutput("tab:1", "file-a\nfile-b\n\x1b]133;D;0\x07");
 
     const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
     expect(tabState?.blocks).toEqual([
       expect.objectContaining({
         kind: "command",
-        command: "codex --dangerously-bypass-approvals-and-sandbox",
+        command: "codex",
         output: "",
       }),
       expect.objectContaining({
         kind: "command",
-        command: "cd ..",
-        output: "/home/zpc/projects/praw $ cd ..\n/home/zpc/projects $",
+        command: "ls",
+        output: "file-a\nfile-b",
+      }),
+    ]);
+  });
+
+  it("does not let the shell prompt rewrite the tail of an old codex transcript into the next ls archive", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "codex");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    writeDirect("tab:1", "OpenAI Codex\n› pong");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07");
+
+    store.submitCommand("tab:1", "ls");
+    writeDirect("tab:1", "\r/Users/s$ ls\r\nfile-a\nfile-b\n");
+    store.consumeOutput("tab:1", "\r/Users/s$ ls\r\nfile-a\nfile-b\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "codex",
+        output: "",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "ls",
+        output: "file-a\nfile-b",
       }),
     ]);
   });

@@ -36,6 +36,7 @@ const ALIYUN_REALTIME_ENDPOINT: &str = "wss://dashscope.aliyuncs.com/api-ws/v1/i
 const ALIYUN_CUSTOMIZATION_ENDPOINT: &str =
     "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/customization";
 const APP_CONFIG_PATH: &str = "config/app-config.json";
+const MAX_PENDING_AUDIO_CHUNKS: usize = 256;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,6 +204,23 @@ async fn run_voice_session(
     mut command_rx: mpsc::UnboundedReceiver<VoiceSessionCommand>,
 ) -> Result<()> {
     let preset = SpeechPreset::parse(&request.preset);
+    let audio_capture = build_audio_capture()?;
+    let sample_rate = audio_capture.sample_rate;
+    let mut audio_receiver = audio_capture.receiver;
+    let mut audio_stream = Some(audio_capture.stream);
+    let mut task_started = false;
+    let mut finish_sent = false;
+    let mut stop_requested = false;
+    let mut pending_audio_chunks: Vec<Vec<u8>> = Vec::new();
+    let mut finalized_chunks: Vec<String> = Vec::new();
+    let mut current_chunk = String::new();
+
+    audio_stream
+        .as_ref()
+        .context("microphone stream missing before warmup")?
+        .play()
+        .context("failed to start microphone capture warmup")?;
+
     let vocabulary_id =
         ensure_programmer_vocabulary(&app, &session_id, &request.api_key, preset).await;
 
@@ -215,15 +233,6 @@ async fn run_voice_session(
         .await
         .context("failed to connect to Bailian realtime websocket")?;
     let (mut sink, mut stream) = websocket.split();
-
-    let audio_capture = build_audio_capture()?;
-    let sample_rate = audio_capture.sample_rate;
-    let mut audio_receiver = audio_capture.receiver;
-    let mut audio_stream = Some(audio_capture.stream);
-    let mut task_started = false;
-    let mut finish_sent = false;
-    let mut finalized_chunks: Vec<String> = Vec::new();
-    let mut current_chunk = String::new();
 
     sink.send(Message::Text(
         build_run_task_message(
@@ -247,25 +256,31 @@ async fn run_voice_session(
                         return Ok(());
                     }
                     Some(VoiceSessionCommand::Stop) => {
+                        audio_stream.take();
                         if task_started && !finish_sent {
-                            audio_stream.take();
                             finish_sent = true;
                             emit_status(&app, &session_id, "Transcribing…");
                             sink.send(Message::Text(build_finish_task_message(&session_id).into()))
                                 .await
                                 .context("failed to send Bailian finish-task")?;
+                        } else {
+                            stop_requested = true;
                         }
                     }
                     None => return Ok(()),
                 }
             }
-            maybe_chunk = audio_receiver.recv(), if task_started && !finish_sent => {
+            maybe_chunk = audio_receiver.recv(), if !finish_sent => {
                 match maybe_chunk {
                     Some(chunk) => {
                         if !chunk.is_empty() {
-                            sink.send(Message::Binary(chunk.into()))
-                                .await
-                                .context("failed to stream microphone audio")?;
+                            if task_started {
+                                sink.send(Message::Binary(chunk.into()))
+                                    .await
+                                    .context("failed to stream microphone audio")?;
+                            } else {
+                                buffer_pending_audio_chunk(&mut pending_audio_chunks, chunk);
+                            }
                         }
                     }
                     None => {
@@ -288,13 +303,23 @@ async fn run_voice_session(
                     ServerMessage::TaskStarted => {
                         if !task_started {
                             task_started = true;
-                            audio_stream
-                                .as_ref()
-                                .context("microphone stream missing before start")?
-                                .play()
-                                .context("failed to start microphone capture")?;
-                            emit_started(&app, &session_id);
-                            emit_status(&app, &session_id, "Listening…");
+
+                            for chunk in take_pending_audio_chunks(&mut pending_audio_chunks) {
+                                sink.send(Message::Binary(chunk.into()))
+                                    .await
+                                    .context("failed to flush buffered microphone audio")?;
+                            }
+
+                            if stop_requested {
+                                finish_sent = true;
+                                emit_status(&app, &session_id, "Transcribing…");
+                                sink.send(Message::Text(build_finish_task_message(&session_id).into()))
+                                    .await
+                                    .context("failed to send deferred Bailian finish-task")?;
+                            } else {
+                                emit_started(&app, &session_id);
+                                emit_status(&app, &session_id, "Listening…");
+                            }
                         }
                     }
                     ServerMessage::ResultGenerated { text, sentence_end } => {
@@ -427,7 +452,9 @@ enum ServerMessage {
         sentence_end: bool,
     },
     TaskFinished,
-    TaskFailed { message: String },
+    TaskFailed {
+        message: String,
+    },
     Ignore,
 }
 
@@ -548,6 +575,21 @@ fn needs_ascii_space(existing: &str, next: &str) -> bool {
     let upcoming = next.chars().next();
     matches!(previous, Some(ch) if ch.is_ascii_alphanumeric())
         && matches!(upcoming, Some(ch) if ch.is_ascii_alphanumeric())
+}
+
+fn buffer_pending_audio_chunk(pending_chunks: &mut Vec<Vec<u8>>, chunk: Vec<u8>) {
+    if chunk.is_empty() {
+        return;
+    }
+
+    pending_chunks.push(chunk);
+    if pending_chunks.len() > MAX_PENDING_AUDIO_CHUNKS {
+        pending_chunks.remove(0);
+    }
+}
+
+fn take_pending_audio_chunks(pending_chunks: &mut Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    std::mem::take(pending_chunks)
 }
 
 fn build_audio_capture() -> Result<AudioCapture> {
@@ -709,7 +751,8 @@ async fn ensure_programmer_vocabulary(
         return None;
     }
 
-    let mut config = storage::load_or_default::<_, AppConfig>(app, APP_CONFIG_PATH).unwrap_or_default();
+    let mut config =
+        storage::load_or_default::<_, AppConfig>(app, APP_CONFIG_PATH).unwrap_or_default();
     let cached_id = config.speech.programmer_vocabulary_id.trim().to_string();
     if !cached_id.is_empty() {
         config.speech.programmer_vocabulary_status = "ready".to_string();
@@ -746,8 +789,7 @@ async fn ensure_programmer_vocabulary(
 }
 
 async fn create_programmer_vocabulary(api_key: &str) -> Result<String> {
-    let suffix = Uuid::new_v4().simple().to_string();
-    let prefix = format!("programmer-{}", &suffix[..8]);
+    let prefix = build_programmer_vocabulary_prefix();
     let payload = vocabulary::build_programmer_vocabulary_create_payload(&prefix);
 
     let response = Client::new()
@@ -781,6 +823,11 @@ async fn create_programmer_vocabulary(api_key: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("programmer vocabulary response did not include vocabulary_id"))
 }
 
+fn build_programmer_vocabulary_prefix() -> String {
+    let suffix = Uuid::new_v4().simple().to_string();
+    format!("praw{}", &suffix[..6])
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -798,7 +845,10 @@ mod tests {
             .expect("websocket request should include auth and client handshake headers");
 
         assert_eq!(
-            request.headers().get("Authorization").and_then(|value| value.to_str().ok()),
+            request
+                .headers()
+                .get("Authorization")
+                .and_then(|value| value.to_str().ok()),
             Some("Bearer test-key")
         );
         assert!(request.headers().contains_key("sec-websocket-key"));
@@ -864,8 +914,8 @@ mod tests {
             SpeechPreset::Programmer,
             Some("vocab-user-123"),
         );
-        let value: Value =
-            serde_json::from_str(&message).expect("programmer run-task payload should be valid json");
+        let value: Value = serde_json::from_str(&message)
+            .expect("programmer run-task payload should be valid json");
 
         assert_eq!(
             value
@@ -884,12 +934,58 @@ mod tests {
 
     #[test]
     fn programmer_vocabulary_create_payload_targets_realtime_v2() {
-        let payload = crate::voice::vocabulary::build_programmer_vocabulary_create_payload("progx-auto");
+        let payload =
+            crate::voice::vocabulary::build_programmer_vocabulary_create_payload("progx-auto");
         assert_eq!(payload["model"].as_str(), Some("speech-biasing"));
-        assert_eq!(payload["input"]["action"].as_str(), Some("create_vocabulary"));
+        assert_eq!(
+            payload["input"]["action"].as_str(),
+            Some("create_vocabulary")
+        );
         assert_eq!(
             payload["input"]["target_model"].as_str(),
             Some("paraformer-realtime-v2")
+        );
+    }
+
+    #[test]
+    fn programmer_vocabulary_prefix_respects_dashscope_length_limit() {
+        let prefix = super::build_programmer_vocabulary_prefix();
+
+        assert!(
+            prefix.len() <= 10,
+            "expected DashScope vocabulary prefix to stay within 10 chars, got {} ({prefix})",
+            prefix.len()
+        );
+        assert!(prefix.starts_with("praw"));
+    }
+
+    #[test]
+    fn buffers_early_audio_chunks_in_order_until_the_task_starts() {
+        let mut pending = Vec::new();
+
+        super::buffer_pending_audio_chunk(&mut pending, vec![1, 2]);
+        super::buffer_pending_audio_chunk(&mut pending, vec![3, 4]);
+
+        assert_eq!(
+            super::take_pending_audio_chunks(&mut pending),
+            vec![vec![1, 2], vec![3, 4]]
+        );
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn drops_oldest_early_audio_when_pending_buffer_reaches_capacity() {
+        let mut pending = Vec::new();
+
+        for index in 0..(super::MAX_PENDING_AUDIO_CHUNKS + 2) {
+            super::buffer_pending_audio_chunk(&mut pending, vec![index as u8]);
+        }
+
+        assert_eq!(pending.len(), super::MAX_PENDING_AUDIO_CHUNKS);
+        assert_eq!(pending.first(), Some(&vec![2]));
+        assert_eq!(
+            pending.last(),
+            Some(&vec![(super::MAX_PENDING_AUDIO_CHUNKS as u8) + 1])
         );
     }
 
@@ -915,13 +1011,25 @@ mod tests {
         let mut finalized_chunks = Vec::new();
         let mut current_chunk = String::new();
 
-        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "你好", true);
+        let first =
+            accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "你好", true);
         assert_eq!(first, "你好");
-        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好");
+        assert_eq!(
+            compose_transcript(&finalized_chunks, Some(current_chunk.as_str())),
+            "你好"
+        );
 
-        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "继续说", false);
+        let second = accumulate_transcript_update(
+            &mut finalized_chunks,
+            &mut current_chunk,
+            "继续说",
+            false,
+        );
         assert_eq!(second, "你好继续说");
-        assert_eq!(compose_transcript(&finalized_chunks, Some(current_chunk.as_str())), "你好继续说");
+        assert_eq!(
+            compose_transcript(&finalized_chunks, Some(current_chunk.as_str())),
+            "你好继续说"
+        );
     }
 
     #[test]
@@ -929,10 +1037,16 @@ mod tests {
         let mut finalized_chunks = Vec::new();
         let mut current_chunk = String::new();
 
-        let first = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "hello world", true);
+        let first = accumulate_transcript_update(
+            &mut finalized_chunks,
+            &mut current_chunk,
+            "hello world",
+            true,
+        );
         assert_eq!(first, "hello world");
 
-        let second = accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "again", false);
+        let second =
+            accumulate_transcript_update(&mut finalized_chunks, &mut current_chunk, "again", false);
         assert_eq!(second, "hello world again");
     }
 
@@ -980,7 +1094,10 @@ mod tests {
             super::preset::SpeechPreset::Programmer,
         );
 
-        assert_eq!(normalized, "用 TypeScript 写一个 React hook 然后运行 pnpm dev");
+        assert_eq!(
+            normalized,
+            "用 TypeScript 写一个 React hook 然后运行 pnpm dev"
+        );
     }
 
     #[test]
@@ -1047,7 +1164,10 @@ mod tests {
         };
         validate_start_request(&request).expect("request should be accepted");
         assert_eq!(language_hints("en", SpeechPreset::Default), vec!["en"]);
-        assert_eq!(language_hints("zh", SpeechPreset::Programmer), vec!["zh", "en"]);
+        assert_eq!(
+            language_hints("zh", SpeechPreset::Programmer),
+            vec!["zh", "en"]
+        );
     }
 
     #[test]

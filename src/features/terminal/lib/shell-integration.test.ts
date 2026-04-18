@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { consumeShellIntegrationChunk, createShellIntegrationParserState } from "./shell-integration";
 
+function createReadyState() {
+  return {
+    ...createShellIntegrationParserState(),
+    shellReady: true,
+  };
+}
+
 describe("shell integration parser", () => {
   it("strips shell markers and emits lifecycle events", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       `hello\x1b]133;C\x07world\x1b]133;D;7\x07!\x1b]133;P;cwd=/tmp\x07`,
     );
 
@@ -20,7 +27,7 @@ describe("shell integration parser", () => {
 
   it("parses command entry markers when present", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       `\x1b]133;C;entry=codex\x07output`,
     );
 
@@ -29,7 +36,7 @@ describe("shell integration parser", () => {
   });
 
   it("holds partial marker data until the sequence is complete", () => {
-    const first = consumeShellIntegrationChunk(createShellIntegrationParserState(), "a\x1b]133;P;cwd=/wo");
+    const first = consumeShellIntegrationChunk(createReadyState(), "a\x1b]133;P;cwd=/wo");
     expect(first.visibleOutput).toBe("a");
     expect(first.events).toEqual([]);
     expect(first.state.pending).toBe("\x1b]133;P;cwd=/wo");
@@ -42,7 +49,7 @@ describe("shell integration parser", () => {
 
   it("suppresses shell prompt text wrapped by prompt markers", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       `\x1b]133;A\x07zpc@host:~/proj$ \x1b]133;B\x07plain output`,
     );
 
@@ -50,9 +57,23 @@ describe("shell integration parser", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("ignores startup noise until the first shell-ready prompt-state marker arrives", () => {
+    const result = consumeShellIntegrationChunk(
+      {
+        ...createShellIntegrationParserState(),
+        shellReady: false,
+      },
+      `/Users/s/.zshrc:1: command not found: fnm\n\x1b]133;P;cwd=/Users/s\x07`,
+    );
+
+    expect(result.visibleOutput).toBe("");
+    expect(result.events).toEqual([{ type: "prompt-state", cwd: "/Users/s" }]);
+    expect(result.state.shellReady).toBe(true);
+  });
+
   it("parses shell markers that use the ST terminator", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       `\u001b]133;C;entry=claude\u001b\\done\u001b]133;D;0\u001b\\`,
     );
 
@@ -65,7 +86,7 @@ describe("shell integration parser", () => {
 
   it("buffers split OSC color reports so they never surface as visible output", () => {
     const first = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "\u001b]10;rgb:0000/0000/0001",
     );
 
@@ -80,7 +101,7 @@ describe("shell integration parser", () => {
 
   it("strips alternate-screen control sequences from visible transcript output", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "loading\u001b[?1049h\u001b[2J",
     );
 
@@ -89,7 +110,7 @@ describe("shell integration parser", () => {
 
   it("keeps ordinary command output stable when bash toggles bracketed paste mode", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "\u001b[?2004lfile-a\nfile-b\n\u001b[?2004h",
     );
 
@@ -98,7 +119,7 @@ describe("shell integration parser", () => {
 
   it("removes zsh line-redraw backspaces from visible output", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "e\becho hello\n",
     );
 
@@ -107,7 +128,7 @@ describe("shell integration parser", () => {
 
   it("collapses carriage-return progress updates into the latest visible line", () => {
     const result = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "处理 delta 中:  14% (238/1697)\r处理 delta 中:  15% (255/1697)\r处理 delta 中:  16% (272/1697)",
     );
 
@@ -116,7 +137,7 @@ describe("shell integration parser", () => {
 
   it("preserves CRLF line endings while still treating bare carriage returns as line rewrites", () => {
     const first = consumeShellIntegrationChunk(
-      createShellIntegrationParserState(),
+      createReadyState(),
       "Receiving objects: 10%\r",
     );
 
