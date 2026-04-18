@@ -50,11 +50,13 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
         <article className="command-block" key={block.id}>
           {index > 0 ? <hr className="command-block__divider" /> : null}
           <div className="command-block__meta">
-            {block.kind === "command" ? (
-              <CommandTranscriptHeader block={block} />
-            ) : (
-              <p className="command-block__session-label">session output</p>
-            )}
+            <div className="command-block__meta-main">
+              {block.kind === "command" ? (
+                <CommandTranscriptHeader block={block} />
+              ) : (
+                <p className="command-block__session-label">session output</p>
+              )}
+            </div>
             <button
               className="button button--ghost command-block__copy"
               type="button"
@@ -108,7 +110,9 @@ function CommandTranscriptHeader({ block }: { block: CommandBlock }) {
     <p className="command-block__header">
       <span className="command-block__cwd">{block.cwd}</span>
       <span className="command-block__sigil">$</span>
-      <HighlightedTokens tokens={highlightCommandText(block.command ?? "")} />
+      <span className="command-block__command-text">
+        <HighlightedTokens tokens={highlightCommandText(block.command ?? "")} />
+      </span>
     </p>
   );
 }

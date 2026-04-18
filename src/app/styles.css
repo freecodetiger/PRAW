@@ -1311,17 +1311,23 @@ button {
 
 .dialog-terminal__composer {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, max-content) minmax(120px, 1fr);
   align-items: center;
   gap: 10px;
+  min-width: 0;
   padding: 8px 12px 12px;
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
 
 .dialog-terminal__prompt {
-  font-size: var(--dialog-terminal-font-size);
+  display: block;
+  min-width: 0;
+  max-width: min(32vw, 320px);
+  overflow: hidden;
   color: var(--text-muted);
+  font-size: var(--dialog-terminal-font-size);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1607,10 +1613,15 @@ button {
 }
 
 .command-block__meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+}
+
+.command-block__meta-main {
+  min-width: 0;
 }
 
 .command-block__divider {
@@ -1628,7 +1639,16 @@ button {
 
 .command-block__header {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+}
+
+.command-block__command-text {
+  min-width: 0;
+  flex: 1 1 240px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .command-block__cwd,
@@ -1638,10 +1658,17 @@ button {
   color: var(--text-muted);
 }
 
+.command-block__cwd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .command-block__output {
   margin: 0;
+  min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--text-primary);
   font-size: var(--dialog-terminal-font-size);
   line-height: 1.45;

@@ -10,6 +10,7 @@ import {
   formatDroppedPathsForShell,
   isDragPositionInsidePane,
 } from "../lib/ai-drop-paths";
+import { formatDialogPromptPath } from "../lib/dialog-prompt-path";
 import { useSuggestionEngine } from "../hooks/useSuggestionEngine";
 import type { TerminalTabViewState } from "../state/terminal-view-store";
 import { SuggestionBar } from "./SuggestionBar";
@@ -40,6 +41,7 @@ export function DialogIdleComposer({
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [suggestionBarVisible, setSuggestionBarVisible] = useState(false);
   const [fileDropActive, setFileDropActive] = useState(false);
+  const [composerWidth, setComposerWidth] = useState(0);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const dismissSuggestionsRef = useRef<() => void>(() => undefined);
@@ -100,6 +102,7 @@ export function DialogIdleComposer({
     visibleSuggestions.length > 0 &&
     !isComposing;
   const isDisabled = status !== "running";
+  const promptPath = formatDialogPromptPath(paneState.cwd, composerWidth);
 
   useEffect(() => {
     if (!isActive) {
@@ -108,6 +111,24 @@ export function DialogIdleComposer({
 
     inputRef.current?.focus();
   }, [isActive]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) {
+      return;
+    }
+
+    const updateWidth = () => setComposerWidth(composer.clientWidth);
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setPhraseIndex(0);
@@ -256,7 +277,7 @@ export function DialogIdleComposer({
 
   return (
     <div ref={composerRef} className="dialog-terminal__composer" onMouseDown={() => inputRef.current?.focus()}>
-      <span className="dialog-terminal__prompt">{paneState.cwd} $</span>
+      <span className="dialog-terminal__prompt" title={paneState.cwd}>{promptPath} $</span>
       <div className="dialog-terminal__input-column">
         {fileDropActive ? (
           <div className="dialog-terminal__file-drop-target" aria-label="Dialog file drop target">
