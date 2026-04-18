@@ -53,6 +53,14 @@ async function requestBrowserMicrophoneAccess(): Promise<void> {
   }
 }
 
+function supportsAutomaticVoicePermissionWarmup(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /mac/i.test(navigator.platform ?? "");
+}
+
 export function AiWorkflowSurface({
   tabId,
   paneState,
@@ -179,7 +187,12 @@ export function AiWorkflowSurface({
   ]);
 
   useEffect(() => {
-    if (!voiceConfigured || composerDisabled || voiceSessionIdRef.current) {
+    if (
+      !voiceConfigured ||
+      composerDisabled ||
+      voiceSessionIdRef.current ||
+      !supportsAutomaticVoicePermissionWarmup()
+    ) {
       return;
     }
 

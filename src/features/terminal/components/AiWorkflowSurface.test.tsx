@@ -233,6 +233,10 @@ describe("AiWorkflowSurface", () => {
     voiceApi.reset();
     terminalRegistryApi.getTerminal.mockReset();
     tauriWindowApi.reset();
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "Linux x86_64",
+    });
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: undefined,
@@ -650,11 +654,15 @@ describe("AiWorkflowSurface", () => {
     expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
   });
 
-  it("warms browser microphone access after mount so the first click can reuse it", async () => {
+  it("warms browser microphone access after mount on macOS so the first click can reuse it", async () => {
     const stop = vi.fn();
     const getUserMedia = vi.fn(async () => ({
       getTracks: () => [{ stop }],
     }));
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "MacIntel",
+    });
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { getUserMedia },
@@ -680,6 +688,47 @@ describe("AiWorkflowSurface", () => {
     });
 
     expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not warm browser microphone access after mount on Linux and waits for an explicit voice click", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "Linux x86_64",
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getUserMedia).not.toHaveBeenCalled();
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
     expect(stop).toHaveBeenCalledTimes(1);
     expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
   });
