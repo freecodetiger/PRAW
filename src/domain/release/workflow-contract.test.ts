@@ -85,4 +85,15 @@ describe("release workflow contract", () => {
     expect(taggedSection).not.toContain("APPLE_CERTIFICATE");
     expect(workflow).toContain("Build and publish main-branch prerelease without notarization");
   });
+
+  it("keeps version-tagged releases on an explicit unsigned fallback path when Apple notarization secrets are absent", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+    const taggedReleaseSection = workflow.split("- name: Build and publish tagged release")[1] ?? "";
+
+    expect(workflow).toContain("Resolve signing mode");
+    expect(workflow).toContain("can_notarize=false");
+    expect(workflow).toContain("Build and publish tagged release without notarization");
+    expect(workflow).not.toContain("Validate macOS signing prerequisites for tagged releases");
+    expect(taggedReleaseSection).toContain("steps.release_signing.outputs.can_notarize == 'true'");
+  });
 });

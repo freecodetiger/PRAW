@@ -73,30 +73,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Validate macOS signing prerequisites for tagged releases
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          missing=()
-          [[ -n "${APPLE_CERTIFICATE}" ]] || missing+=("APPLE_CERTIFICATE")
-          [[ -n "${APPLE_CERTIFICATE_PASSWORD}" ]] || missing+=("APPLE_CERTIFICATE_PASSWORD")
-          [[ -n "${KEYCHAIN_PASSWORD}" ]] || missing+=("KEYCHAIN_PASSWORD")
-          [[ -n "${APPLE_ID}" ]] || missing+=("APPLE_ID")
-          [[ -n "${APPLE_PASSWORD}" ]] || missing+=("APPLE_PASSWORD")
-          [[ -n "${APPLE_TEAM_ID}" ]] || missing+=("APPLE_TEAM_ID")
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "Missing required macOS signing/notarization secrets for tagged release:"
-            printf ' - %s\n' "${missing[@]}"
-            exit 1
-          fi
-
       - name: Import Apple Developer ID certificate
         id: apple_signing
         if: runner.os == 'macOS'
@@ -185,6 +161,8 @@ jobs:
             echo "### 作者的话"
             echo
             echo "- 这一版已经自动聚合了 macOS 与 Linux 的桌面端安装资产"
+            echo "- 如果 Apple Developer 签名/公证凭据缺失，macOS 资产会以未签名 / 未公证形式附带"
+            echo "- 遇到 Gatekeeper 拦截时，请按系统提示执行“右键打开”或前往“隐私与安全性”点击“仍要打开”"
             echo "- 请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议"
             echo "- 确认文案无误后，再从 GitHub Release 页面手动点击 Publish release"
             echo
@@ -258,7 +236,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish tagged release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.release_signing.outputs.can_notarize == 'true'
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -267,6 +245,20 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
           APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: PRAW ${{ github.ref_name }}
+          releaseBody: ${{ steps.release_meta.outputs.tag_body }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.bundle_args }}
+
+      - name: Build and publish tagged release without notarization
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.release_signing.outputs.can_notarize != 'true'
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.apple_signing.outputs.signing_identity || '-' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}

@@ -25,10 +25,11 @@ describe('public installation guidance contract', () => {
   it('documents the unsigned macOS preview path separately from formal signing setup', () => {
     const docs = readRepoFile('docs/releasing.md');
 
-    expect(docs).toContain('## Unsigned macOS preview builds');
+    expect(docs).toContain('## Unsigned macOS builds');
     expect(docs).toContain('main prerelease lane can still publish unsigned macOS artifacts');
     expect(docs).toContain('docs/installing-macos.md');
-    expect(docs).toContain('Formal signed/notarized builds still require Apple credentials');
+    expect(docs).toContain('Version-tagged formal releases can also publish unsigned macOS artifacts');
+    expect(docs).toContain('Apple credentials are only required for signed/notarized macOS releases');
   });
 
   it('puts macOS install help directly into generated release notes', () => {
