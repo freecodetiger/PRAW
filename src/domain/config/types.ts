@@ -3,6 +3,8 @@ import type { SettingsPanelLanguage } from "./settings-panel-language";
 import type { SpeechPreset } from "./speech-preset";
 import type { TerminalShortcutConfig } from "./terminal-shortcuts";
 
+export type { SpeechPreset } from "./speech-preset";
+
 export type TerminalPreferredMode = "dialog" | "classic";
 
 export interface TerminalConfig {
