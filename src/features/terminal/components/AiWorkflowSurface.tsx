@@ -42,6 +42,17 @@ interface AiWorkflowSurfaceProps {
   voiceBypassToggleRequestKey?: number;
 }
 
+async function requestBrowserMicrophoneAccess(): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return;
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
 export function AiWorkflowSurface({
   tabId,
   paneState,
@@ -381,6 +392,9 @@ ${transcript}` : transcript));
     setVoiceStatus("Starting microphone…");
 
     try {
+      if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+        await requestBrowserMicrophoneAccess();
+      }
       const session = await startVoiceTranscription({
         provider: speechConfig.provider,
         apiKey: speechConfig.apiKey,
@@ -391,7 +405,7 @@ ${transcript}` : transcript));
       setVoiceSessionId(session.sessionId);
     } catch {
       resetVoiceState();
-      setBypassError("Voice input could not start.");
+      setBypassError("Voice input could not start. Check microphone permission and try again.");
     }
   };
 

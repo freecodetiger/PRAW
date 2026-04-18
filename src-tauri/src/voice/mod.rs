@@ -746,8 +746,7 @@ async fn ensure_programmer_vocabulary(
 }
 
 async fn create_programmer_vocabulary(api_key: &str) -> Result<String> {
-    let suffix = Uuid::new_v4().simple().to_string();
-    let prefix = format!("programmer-{}", &suffix[..8]);
+    let prefix = build_programmer_vocabulary_prefix();
     let payload = vocabulary::build_programmer_vocabulary_create_payload(&prefix);
 
     let response = Client::new()
@@ -779,6 +778,11 @@ async fn create_programmer_vocabulary(api_key: &str) -> Result<String> {
         .filter(|value| !value.trim().is_empty())
         .map(str::to_string)
         .ok_or_else(|| anyhow!("programmer vocabulary response did not include vocabulary_id"))
+}
+
+fn build_programmer_vocabulary_prefix() -> String {
+    let suffix = Uuid::new_v4().simple().to_string();
+    format!("praw{}", &suffix[..6])
 }
 
 #[cfg(test)]
@@ -891,6 +895,18 @@ mod tests {
             payload["input"]["target_model"].as_str(),
             Some("paraformer-realtime-v2")
         );
+    }
+
+    #[test]
+    fn programmer_vocabulary_prefix_respects_dashscope_length_limit() {
+        let prefix = super::build_programmer_vocabulary_prefix();
+
+        assert!(
+            prefix.len() <= 10,
+            "expected DashScope vocabulary prefix to stay within 10 chars, got {} ({prefix})",
+            prefix.len()
+        );
+        assert!(prefix.starts_with("praw"));
     }
 
     #[test]

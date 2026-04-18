@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { clearRegistry, writeDirect } from "../lib/terminal-registry";
+import { clearRegistry, resetDirect, writeDirect } from "../lib/terminal-registry";
 import { selectTerminalTabState, selectTranscriptViewportState, useTerminalViewStore } from "./terminal-view-store";
 
 describe("terminal-view-store AI transcript", () => {
@@ -278,6 +278,27 @@ describe("terminal-view-store AI transcript", () => {
         kind: "command",
         command: "pwd",
         output: "/workspace",
+      }),
+    ]);
+  });
+
+  it("does not reuse visible history when the archive baseline was top-trimmed between commands", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/Users/s", "dialog");
+
+    writeDirect("tab:1", "header that scrolled away\nApplications\nDesktop\n");
+    store.submitCommand("tab:1", "echo a");
+    resetDirect("tab:1");
+    writeDirect("tab:1", "Applications\nDesktop\n/Users/s $ echo a\r\na\n");
+    store.consumeOutput("tab:1", "/Users/s $ echo a\r\na\n\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "echo a",
+        output: "a",
       }),
     ]);
   });

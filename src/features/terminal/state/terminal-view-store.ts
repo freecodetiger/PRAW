@@ -474,6 +474,16 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   if (!nextArchive.startsWith(baseline)) {
+    const overlap = findSuffixPrefixOverlap(baseline, nextArchive);
+    if (overlap >= 8) {
+      const delta = nextArchive.slice(overlap);
+      if (delta.startsWith("\n")) {
+        return delta.slice(1) || undefined;
+      }
+
+      return delta || undefined;
+    }
+
     return nextArchive;
   }
 
@@ -483,6 +493,18 @@ function computeCommandArchiveDelta(archiveText: string | null, baselineText: st
   }
 
   return delta || undefined;
+}
+
+function findSuffixPrefixOverlap(previous: string, next: string): number {
+  const maxOverlap = Math.min(previous.length, next.length);
+
+  for (let length = maxOverlap; length > 0; length -= 1) {
+    if (previous.endsWith(next.slice(0, length))) {
+      return length;
+    }
+  }
+
+  return 0;
 }
 
 function sanitizeArchivedCommandOutput(archiveText: string | undefined, command: string | null): string | undefined {
