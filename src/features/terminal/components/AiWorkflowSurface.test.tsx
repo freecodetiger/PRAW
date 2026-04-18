@@ -650,6 +650,40 @@ describe("AiWorkflowSurface", () => {
     expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
   });
 
+  it("warms browser microphone access after mount so the first click can reuse it", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(voiceApi.startVoiceTranscription).toHaveBeenCalledTimes(1);
+  });
+
   it("surfaces a microphone permission failure before contacting the backend voice bridge", async () => {
     const getUserMedia = vi.fn(async () => {
       throw new Error("Permission denied");

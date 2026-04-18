@@ -85,6 +85,7 @@ export function AiWorkflowSurface({
   const composerDisabled = status !== "running";
   const voiceSessionIdRef = useRef<string | null>(null);
   const voicePermissionPrimedRef = useRef(false);
+  const voicePermissionWarmupRef = useRef<Promise<void> | null>(null);
   const bypassPromptOpenRef = useRef(false);
   const composerDisabledRef = useRef(false);
   const handledVoiceBypassRequestKeyRef = useRef(0);
@@ -101,6 +102,30 @@ export function AiWorkflowSurface({
   useEffect(() => {
     composerDisabledRef.current = composerDisabled;
   }, [composerDisabled]);
+
+  const ensureVoicePermissionPrimed = async (silent: boolean) => {
+    if (voicePermissionPrimedRef.current || typeof navigator === "undefined" || !navigator.mediaDevices) {
+      return;
+    }
+
+    if (!voicePermissionWarmupRef.current) {
+      voicePermissionWarmupRef.current = requestBrowserMicrophoneAccess()
+        .then(() => {
+          voicePermissionPrimedRef.current = true;
+        })
+        .finally(() => {
+          voicePermissionWarmupRef.current = null;
+        });
+    }
+
+    try {
+      await voicePermissionWarmupRef.current;
+    } catch (error) {
+      if (!silent) {
+        throw error;
+      }
+    }
+  };
 
   useEffect(() => {
     if (quickPromptOpenRequestKey <= 0 || !showsBypassCapsule) {
@@ -152,6 +177,14 @@ export function AiWorkflowSurface({
     composerDisabled,
     isBypassSubmitting,
   ]);
+
+  useEffect(() => {
+    if (!voiceConfigured || composerDisabled || voiceSessionIdRef.current) {
+      return;
+    }
+
+    void ensureVoicePermissionPrimed(true);
+  }, [voiceConfigured, composerDisabled]);
 
   useEffect(() => {
     const cleanup: Array<() => void> = [];
@@ -393,13 +426,8 @@ ${transcript}` : transcript));
     setVoiceStatus("Starting microphone…");
 
     try {
-      if (
-        !voicePermissionPrimedRef.current &&
-        typeof navigator !== "undefined" &&
-        navigator.mediaDevices
-      ) {
-        await requestBrowserMicrophoneAccess();
-        voicePermissionPrimedRef.current = true;
+      if (!voicePermissionPrimedRef.current && typeof navigator !== "undefined" && navigator.mediaDevices) {
+        await ensureVoicePermissionPrimed(false);
       }
       const session = await startVoiceTranscription({
         provider: speechConfig.provider,
