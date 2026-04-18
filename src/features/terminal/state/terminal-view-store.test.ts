@@ -272,6 +272,41 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
+  it("does not archive stale agent-workflow mirror text into the next dialog command block", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/home/zpc/projects/praw", "dialog");
+    store.submitCommand("tab:1", "codex --dangerously-bypass-approvals-and-sandbox");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    writeDirect("tab:1", "OpenAI Codex (v0.121.0)\nLoading sessions");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+
+    store.submitCommand("tab:1", "cd ..");
+    writeDirect("tab:1", "\r/home/zpc/projects/praw $ cd ..\n/home/zpc/projects $");
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "codex --dangerously-bypass-approvals-and-sandbox",
+        output: "",
+      }),
+      expect.objectContaining({
+        kind: "command",
+        command: "cd ..",
+        output: "/home/zpc/projects/praw $ cd ..\n/home/zpc/projects $",
+      }),
+    ]);
+  });
+
   it("reuses the default transcript viewport snapshot for tabs that are not in the store", () => {
     const first = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
     const second = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");

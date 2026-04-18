@@ -63,9 +63,12 @@ export interface TerminalTabViewState extends DialogState {
   aiSession?: AiSessionState | null;
   transcriptViewport?: TranscriptViewportState;
   activeArchiveBaseline?: string | null;
+  archiveOwner?: TerminalArchiveOwner;
+  pendingArchiveResetAfterAgentWorkflow?: boolean;
 }
 
 export type AiSessionProvider = "codex" | "claude" | "qwen" | "unknown";
+type TerminalArchiveOwner = "dialog" | "agent-workflow";
 
 export interface AiSessionState {
   provider: AiSessionProvider;
@@ -108,10 +111,16 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         return state;
       }
 
+      if (tabState.pendingArchiveResetAfterAgentWorkflow) {
+        resetDirect(tabId);
+      }
+
       const nextTabState = {
         ...tabState,
         ...submitDialogCommand(tabState, command, () => crypto.randomUUID()),
         activeArchiveBaseline: exportTerminalArchive(tabId) ?? "",
+        archiveOwner: "dialog" as const,
+        pendingArchiveResetAfterAgentWorkflow: false,
       };
 
       return {
@@ -206,7 +215,8 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
       const shouldCaptureVisibleOutput =
         nextState.dialogPhase !== "live-console" &&
         nextState.captureActiveOutputInTranscript &&
-        nextState.presentation !== "agent-workflow";
+        nextState.presentation !== "agent-workflow" &&
+        nextState.archiveOwner === "dialog";
 
       if (normalizedOutput.length > 0 && shouldCaptureVisibleOutput) {
         nextState = {
@@ -221,7 +231,9 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         }
 
         const archivedOutput =
-          event.type === "command-end" && nextState.presentation !== "agent-workflow"
+          event.type === "command-end" &&
+          nextState.presentation !== "agent-workflow" &&
+          nextState.archiveOwner === "dialog"
             ? computeCommandArchiveDelta(exportTerminalArchive(tabId), nextState.activeArchiveBaseline)
             : undefined;
 
@@ -237,6 +249,7 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         if (
           event.type === "command-end" &&
           nextState.presentation !== "agent-workflow" &&
+          nextState.archiveOwner === "dialog" &&
           (nextState.aiTranscript?.entries.length ?? 0) > 0
         ) {
           nextState = {
@@ -277,6 +290,9 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
             provider: resolveAgentProvider(event.commandEntry),
             rawOnly: true,
           },
+          archiveOwner: "agent-workflow",
+          activeArchiveBaseline: null,
+          pendingArchiveResetAfterAgentWorkflow: true,
         };
       }
 
@@ -387,6 +403,8 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
     aiSession: null,
     transcriptViewport: createTranscriptViewportState(),
     activeArchiveBaseline: null,
+    archiveOwner: "dialog",
+    pendingArchiveResetAfterAgentWorkflow: false,
   };
 }
 
@@ -441,6 +459,8 @@ function reconcileShellState(
     aiSession: state.aiSession,
     transcriptViewport: state.transcriptViewport,
     activeArchiveBaseline: state.activeArchiveBaseline,
+    archiveOwner: state.archiveOwner,
+    pendingArchiveResetAfterAgentWorkflow: state.pendingArchiveResetAfterAgentWorkflow,
   };
 }
 
