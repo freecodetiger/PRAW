@@ -759,7 +759,126 @@ describe("AiWorkflowSurface", () => {
 
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
     expect(voiceApi.startVoiceTranscription).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Check microphone permission and try again");
+    expect(host.textContent).toContain("Browser microphone permission is blocked");
+  });
+
+  it("surfaces a local microphone device error when backend capture cannot start", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+    voiceApi.startVoiceTranscription.mockRejectedValueOnce(new Error("no microphone input device available"));
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(host.textContent).toContain("Local microphone is unavailable");
+  });
+
+  it("surfaces a Bailian connectivity error when realtime websocket connection fails", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+    voiceApi.startVoiceTranscription.mockRejectedValueOnce(new Error("failed to connect to Bailian realtime websocket"));
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(host.textContent).toContain("Could not connect to Bailian realtime service");
+  });
+
+  it("surfaces a local microphone device error for browser NotReadableError failures on Linux", async () => {
+    const getUserMedia = vi.fn(async () => {
+      const error = new Error("Could not start audio source");
+      error.name = "NotReadableError";
+      throw error;
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(host.textContent).toContain("Local microphone is unavailable");
+  });
+
+  it("surfaces a browser microphone permission error for object-shaped invoke failures", async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    useAppConfigStore.getState().patchSpeechConfig({
+      enabled: true,
+      apiKey: "speech-key",
+      language: "auto",
+    });
+    voiceApi.startVoiceTranscription.mockRejectedValueOnce({
+      name: "NotAllowedError",
+      message: "",
+    });
+
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const voiceButton = host.querySelector('[aria-label="Toggle voice input"]') as HTMLButtonElement | null;
+
+    await act(async () => {
+      voiceButton?.click();
+    });
+
+    expect(host.textContent).toContain("Browser microphone permission is blocked");
   });
 
   it("does not repeat browser microphone warmup after one successful permission preflight", async () => {

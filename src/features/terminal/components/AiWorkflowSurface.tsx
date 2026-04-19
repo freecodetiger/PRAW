@@ -53,6 +53,64 @@ async function requestBrowserMicrophoneAccess(): Promise<void> {
   }
 }
 
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const parts = [error.name, error.message];
+    const cause = "cause" in error ? (error as Error & { cause?: unknown }).cause : undefined;
+    if (cause !== undefined) {
+      parts.push(asErrorMessage(cause));
+    }
+
+    return parts.filter((part) => typeof part === "string" && part.trim().length > 0).join(" ");
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const parts = [
+      typeof record.name === "string" ? record.name : "",
+      typeof record.message === "string" ? record.message : "",
+      "cause" in record ? asErrorMessage(record.cause) : "",
+    ];
+
+    return parts.filter((part) => part.trim().length > 0).join(" ");
+  }
+
+  return String(error ?? "");
+}
+
+function resolveVoiceStartErrorMessage(error: unknown): string {
+  const message = asErrorMessage(error).toLowerCase();
+
+  if (
+    message.includes("permission denied") ||
+    message.includes("notallowederror") ||
+    message.includes("permissiondeniederror") ||
+    message.includes("securityerror")
+  ) {
+    return "Browser microphone permission is blocked. Allow microphone access and try again.";
+  }
+
+  if (
+    message.includes("notreadableerror") ||
+    message.includes("notfounderror") ||
+    message.includes("aborterror") ||
+    message.includes("devicesnotfounderror") ||
+    message.includes("trackstarterror") ||
+    message.includes("no microphone input device available") ||
+    message.includes("failed to read default microphone configuration") ||
+    message.includes("failed to open microphone stream") ||
+    message.includes("failed to start microphone capture warmup")
+  ) {
+    return "Local microphone is unavailable. Check your audio input device and try again.";
+  }
+
+  if (message.includes("failed to connect to bailian realtime websocket")) {
+    return "Could not connect to Bailian realtime service. Check your network and API key and try again.";
+  }
+
+  return "Voice input could not start. Check microphone permission and try again.";
+}
+
 function supportsAutomaticVoicePermissionWarmup(): boolean {
   if (typeof navigator === "undefined") {
     return false;
@@ -450,9 +508,9 @@ ${transcript}` : transcript));
       });
       voiceSessionIdRef.current = session.sessionId;
       setVoiceSessionId(session.sessionId);
-    } catch {
+    } catch (error) {
       resetVoiceState();
-      setBypassError("Voice input could not start. Check microphone permission and try again.");
+      setBypassError(resolveVoiceStartErrorMessage(error));
     }
   };
 

@@ -24,11 +24,53 @@ use commands::voice::{
     cancel_voice_transcription, start_voice_transcription, stop_voice_transcription,
 };
 
+#[cfg(target_os = "linux")]
+fn should_allow_linux_webview_permission_request(is_user_media_request: bool) -> bool {
+    is_user_media_request
+}
+
+#[cfg(target_os = "linux")]
+fn configure_linux_webview_permissions<R: tauri::Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
+    use tauri::Manager;
+    use webkit2gtk::{
+        glib::prelude::ObjectExt, PermissionRequest, PermissionRequestExt,
+        UserMediaPermissionRequest, WebViewExt,
+    };
+
+    let Some(main_webview) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+
+    main_webview.with_webview(|webview| {
+        webview
+            .inner()
+            .connect_permission_request(|_, request: &PermissionRequest| {
+                let allow_request =
+                    should_allow_linux_webview_permission_request(request.is::<UserMediaPermissionRequest>());
+
+                if allow_request {
+                    request.allow();
+                    return true;
+                }
+
+                false
+            });
+    })?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            #[cfg(target_os = "linux")]
+            configure_linux_webview_permissions(app)?;
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             load_app_bootstrap_state,
             save_app_config,
@@ -52,4 +94,22 @@ pub fn run() {
 
 pub fn run_special_mode_from_args(args: &[String]) -> Result<bool, String> {
     terminal::run_agent_host_from_args(args).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    use super::should_allow_linux_webview_permission_request;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn allows_linux_user_media_permission_requests() {
+        assert!(should_allow_linux_webview_permission_request(true));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn does_not_auto_allow_other_linux_webview_permissions() {
+        assert!(!should_allow_linux_webview_permission_request(false));
+    }
 }
