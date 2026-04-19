@@ -1,12 +1,12 @@
 # Installing PRAW on macOS
 
-This guide is for the GitHub-hosted preview builds of PRAW.
+This guide covers the GitHub-hosted macOS releases of PRAW.
 
-Those preview builds can be unsigned or unnotarized when the project is published without Apple Developer credentials, so macOS may block the first launch. That is expected for this release lane.
+Some macOS releases can still be unsigned or unnotarized when the project is published without Apple Developer credentials, so macOS may block the first launch. If that happens, use the steps below.
 
 ## 1. Choose the right download
 
-Open the latest GitHub prerelease and download:
+Open the target GitHub release and download:
 
 - `aarch64` / `arm64` if you use an **Apple Silicon** Mac
 - `x64` / `x86_64` if you use an **Intel** Mac

@@ -1,23 +1,32 @@
 # PRAW
 
 > A modern desktop terminal workspace for developers who want split panes, readable command history, raw terminal compatibility, voice input, and AI-friendly CLI workflows.
+>
+> Official Website / 官网：**[praw.top](https://praw.top/)**  
+> Start here for the latest product updates, downloads, and release information.
 
 [中文](#中文) | [English](#english)
+
+## Editor's Note | 编者的话
+
+> 这个项目由两名武汉大学计算机学院的本科生发起。学生时代我们有过许多梦想，而做出一款真正好用、能够被更多人看见的产品，一直是其中很重要的一个。PRAW 还在持续成长，后续也会不断吸收大家的意见和反馈进行更新。如果你有任何想法，欢迎发在评论区，或直接和我们沟通。每一条评论、每一颗 Star，都是对我们极大的认可，也是在提醒我们把这件事认真做下去。希望这份还不算成熟、但足够真诚的行动，能为开源社区带来一点微小而长期的价值，也让更多人因为这个项目知道我们的存在。
+>
+> This project was started by two undergraduate students from the School of Computer Science at Wuhan University. During our student years, we carried many dreams, and one of the most important was to build a product that is genuinely useful and can be seen by more people. PRAW is still growing, and we will keep improving it by listening closely to feedback and suggestions. If you have any thoughts, feel free to leave a comment or reach out to us directly. Every comment and every star means a great deal to us. They are not only encouragement, but also a reminder to keep taking this work seriously. We hope this project, still young but made with sincerity, can contribute something small yet lasting to the open source community, and let more people know who we are through what we build.
 
 ## 中文
 
 PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保留真实 shell 和原生 CLI 语义，同时围绕多分屏工作区、可读的命令历史、Classic/raw terminal 兼容模式、语音输入，以及 AI CLI 工作流做额外优化。
 
-当前公开发布同时覆盖 Linux 正式安装包与 macOS 预览构建。
+当前公开发布同时覆盖 Linux 与 macOS 正式安装包。
 
 ### 下载
 
 请从官网或 GitHub Releases 下载最新版：
 
-- 官网：[praw.top](https://praw.top/)
+- 官网直达：**[praw.top](https://praw.top/)**
 - Releases: https://github.com/freecodetiger/PRAW/releases
 - Linux 安装包：`.deb`、`.rpm`、`.AppImage`
-- macOS 预览构建：`.dmg`、`.app.tar.gz`
+- macOS 安装包：`.dmg`、`.app.tar.gz`
 
 ### 主要特性
 
@@ -46,9 +55,9 @@ chmod +x ./PRAW_0.1.1_amd64.AppImage
 ./PRAW_0.1.1_amd64.AppImage
 ```
 
-## Install The macOS Preview Build
+## macOS 安装
 
-macOS 当前走 `latest prerelease` 预览发布通道，请从 GitHub Releases 下载：
+macOS 已正式发布，请从 GitHub Releases 下载最新版：
 
 - Releases: https://github.com/freecodetiger/PRAW/releases
 - **Apple Silicon** Mac 请优先选择 `aarch64` / `arm64` 资产
@@ -89,7 +98,7 @@ npm run build
 
 ### 状态
 
-PRAW 仍处于快速迭代阶段。Linux 安装包已经公开发布；macOS 目前提供预览构建，其余平台暂未公开发布。
+PRAW 仍处于快速迭代阶段。Linux 与 macOS 安装包均已公开发布，其余平台暂未公开发布。
 
 ### 许可证
 
@@ -99,16 +108,16 @@ PRAW 使用 [Apache License 2.0](./LICENSE) 开源。
 
 PRAW is a desktop terminal app built with `Tauri + React + Rust`. It keeps a real shell and native CLI semantics, while adding a workspace-oriented interface for split panes, readable command history, raw terminal compatibility, voice input, and AI CLI workflows.
 
-The current public release covers Linux packages plus a macOS preview lane.
+The current public release includes formal Linux and macOS packages.
 
 ### Download
 
 Download the latest build from the website or GitHub Releases:
 
-- Website: [praw.top](https://praw.top/)
+- Official Website: **[praw.top](https://praw.top/)**
 - Releases: https://github.com/freecodetiger/PRAW/releases
 - Linux packages: `.deb`, `.rpm`, `.AppImage`
-- macOS preview assets: `.dmg`, `.app.tar.gz`
+- macOS packages: `.dmg`, `.app.tar.gz`
 
 ### Highlights
 
@@ -137,9 +146,9 @@ chmod +x ./PRAW_0.1.1_amd64.AppImage
 ./PRAW_0.1.1_amd64.AppImage
 ```
 
-## Install The macOS Preview Build
+## Install on macOS
 
-macOS currently ships through the `latest prerelease` lane on GitHub Releases:
+macOS is now part of the formal public release. Download the latest build from GitHub Releases:
 
 - Releases: https://github.com/freecodetiger/PRAW/releases
 - Use `aarch64` / `arm64` assets on **Apple Silicon**
@@ -180,7 +189,7 @@ npm run build
 
 ### Status
 
-PRAW is still moving quickly. Linux packages are publicly released today, while macOS is available as a preview build. Other platforms are not public targets yet.
+PRAW is still moving quickly. Linux and macOS packages are publicly released today. Other platforms are not public targets yet.
 
 ### License
 

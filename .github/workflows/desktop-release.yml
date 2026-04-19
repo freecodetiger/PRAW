@@ -127,7 +127,7 @@ jobs:
             echo "- macOS 应用归档（\`.app.tar.gz\`）"
             echo "- Linux 安装包（\`.deb\` / \`.rpm\` / \`.AppImage\`）"
             echo
-            echo "### macOS 安装（预览版）"
+            echo "### macOS 安装"
             echo
             echo "- Apple Silicon Mac 请优先下载 aarch64 / arm64 资产"
             echo "- Intel Mac 请优先下载 x64 / x86_64 资产"
