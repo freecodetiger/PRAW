@@ -156,15 +156,14 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           {
             echo "tag_body<<EOF"
-            echo "这是 PRAW 的正式版发布草稿。"
+            echo "这是 PRAW 的正式版发布。"
             echo
             echo "### 作者的话"
             echo
             echo "- 这一版已经自动聚合了 macOS 与 Linux 的桌面端安装资产"
             echo "- 如果 Apple Developer 签名/公证凭据缺失，macOS 资产会以未签名 / 未公证形式附带"
             echo "- 遇到 Gatekeeper 拦截时，请按系统提示执行“右键打开”或前往“隐私与安全性”点击“仍要打开”"
-            echo "- 请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议"
-            echo "- 确认文案无误后，再从 GitHub Release 页面手动点击 Publish release"
+            echo "- 请作者后续补充本版本亮点、变更说明、已知问题和升级建议"
             echo
             echo "### 发布资产"
             echo
@@ -204,7 +203,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize == 'true'
+        if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore: release v') && steps.release_signing.outputs.can_notarize == 'true'"
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -222,7 +221,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: Build and publish main-branch prerelease without notarization
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release_signing.outputs.can_notarize != 'true'
+        if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore: release v') && steps.release_signing.outputs.can_notarize != 'true'"
         uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -249,7 +248,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
           releaseBody: ${{ steps.release_meta.outputs.tag_body }}
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.bundle_args }}
 
@@ -263,6 +262,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: PRAW ${{ github.ref_name }}
           releaseBody: ${{ steps.release_meta.outputs.tag_body }}
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.bundle_args }}

@@ -39,7 +39,7 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("startsWith(github.ref, 'refs/tags/v')");
     expect(workflow).toContain("tagName: ${{ github.ref_name }}");
     expect(workflow).toContain('releaseBody: ${{ steps.release_meta.outputs.tag_body }}');
-    expect(workflow).toContain("releaseDraft: true");
+    expect(workflow).toContain("releaseDraft: false");
     expect(workflow).toContain("prerelease: false");
   });
 
@@ -48,7 +48,14 @@ describe("release workflow contract", () => {
 
     expect(workflow).toContain("### 作者的话");
     expect(workflow).toContain('echo "这是从 \\`main\\` 自动产出的桌面端预发布版本。"');
-    expect(workflow).toContain("请作者在发布前补充本版本亮点、变更说明、已知问题和升级建议");
+    expect(workflow).toContain("请作者后续补充本版本亮点、变更说明、已知问题和升级建议");
+    expect(workflow).toContain("这是 PRAW 的正式版发布。");
+  });
+
+  it("skips main-branch prereleases for dedicated release commits", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+
+    expect(workflow).toContain("!startsWith(github.event.head_commit.message, 'chore: release v')");
   });
 
   it("documents and wires the macOS signing secrets expected by CI", () => {

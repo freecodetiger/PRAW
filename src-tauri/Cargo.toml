@@ -1,6 +1,6 @@
 [package]
 name = "praw"
-version = "0.1.1"
+version = "0.1.2"
 description = "PRAW intelligent terminal for Ubuntu"
 authors = ["freecodetiger <2388387947@qq.com>"]
 edition = "2021"
