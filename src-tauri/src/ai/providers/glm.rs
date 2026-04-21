@@ -3,18 +3,17 @@ use async_trait::async_trait;
 use reqwest::Client;
 
 use crate::ai::provider::{AiProvider, ProviderDescriptor};
-use crate::ai::types::{
-    AiInlineSuggestionRequest, AiRecoverySuggestionRequest, CompletionRequest, CompletionResponse,
-    ConnectionTestRequest, ConnectionTestResult, SuggestionResponse,
-};
 use crate::ai::providers::openai_compatible::{
     complete_with_openai_compatible, suggest_inline_with_openai_compatible,
-    suggest_recovery_with_openai_compatible, test_connection_with_openai_compatible,
-    OpenAiCompatibleDescriptor,
+    suggest_intent_with_openai_compatible, suggest_recovery_with_openai_compatible,
+    test_connection_with_openai_compatible, OpenAiCompatibleDescriptor,
 };
-use crate::ai::{
-    build_client, COMPLETION_REQUEST_TIMEOUT_MS, CONNECTION_TEST_TIMEOUT_MS,
+use crate::ai::types::{
+    AiInlineSuggestionRequest, AiIntentSuggestionRequest, AiRecoverySuggestionRequest,
+    CompletionRequest, CompletionResponse, ConnectionTestRequest, ConnectionTestResult,
+    SuggestionResponse,
 };
+use crate::ai::{build_client, COMPLETION_REQUEST_TIMEOUT_MS, CONNECTION_TEST_TIMEOUT_MS};
 
 pub struct GlmProvider {
     completion_client: Client,
@@ -76,6 +75,18 @@ impl AiProvider for GlmProvider {
         request: AiRecoverySuggestionRequest,
     ) -> Result<Option<SuggestionResponse>> {
         suggest_recovery_with_openai_compatible(
+            &self.openai_compatible_descriptor(),
+            &self.completion_client,
+            request,
+        )
+        .await
+    }
+
+    async fn suggest_intent(
+        &self,
+        request: AiIntentSuggestionRequest,
+    ) -> Result<Option<SuggestionResponse>> {
+        suggest_intent_with_openai_compatible(
             &self.openai_compatible_descriptor(),
             &self.completion_client,
             request,

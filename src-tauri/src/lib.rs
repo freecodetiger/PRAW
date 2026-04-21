@@ -11,8 +11,8 @@ mod workspace;
 
 use app_state::AppState;
 use commands::ai::{
-    request_ai_inline_suggestions, request_ai_recovery_suggestions, request_completion,
-    test_ai_connection,
+    request_ai_inline_suggestions, request_ai_intent_suggestions, request_ai_recovery_suggestions,
+    request_completion, test_ai_connection,
 };
 use commands::bootstrap::{load_app_bootstrap_state, save_app_config, save_window_snapshot};
 use commands::completion::request_local_completion;
@@ -81,6 +81,7 @@ pub fn run() {
             close_terminal_session,
             request_completion,
             request_ai_inline_suggestions,
+            request_ai_intent_suggestions,
             request_ai_recovery_suggestions,
             test_ai_connection,
             request_local_completion,

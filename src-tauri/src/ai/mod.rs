@@ -16,7 +16,9 @@ pub mod types;
 pub use provider::{AiProvider, ProviderDescriptor};
 #[allow(unused_imports)]
 pub use types::{
-    AiInlineSuggestionRequest, AiRecoverySuggestionRequest, CompletionCandidate,
+    AiCompletionContextPack, AiFailureContext, AiInlineSuggestionRequest,
+    AiIntentSuggestionRequest, AiProjectProfileContext, AiRecoverySuggestionRequest,
+    AiSuggestionCommandResult, AiSuggestionCommandStatus, CompletionCandidate,
     CompletionCandidateKind, CompletionCandidateSource, CompletionRequest, CompletionResponse,
     ConnectionTestRequest, ConnectionTestResult, CwdSummary, SuggestionApplyMode, SuggestionGroup,
     SuggestionItem, SuggestionKind, SuggestionReplacement, SuggestionResponse, SystemSummary,
@@ -24,7 +26,7 @@ pub use types::{
 
 use self::registry::ProviderRegistry;
 
-pub(crate) const COMPLETION_REQUEST_TIMEOUT_MS: u64 = 1_500;
+pub(crate) const COMPLETION_REQUEST_TIMEOUT_MS: u64 = 5_000;
 pub(crate) const CONNECTION_TEST_TIMEOUT_MS: u64 = 8_000;
 const MAX_RECENT_COMMANDS: usize = 8;
 const MAX_STATUS_LINES: usize = 8;
@@ -63,6 +65,16 @@ pub async fn recovery_suggestions(
     provider.suggest_recovery(request).await
 }
 
+pub async fn intent_suggestions(
+    request: AiIntentSuggestionRequest,
+) -> Result<Option<SuggestionResponse>> {
+    let Some(provider) = ProviderRegistry::default().get(&request.provider) else {
+        return Ok(None);
+    };
+
+    provider.suggest_intent(request).await
+}
+
 pub async fn test_connection(request: ConnectionTestRequest) -> ConnectionTestResult {
     match validate_connection_test_request(&request) {
         Ok(()) => match ProviderRegistry::default().get(&request.provider) {
@@ -74,6 +86,86 @@ pub async fn test_connection(request: ConnectionTestRequest) -> ConnectionTestRe
             },
         },
         Err(result) => result,
+    }
+}
+
+pub(crate) fn build_ai_suggestion_command_result(
+    response: Option<SuggestionResponse>,
+) -> AiSuggestionCommandResult {
+    match response {
+        Some(response) if !response.suggestions.is_empty() => AiSuggestionCommandResult {
+            status: AiSuggestionCommandStatus::Success,
+            suggestions: response.suggestions,
+            latency_ms: Some(response.latency_ms),
+            message: None,
+        },
+        Some(response) => AiSuggestionCommandResult {
+            status: AiSuggestionCommandStatus::Empty,
+            suggestions: Vec::new(),
+            latency_ms: Some(response.latency_ms),
+            message: None,
+        },
+        None => AiSuggestionCommandResult {
+            status: AiSuggestionCommandStatus::Empty,
+            suggestions: Vec::new(),
+            latency_ms: None,
+            message: None,
+        },
+    }
+}
+
+pub(crate) fn classify_ai_suggestion_error(error: anyhow::Error) -> AiSuggestionCommandResult {
+    if let Some(reqwest_error) = error.downcast_ref::<ReqwestError>() {
+        if reqwest_error.is_timeout() {
+            return ai_suggestion_error_result(
+                AiSuggestionCommandStatus::Timeout,
+                "request timed out".to_string(),
+            );
+        }
+
+        if reqwest_error.is_connect() || reqwest_error.is_request() {
+            return ai_suggestion_error_result(
+                AiSuggestionCommandStatus::NetworkError,
+                reqwest_error.to_string(),
+            );
+        }
+    }
+
+    let text = error.to_string();
+    let lowered = text.to_ascii_lowercase();
+    if lowered.contains("timed out") || lowered.contains("timeout") {
+        return ai_suggestion_error_result(AiSuggestionCommandStatus::Timeout, text);
+    }
+
+    if let Some((status_code, body)) = parse_http_error_message(&text) {
+        let status = StatusCode::from_u16(status_code).ok();
+        let kind = match status {
+            Some(StatusCode::UNAUTHORIZED) | Some(StatusCode::FORBIDDEN) => {
+                AiSuggestionCommandStatus::AuthError
+            }
+            _ => AiSuggestionCommandStatus::ProviderError,
+        };
+        let message = if body.trim().is_empty() {
+            format!("HTTP {}", status_code)
+        } else {
+            body.trim().to_string()
+        };
+
+        return ai_suggestion_error_result(kind, message);
+    }
+
+    ai_suggestion_error_result(AiSuggestionCommandStatus::ProviderError, text)
+}
+
+fn ai_suggestion_error_result(
+    status: AiSuggestionCommandStatus,
+    message: String,
+) -> AiSuggestionCommandResult {
+    AiSuggestionCommandResult {
+        status,
+        suggestions: Vec::new(),
+        latency_ms: None,
+        message: Some(message),
     }
 }
 
@@ -123,6 +215,7 @@ struct RawSuggestionEntry {
     text: String,
     kind: Option<String>,
     apply_mode: Option<String>,
+    reason: Option<String>,
 }
 
 pub(crate) fn build_client(timeout_ms: u64) -> Client {
@@ -180,9 +273,7 @@ pub(crate) fn build_completion_request_payload(
     }
 }
 
-pub(crate) fn build_completion_prompt_messages(
-    request: &CompletionRequest,
-) -> (String, String) {
+pub(crate) fn build_completion_prompt_messages(request: &CompletionRequest) -> (String, String) {
     let git_branch = request
         .git_branch
         .clone()
@@ -283,6 +374,8 @@ pub(crate) fn build_inline_suggestion_prompt_messages(
             "Return up to 5 safe executable commands with no explanations.",
             "Never suggest destructive commands or commands that require secret values.",
             "Prefer completion when the current draft is already correct.",
+            "If the draft already uses mysql, mysqldump, or mysqladmin, prefer continuing that MySQL tool family.",
+            "Prefer executable connection, query, export, and health-check forms over switching to unrelated tools.",
         ]
         .join(" "),
         format!(
@@ -339,6 +432,106 @@ pub(crate) fn build_recovery_suggestion_request_payload(
             },
         ],
     }
+}
+
+pub(crate) fn build_intent_suggestion_request_payload(
+    request: &AiIntentSuggestionRequest,
+) -> OpenAiChatCompletionRequest {
+    let (system_content, user_content) = build_intent_suggestion_prompt_messages(request);
+
+    OpenAiChatCompletionRequest {
+        model: normalize_identifier(&request.model),
+        temperature: COMPLETION_TEMPERATURE,
+        max_tokens: COMPLETION_MAX_TOKENS,
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system",
+                content: system_content,
+            },
+            OpenAiChatMessage {
+                role: "user",
+                content: user_content,
+            },
+        ],
+    }
+}
+
+pub(crate) fn build_intent_suggestion_prompt_messages(
+    request: &AiIntentSuggestionRequest,
+) -> (String, String) {
+    let context = &request.context_pack;
+    let recent_commands = join_limited(&context.recent_commands, MAX_RECENT_COMMANDS);
+    let recent_successes = join_limited(&context.recent_successes, MAX_RECENT_COMMANDS);
+    let recent_failures = if context.recent_failures.is_empty() {
+        "(none)".to_string()
+    } else {
+        context
+            .recent_failures
+            .iter()
+            .take(MAX_STATUS_LINES)
+            .map(|failure| {
+                format!(
+                    "{} -> {} -> {}",
+                    failure.command, failure.exit_code, failure.output_summary
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let frequent_commands = join_limited(&context.frequent_commands_in_cwd, MAX_SUMMARY_ITEMS);
+    let scripts = join_limited(&context.project_profile.scripts, MAX_SUMMARY_ITEMS);
+    let local_candidates = join_limited(&context.local_candidates, MAX_SUMMARY_ITEMS);
+    let preference_hints = join_limited(&context.user_preference_hints, MAX_SUMMARY_ITEMS);
+
+    (
+        [
+            "You are a Linux terminal command intent assistant.",
+            "The user wrote natural language and explicitly pressed Tab to request command suggestions.",
+            "Return JSON object only with a suggestions array.",
+            "Each suggestion must contain text, kind, applyMode, and an optional short reason.",
+            "Use kind=intent and applyMode=replace for every suggestion.",
+            "Return up to 5 safe executable shell commands with no explanations outside JSON.",
+            "Never suggest destructive commands or commands that require secret values.",
+            "Prefer mysql, mysqldump, or mysqladmin for MySQL-related requests.",
+            "Favor directly executable commands when the request clearly asks for a MySQL action.",
+        ]
+        .join(" "),
+        format!(
+            concat!(
+                "Return JSON object only.\n",
+                "input_mode: {}\n",
+                "natural_language_draft: {}\n",
+                "cwd: {}\n",
+                "shell: {}\n",
+                "project_type: {}\n",
+                "package_manager: {}\n",
+                "scripts: {}\n",
+                "recent_commands: {}\n",
+                "recent_successes: {}\n",
+                "recent_failures: {}\n",
+                "frequent_commands_in_cwd: {}\n",
+                "local_candidates: {}\n",
+                "user_preference_hints: {}\n",
+                "session_id: {}\n",
+                "user_id: {}"
+            ),
+            context.input_mode,
+            request.draft,
+            context.cwd,
+            context.shell,
+            context.project_profile.project_type,
+            context.project_profile.package_manager,
+            scripts,
+            recent_commands,
+            recent_successes,
+            recent_failures,
+            frequent_commands,
+            local_candidates,
+            preference_hints,
+            request.session_id,
+            request.user_id,
+        ),
+    )
 }
 
 pub(crate) fn build_recovery_suggestion_prompt_messages(
@@ -501,6 +694,30 @@ pub(crate) fn parse_recovery_suggestion_items(
     suggestions
 }
 
+pub(crate) fn parse_intent_suggestion_items(raw: &str) -> Vec<SuggestionItem> {
+    let Some(entries) = parse_structured_suggestions(raw) else {
+        return Vec::new();
+    };
+
+    let mut seen = HashSet::new();
+    let mut suggestions = Vec::new();
+    for (index, entry) in entries.into_iter().enumerate() {
+        let Some(suggestion) = sanitize_intent_suggestion(&entry, index) else {
+            continue;
+        };
+        if !seen.insert(suggestion.text.clone()) {
+            continue;
+        }
+
+        suggestions.push(suggestion);
+        if suggestions.len() >= MAX_COMPLETION_CANDIDATES {
+            break;
+        }
+    }
+
+    suggestions
+}
+
 pub(crate) fn sanitize_candidate(prefix: &str, candidate: &str) -> Option<String> {
     let trimmed = candidate.trim();
     if trimmed.is_empty() || trimmed.chars().count() > MAX_SUGGESTION_CHARS {
@@ -549,14 +766,15 @@ fn sanitize_inline_suggestion(
         _ if text.starts_with(draft) => SuggestionKind::Completion,
         _ => SuggestionKind::Intent,
     };
-    let apply_mode = match normalize_identifier(entry.apply_mode.as_deref().unwrap_or_default()).as_str() {
-        "append" => SuggestionApplyMode::Append,
-        "replace" => SuggestionApplyMode::Replace,
-        _ if matches!(kind, SuggestionKind::Completion) && text.starts_with(draft) => {
-            SuggestionApplyMode::Append
-        }
-        _ => SuggestionApplyMode::Replace,
-    };
+    let apply_mode =
+        match normalize_identifier(entry.apply_mode.as_deref().unwrap_or_default()).as_str() {
+            "append" => SuggestionApplyMode::Append,
+            "replace" => SuggestionApplyMode::Replace,
+            _ if matches!(kind, SuggestionKind::Completion) && text.starts_with(draft) => {
+                SuggestionApplyMode::Append
+            }
+            _ => SuggestionApplyMode::Replace,
+        };
 
     let replacement = match apply_mode {
         SuggestionApplyMode::Append => {
@@ -585,10 +803,15 @@ fn sanitize_inline_suggestion(
         group: SuggestionGroup::Inline,
         apply_mode,
         replacement,
+        reason: None,
+        source_id: Some("ai-inline".to_string()),
     })
 }
 
-fn sanitize_recovery_suggestion(entry: &RawSuggestionEntry, index: usize) -> Option<SuggestionItem> {
+fn sanitize_recovery_suggestion(
+    entry: &RawSuggestionEntry,
+    index: usize,
+) -> Option<SuggestionItem> {
     let text = sanitize_command_text(&entry.text)?;
 
     Some(SuggestionItem {
@@ -600,6 +823,30 @@ fn sanitize_recovery_suggestion(entry: &RawSuggestionEntry, index: usize) -> Opt
         group: SuggestionGroup::Recovery,
         apply_mode: SuggestionApplyMode::Replace,
         replacement: SuggestionReplacement::ReplaceAll { value: text },
+        reason: None,
+        source_id: Some("ai-recovery".to_string()),
+    })
+}
+
+fn sanitize_intent_suggestion(entry: &RawSuggestionEntry, index: usize) -> Option<SuggestionItem> {
+    let text = sanitize_command_text(&entry.text)?;
+
+    Some(SuggestionItem {
+        id: format!("ai:intent:{}", index),
+        text: text.clone(),
+        kind: SuggestionKind::Intent,
+        source: CompletionCandidateSource::Ai,
+        score: 900u16.saturating_sub((index as u16) * 10),
+        group: SuggestionGroup::Intent,
+        apply_mode: SuggestionApplyMode::Replace,
+        replacement: SuggestionReplacement::ReplaceAll { value: text },
+        reason: entry
+            .reason
+            .as_deref()
+            .map(str::trim)
+            .filter(|reason| !reason.is_empty())
+            .map(|reason| reason.chars().take(80).collect()),
+        source_id: Some("ai-intent".to_string()),
     })
 }
 
@@ -644,6 +891,12 @@ pub(crate) fn classify_candidate_kind(command: &str) -> CompletionCandidateKind 
     }
     if command.starts_with("kubectl ") {
         return CompletionCandidateKind::Kubectl;
+    }
+    if command.starts_with("mysql ")
+        || command.starts_with("mysqldump ")
+        || command.starts_with("mysqladmin ")
+    {
+        return CompletionCandidateKind::Database;
     }
     if command.starts_with("curl ") || command.starts_with("wget ") || command.starts_with("ping ")
     {
@@ -801,9 +1054,11 @@ fn parse_http_error_message(message: &str) -> Option<(u16, &str)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_completion_request_payload, classify_http_error_message, parse_completion_candidates,
-        validate_connection_test_request, CompletionCandidateSource, CompletionRequest,
-        ConnectionTestRequest, ConnectionTestResult, CwdSummary, SystemSummary,
+        build_ai_suggestion_command_result, build_completion_request_payload,
+        classify_ai_suggestion_error, classify_http_error_message, parse_completion_candidates,
+        validate_connection_test_request, AiSuggestionCommandStatus, CompletionCandidateSource,
+        CompletionRequest, ConnectionTestRequest, ConnectionTestResult, CwdSummary,
+        SuggestionResponse, SystemSummary,
     };
 
     fn request(prefix: &str) -> CompletionRequest {
@@ -905,6 +1160,53 @@ mod tests {
     }
 
     #[test]
+    fn uses_realistic_completion_request_timeout() {
+        assert_eq!(super::COMPLETION_REQUEST_TIMEOUT_MS, 5_000);
+    }
+
+    #[test]
+    fn builds_structured_ai_suggestion_results() {
+        let empty = build_ai_suggestion_command_result(None);
+        assert_eq!(empty.status, AiSuggestionCommandStatus::Empty);
+        assert!(empty.suggestions.is_empty());
+
+        let success = build_ai_suggestion_command_result(Some(SuggestionResponse {
+            suggestions: vec![super::SuggestionItem {
+                id: "ai:inline:1".to_string(),
+                text: "git status".to_string(),
+                kind: super::SuggestionKind::Completion,
+                source: CompletionCandidateSource::Ai,
+                score: 900,
+                group: super::SuggestionGroup::Inline,
+                apply_mode: super::SuggestionApplyMode::Append,
+                replacement: super::SuggestionReplacement::Append {
+                    suffix: " status".to_string(),
+                },
+                reason: None,
+                source_id: Some("ai-inline".to_string()),
+            }],
+            latency_ms: 42,
+        }));
+
+        assert_eq!(success.status, AiSuggestionCommandStatus::Success);
+        assert_eq!(success.latency_ms, Some(42));
+        assert_eq!(success.suggestions.len(), 1);
+    }
+
+    #[test]
+    fn classifies_ai_suggestion_errors_for_ui_status() {
+        let timeout = classify_ai_suggestion_error(anyhow::anyhow!("request timed out"));
+        assert_eq!(timeout.status, AiSuggestionCommandStatus::Timeout);
+
+        let auth = classify_ai_suggestion_error(anyhow::anyhow!("http:401:bad key"));
+        assert_eq!(auth.status, AiSuggestionCommandStatus::AuthError);
+        assert_eq!(auth.message, Some("bad key".to_string()));
+
+        let provider = classify_ai_suggestion_error(anyhow::anyhow!("http:429:rate limit"));
+        assert_eq!(provider.status, AiSuggestionCommandStatus::ProviderError);
+    }
+
+    #[test]
     fn parses_structured_inline_suggestions() {
         let suggestions = super::parse_inline_suggestion_items(
             &super::AiInlineSuggestionRequest {
@@ -941,20 +1243,21 @@ mod tests {
 
     #[test]
     fn builds_recovery_prompt_with_failed_command_context() {
-        let payload = super::build_recovery_suggestion_request_payload(&super::AiRecoverySuggestionRequest {
-            provider: "glm".to_string(),
-            model: "glm-4.7-flash".to_string(),
-            api_key: "secret-key".to_string(),
-            base_url: String::new(),
-            command: "gti sttaus".to_string(),
-            output: "git: 'sttaus' is not a git command".to_string(),
-            exit_code: 1,
-            cwd: "/workspace".to_string(),
-            shell: "/bin/bash".to_string(),
-            recent_history: vec!["git status".to_string()],
-            session_id: "sess-1".to_string(),
-            user_id: "user-1".to_string(),
-        });
+        let payload =
+            super::build_recovery_suggestion_request_payload(&super::AiRecoverySuggestionRequest {
+                provider: "glm".to_string(),
+                model: "glm-4.7-flash".to_string(),
+                api_key: "secret-key".to_string(),
+                base_url: String::new(),
+                command: "gti sttaus".to_string(),
+                output: "git: 'sttaus' is not a git command".to_string(),
+                exit_code: 1,
+                cwd: "/workspace".to_string(),
+                shell: "/bin/bash".to_string(),
+                recent_history: vec!["git status".to_string()],
+                session_id: "sess-1".to_string(),
+                user_id: "user-1".to_string(),
+            });
 
         let user_message = payload
             .messages
@@ -964,6 +1267,158 @@ mod tests {
 
         assert!(user_message.content.contains("failed_command: gti sttaus"));
         assert!(user_message.content.contains("exit_code: 1"));
-        assert!(user_message.content.contains("git: 'sttaus' is not a git command"));
+        assert!(user_message
+            .content
+            .contains("git: 'sttaus' is not a git command"));
+    }
+
+    #[test]
+    fn builds_intent_prompt_with_context_pack() {
+        let request = super::AiIntentSuggestionRequest {
+            provider: "glm".to_string(),
+            model: "glm-4.7-flash".to_string(),
+            api_key: "secret-key".to_string(),
+            base_url: String::new(),
+            draft: "查看 3000 端口被谁占用".to_string(),
+            context_pack: super::AiCompletionContextPack {
+                input_mode: "intent".to_string(),
+                cwd: "/workspace".to_string(),
+                shell: "/bin/bash".to_string(),
+                recent_commands: vec!["pnpm dev".to_string()],
+                recent_successes: vec!["pnpm dev".to_string()],
+                recent_failures: vec![super::AiFailureContext {
+                    command: "npm test".to_string(),
+                    exit_code: 1,
+                    output_summary: "FAIL src/app.test.ts".to_string(),
+                }],
+                frequent_commands_in_cwd: vec!["pnpm test".to_string()],
+                project_profile: super::AiProjectProfileContext {
+                    project_type: "node".to_string(),
+                    scripts: vec!["dev".to_string(), "test".to_string()],
+                    package_manager: "pnpm".to_string(),
+                },
+                local_candidates: vec!["lsof".to_string()],
+                user_preference_hints: vec!["accepted:pnpm test".to_string()],
+            },
+            session_id: "sess-1".to_string(),
+            user_id: "user-1".to_string(),
+        };
+        let payload = super::build_intent_suggestion_request_payload(&request);
+        let user_message = payload
+            .messages
+            .iter()
+            .find(|message| message.role == "user")
+            .expect("user message should exist");
+
+        assert!(user_message.content.contains("input_mode: intent"));
+        assert!(user_message
+            .content
+            .contains("natural_language_draft: 查看 3000 端口被谁占用"));
+        assert!(user_message.content.contains("project_type: node"));
+        assert!(user_message.content.contains("scripts: dev, test"));
+        assert!(user_message
+            .content
+            .contains("recent_failures: npm test -> 1 -> FAIL src/app.test.ts"));
+    }
+
+    #[test]
+    fn parses_intent_suggestions_with_reasons_and_filters_dangerous_commands() {
+        let suggestions = super::parse_intent_suggestion_items(
+            r#"{"suggestions":[{"text":"lsof -i :3000","kind":"intent","applyMode":"replace","reason":"find process using port"},{"text":"shutdown now","kind":"intent","applyMode":"replace","reason":"danger"}]}"#,
+        );
+
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].text, "lsof -i :3000");
+        assert_eq!(suggestions[0].group, super::SuggestionGroup::Intent);
+        assert_eq!(
+            suggestions[0].reason.as_deref(),
+            Some("find process using port")
+        );
+    }
+
+    #[test]
+    fn classifies_mysql_family_commands_as_database() {
+        assert_eq!(
+            super::classify_candidate_kind("mysql -u root -p"),
+            super::CompletionCandidateKind::Database
+        );
+        assert_eq!(
+            super::classify_candidate_kind("mysqldump mydb > mydb.sql"),
+            super::CompletionCandidateKind::Database
+        );
+        assert_eq!(
+            super::classify_candidate_kind("mysqladmin ping"),
+            super::CompletionCandidateKind::Database
+        );
+    }
+
+    #[test]
+    fn inline_prompt_mentions_mysql_family_guidance() {
+        let request = super::AiInlineSuggestionRequest {
+            provider: "glm".to_string(),
+            model: "glm-4.7-flash".to_string(),
+            api_key: "secret-key".to_string(),
+            base_url: String::new(),
+            draft: "mysql -u root".to_string(),
+            pwd: "/workspace".to_string(),
+            git_branch: Some("main".to_string()),
+            git_status_summary: vec![],
+            recent_history: vec!["mysql -u root -p".to_string()],
+            cwd_summary: super::CwdSummary {
+                dirs: vec!["src".to_string()],
+                files: vec!["package.json".to_string()],
+            },
+            system_summary: super::SystemSummary {
+                os: "ubuntu".to_string(),
+                shell: "/bin/bash".to_string(),
+                package_manager: "apt".to_string(),
+            },
+            tool_availability: vec!["mysql".to_string(), "mysqldump".to_string()],
+            session_id: "sess-1".to_string(),
+            user_id: "user-1".to_string(),
+        };
+
+        let (system, user) = super::build_inline_suggestion_prompt_messages(&request);
+
+        assert!(system.contains(
+            "If the draft already uses mysql, mysqldump, or mysqladmin"
+        ));
+        assert!(system.contains("prefer continuing that MySQL tool family"));
+        assert!(user.contains("draft: mysql -u root"));
+    }
+
+    #[test]
+    fn intent_prompt_mentions_mysql_natural_language_guidance() {
+        let request = super::AiIntentSuggestionRequest {
+            provider: "glm".to_string(),
+            model: "glm-4.7-flash".to_string(),
+            api_key: "secret-key".to_string(),
+            base_url: String::new(),
+            draft: "导出 mysql 数据库".to_string(),
+            context_pack: super::AiCompletionContextPack {
+                input_mode: "intent".to_string(),
+                cwd: "/workspace".to_string(),
+                shell: "/bin/bash".to_string(),
+                recent_commands: vec!["mysql -u root -p".to_string()],
+                recent_successes: vec!["mysqladmin ping".to_string()],
+                recent_failures: vec![],
+                frequent_commands_in_cwd: vec!["mysqldump mydb > mydb.sql".to_string()],
+                project_profile: super::AiProjectProfileContext {
+                    project_type: "node".to_string(),
+                    scripts: vec![],
+                    package_manager: "pnpm".to_string(),
+                },
+                local_candidates: vec!["mysql -u root -p".to_string()],
+                user_preference_hints: vec![],
+            },
+            session_id: "sess-1".to_string(),
+            user_id: "user-1".to_string(),
+        };
+
+        let (system, _) = super::build_intent_suggestion_prompt_messages(&request);
+        assert!(system.contains(
+            "Prefer mysql, mysqldump, or mysqladmin for MySQL-related requests"
+        ));
+        assert!(system.contains("Favor directly executable commands"));
     }
 }

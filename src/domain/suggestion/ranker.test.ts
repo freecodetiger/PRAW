@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { CompletionContextSnapshot } from "../ai/types";
 import type { CommandBlock } from "../terminal/dialog";
-import type { SuggestionItem } from "./types";
+import type { SessionCompletionContext, SuggestionItem } from "./types";
 import { rankSuggestionItems, selectRankedGhostSuggestion } from "./ranker";
 import { deriveWorkflowSuggestions } from "./workflow";
+import { createEmptySessionCompletionContext } from "./session-memory";
 
 const baseLocalContext: CompletionContextSnapshot = {
   pwd: "/USER/project",
@@ -154,5 +155,82 @@ describe("suggestion ranker", () => {
     });
 
     expect(ghost?.text).toBe("git status");
+  });
+
+  it("uses current-session accepted feedback as a ranking hint", () => {
+    const sessionContext: SessionCompletionContext = {
+      ...createEmptySessionCompletionContext("tab:1", "/workspace", "/bin/bash"),
+      acceptedSuggestions: [
+        {
+          source: "local",
+          kind: "completion",
+          text: "pnpm test",
+          draft: "pn",
+          cwd: "/workspace",
+          acceptedAt: 1,
+        },
+      ],
+    };
+
+    const ranked = rankSuggestionItems({
+      draft: "pn",
+      recentCommands: [],
+      blocks: [],
+      localContext: baseLocalContext,
+      sessionContext,
+      suggestions: [
+        suggestion({
+          id: "dev",
+          text: "pnpm run dev",
+          score: 900,
+          replacement: {
+            type: "append",
+            suffix: "pm run dev",
+          },
+        }),
+        suggestion({
+          id: "test",
+          text: "pnpm test",
+          score: 900,
+          replacement: {
+            type: "append",
+            suffix: "pm test",
+          },
+        }),
+      ],
+    });
+
+    expect(ranked[0]?.text).toBe("pnpm test");
+  });
+
+  it("lightly prefers mysql database completions over generic commands for mysql drafts", () => {
+    const ranked = rankSuggestionItems({
+      draft: "my",
+      recentCommands: [],
+      blocks: [],
+      localContext: baseLocalContext,
+      suggestions: [
+        suggestion({
+          id: "mysql",
+          text: "mysql -u root -p",
+          score: 900,
+          replacement: {
+            type: "append",
+            suffix: "sql -u root -p",
+          },
+        }),
+        suggestion({
+          id: "mypy",
+          text: "mypy src",
+          score: 900,
+          replacement: {
+            type: "append",
+            suffix: "py src",
+          },
+        }),
+      ],
+    });
+
+    expect(ranked[0]?.text).toBe("mysql -u root -p");
   });
 });

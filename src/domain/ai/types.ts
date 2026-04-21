@@ -27,7 +27,8 @@ export type CompletionCandidateKind =
   | "go"
   | "package"
   | "kubectl"
-  | "network";
+  | "network"
+  | "database";
 
 export interface CwdSummary {
   dirs: string[];

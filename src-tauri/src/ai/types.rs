@@ -37,6 +37,7 @@ pub enum CompletionCandidateKind {
     Package,
     Kubectl,
     Network,
+    Database,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,10 +114,57 @@ pub struct AiRecoverySuggestionRequest {
     pub user_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiIntentSuggestionRequest {
+    pub provider: String,
+    pub model: String,
+    pub api_key: String,
+    #[serde(default)]
+    pub base_url: String,
+    pub draft: String,
+    pub context_pack: AiCompletionContextPack,
+    pub session_id: String,
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCompletionContextPack {
+    pub input_mode: String,
+    pub cwd: String,
+    pub shell: String,
+    pub recent_commands: Vec<String>,
+    pub recent_successes: Vec<String>,
+    pub recent_failures: Vec<AiFailureContext>,
+    pub frequent_commands_in_cwd: Vec<String>,
+    pub project_profile: AiProjectProfileContext,
+    pub local_candidates: Vec<String>,
+    pub user_preference_hints: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiFailureContext {
+    pub command: String,
+    pub exit_code: i32,
+    pub output_summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiProjectProfileContext {
+    #[serde(rename = "type")]
+    pub project_type: String,
+    pub scripts: Vec<String>,
+    pub package_manager: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SuggestionGroup {
     Inline,
+    Intent,
     Recovery,
 }
 
@@ -154,6 +202,8 @@ pub struct SuggestionItem {
     pub group: SuggestionGroup,
     pub apply_mode: SuggestionApplyMode,
     pub replacement: SuggestionReplacement,
+    pub reason: Option<String>,
+    pub source_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,6 +211,27 @@ pub struct SuggestionItem {
 pub struct SuggestionResponse {
     pub suggestions: Vec<SuggestionItem>,
     pub latency_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AiSuggestionCommandStatus {
+    Success,
+    Empty,
+    Timeout,
+    AuthError,
+    NetworkError,
+    ProviderError,
+    ParseError,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSuggestionCommandResult {
+    pub status: AiSuggestionCommandStatus,
+    pub suggestions: Vec<SuggestionItem>,
+    pub latency_ms: Option<u64>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

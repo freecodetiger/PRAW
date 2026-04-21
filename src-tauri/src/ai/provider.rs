@@ -2,8 +2,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use super::types::{
-    AiInlineSuggestionRequest, AiRecoverySuggestionRequest, CompletionRequest, CompletionResponse,
-    ConnectionTestRequest, ConnectionTestResult, SuggestionResponse,
+    AiInlineSuggestionRequest, AiIntentSuggestionRequest, AiRecoverySuggestionRequest,
+    CompletionRequest, CompletionResponse, ConnectionTestRequest, ConnectionTestResult,
+    SuggestionResponse,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +28,11 @@ pub trait AiProvider: Send + Sync {
     async fn suggest_recovery(
         &self,
         request: AiRecoverySuggestionRequest,
+    ) -> Result<Option<SuggestionResponse>>;
+
+    async fn suggest_intent(
+        &self,
+        request: AiIntentSuggestionRequest,
     ) -> Result<Option<SuggestionResponse>>;
 
     async fn test_connection(&self, request: ConnectionTestRequest) -> ConnectionTestResult;

@@ -8,7 +8,8 @@ const SOURCE_PRIORITY: Record<SuggestionItem["source"], number> = {
 
 const GROUP_PRIORITY: Record<SuggestionItem["group"], number> = {
   recovery: 0,
-  inline: 1,
+  intent: 1,
+  inline: 2,
 };
 
 const INLINE_KIND_PRIORITY: Record<SuggestionItem["kind"], number> = {

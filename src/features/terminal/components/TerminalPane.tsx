@@ -43,6 +43,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const aiThemeColor = useAppConfigStore((state) => state.config.ai.themeColor);
   const tabState = useTerminalViewStore((state) => selectTerminalTabState(state.tabStates, tabId));
   const submitCommand = useTerminalViewStore((state) => state.submitCommand);
+  const enterAiWorkflowMode = useTerminalViewStore((state) => state.enterAiWorkflowMode);
   const recordAiPrompt = useTerminalViewStore((state) => state.recordAiPrompt);
   const { tab, currentStreamSessionId, write, resize, restart, terminate } = useTerminalSession(tabId);
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -194,6 +195,10 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const paneActions = resolvePaneActions({
     canClose,
     isFocusModeActive,
+    canEnterAiMode:
+      Boolean(tabState?.activeCommandBlockId) &&
+      tabState?.presentation !== "agent-workflow" &&
+      tab.status === "running",
   });
 
   const runPaneAction = (actionId: PaneActionId) => {
@@ -203,6 +208,9 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
         return;
       case "close-tab":
         void requestClose();
+        return;
+      case "enter-ai-mode":
+        enterAiWorkflowMode(tabId);
         return;
       case "restart-shell":
         void restart();

@@ -6,16 +6,16 @@ use reqwest::Client;
 use serde::Deserialize;
 
 use crate::ai::types::{
-    AiInlineSuggestionRequest, AiRecoverySuggestionRequest, CompletionCandidate,
-    CompletionRequest, CompletionResponse, ConnectionTestRequest, ConnectionTestResult,
-    SuggestionResponse, CompletionCandidateSource,
+    AiInlineSuggestionRequest, AiIntentSuggestionRequest, AiRecoverySuggestionRequest,
+    CompletionCandidate, CompletionCandidateSource, CompletionRequest, CompletionResponse,
+    ConnectionTestRequest, ConnectionTestResult, SuggestionResponse,
 };
 use crate::ai::{
     build_completion_request_payload, build_connection_test_payload,
-    build_inline_suggestion_request_payload, build_recovery_suggestion_request_payload,
-    classify_candidate_kind, classify_transport_error, parse_completion_candidates,
-    parse_inline_suggestion_items, parse_recovery_suggestion_items, sanitize_candidate,
-    send_openai_request,
+    build_inline_suggestion_request_payload, build_intent_suggestion_request_payload,
+    build_recovery_suggestion_request_payload, classify_candidate_kind, classify_transport_error,
+    parse_completion_candidates, parse_inline_suggestion_items, parse_intent_suggestion_items,
+    parse_recovery_suggestion_items, sanitize_candidate, send_openai_request,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,6 +210,48 @@ pub async fn suggest_recovery_with_openai_compatible(
     }))
 }
 
+pub async fn suggest_intent_with_openai_compatible(
+    descriptor: &OpenAiCompatibleDescriptor,
+    client: &Client,
+    request: AiIntentSuggestionRequest,
+) -> Result<Option<SuggestionResponse>> {
+    if request.api_key.trim().is_empty()
+        || request.model.trim().is_empty()
+        || request.draft.trim().is_empty()
+    {
+        return Ok(None);
+    }
+
+    let started_at = Instant::now();
+    let base_url = resolve_base_url(&request.base_url, descriptor.base_url);
+    let payload = send_openai_request(
+        client,
+        &build_chat_completions_url_from_base_url(&base_url),
+        request.api_key.trim(),
+        &build_intent_suggestion_request_payload(&request),
+    )
+    .await?;
+
+    let Some(content) = payload
+        .choices
+        .into_iter()
+        .next()
+        .map(|choice| choice.message.content)
+    else {
+        return Ok(None);
+    };
+
+    let suggestions = parse_intent_suggestion_items(&content);
+    if suggestions.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(SuggestionResponse {
+        suggestions,
+        latency_ms: started_at.elapsed().as_millis() as u64,
+    }))
+}
+
 pub async fn test_connection_with_openai_compatible(
     descriptor: &OpenAiCompatibleDescriptor,
     client: &Client,
@@ -266,9 +308,7 @@ mod tests {
         CompletionCandidateSource, CompletionRequest, CwdSummary, SystemSummary,
     };
 
-    use super::{
-        build_chat_completions_url, parse_completion_content, OpenAiCompatibleDescriptor,
-    };
+    use super::{build_chat_completions_url, parse_completion_content, OpenAiCompatibleDescriptor};
 
     fn request(prefix: &str) -> CompletionRequest {
         CompletionRequest {

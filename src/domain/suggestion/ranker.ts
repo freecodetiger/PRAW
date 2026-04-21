@@ -1,6 +1,6 @@
 import type { CompletionContextSnapshot } from "../ai/types";
 import type { CommandBlock } from "../terminal/dialog";
-import type { SuggestionItem } from "./types";
+import type { SessionCompletionContext, SuggestionItem } from "./types";
 import { findLastSuccessfulCommand } from "./workflow";
 
 export interface SuggestionRankingContext {
@@ -8,6 +8,7 @@ export interface SuggestionRankingContext {
   recentCommands: string[];
   blocks?: CommandBlock[];
   localContext?: CompletionContextSnapshot | null;
+  sessionContext?: SessionCompletionContext | null;
   suggestions: SuggestionItem[];
 }
 
@@ -48,7 +49,7 @@ function buildRankedSuggestions(context: SuggestionRankingContext): RankedSugges
   for (const item of context.suggestions) {
     const ranked = {
       item,
-      rank: scoreSuggestion(item, context.draft, lastSuccessfulCommand),
+      rank: scoreSuggestion(item, context.draft, lastSuccessfulCommand, context.sessionContext ?? null),
     };
     const key = `${item.group}:${item.text}`;
     const existing = deduped.get(key);
@@ -70,7 +71,12 @@ function buildRankedSuggestions(context: SuggestionRankingContext): RankedSugges
   });
 }
 
-function scoreSuggestion(item: SuggestionItem, draft: string, lastSuccessfulCommand: string | null): number {
+function scoreSuggestion(
+  item: SuggestionItem,
+  draft: string,
+  lastSuccessfulCommand: string | null,
+  sessionContext: SessionCompletionContext | null,
+): number {
   let rank = item.score;
 
   if (item.group === "recovery") {
@@ -94,12 +100,26 @@ function scoreSuggestion(item: SuggestionItem, draft: string, lastSuccessfulComm
   }
 
   rank += scoreDraftAffinity(draft, item);
+  rank += scoreDatabaseAffinity(draft, item);
+  rank += scoreSessionFeedback(item, sessionContext);
 
   if (lastSuccessfulCommand && normalizeCommand(item.text) === lastSuccessfulCommand) {
     rank -= 920;
   }
 
   return rank;
+}
+
+function scoreSessionFeedback(item: SuggestionItem, sessionContext: SessionCompletionContext | null): number {
+  if (!sessionContext) {
+    return 0;
+  }
+
+  return sessionContext.acceptedSuggestions.some(
+    (feedback) => feedback.cwd === sessionContext.cwd && normalizeCommand(feedback.text) === normalizeCommand(item.text),
+  )
+    ? 500
+    : 0;
 }
 
 function scoreDraftAffinity(draft: string, item: SuggestionItem): number {
@@ -117,6 +137,27 @@ function scoreDraftAffinity(draft: string, item: SuggestionItem): number {
   }
 
   return item.replacement.type === "replace-all" ? 24 : -220;
+}
+
+function scoreDatabaseAffinity(draft: string, item: SuggestionItem): number {
+  const trimmedDraft = draft.trim().toLowerCase();
+  const text = item.text.toLowerCase();
+
+  if (
+    text.startsWith("mysql ")
+    || text.startsWith("mysqldump ")
+    || text.startsWith("mysqladmin ")
+  ) {
+    if (
+      trimmedDraft.startsWith("my")
+      || trimmedDraft.startsWith("mysql")
+      || trimmedDraft.includes("mysql")
+    ) {
+      return 48;
+    }
+  }
+
+  return 0;
 }
 
 function isGhostCandidate(draft: string, item: SuggestionItem): boolean {

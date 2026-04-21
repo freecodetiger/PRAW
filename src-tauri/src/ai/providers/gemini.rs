@@ -7,15 +7,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::ai::provider::{AiProvider, ProviderDescriptor};
 use crate::ai::types::{
-    AiInlineSuggestionRequest, AiRecoverySuggestionRequest, CompletionRequest, CompletionResponse,
-    ConnectionTestRequest, ConnectionTestResult, SuggestionResponse,
+    AiInlineSuggestionRequest, AiIntentSuggestionRequest, AiRecoverySuggestionRequest,
+    CompletionRequest, CompletionResponse, ConnectionTestRequest, ConnectionTestResult,
+    SuggestionResponse,
 };
 use crate::ai::{
     build_client, build_completion_prompt_messages, build_connection_test_prompt_messages,
-    build_inline_suggestion_prompt_messages, build_recovery_suggestion_prompt_messages,
-    classify_transport_error, normalize_identifier, parse_completion_candidates,
-    parse_inline_suggestion_items, parse_recovery_suggestion_items,
-    COMPLETION_REQUEST_TIMEOUT_MS, CONNECTION_TEST_TIMEOUT_MS,
+    build_inline_suggestion_prompt_messages, build_intent_suggestion_prompt_messages,
+    build_recovery_suggestion_prompt_messages, classify_transport_error, normalize_identifier,
+    parse_completion_candidates, parse_inline_suggestion_items, parse_intent_suggestion_items,
+    parse_recovery_suggestion_items, COMPLETION_REQUEST_TIMEOUT_MS, CONNECTION_TEST_TIMEOUT_MS,
 };
 
 const GEMINI_TEMPERATURE: f32 = 0.1;
@@ -80,7 +81,13 @@ impl GeminiProvider {
             .context("failed to parse gemini response")
     }
 
-    fn build_request(&self, system: String, user: String, max_tokens: u16, temperature: f32) -> GeminiGenerateContentRequest {
+    fn build_request(
+        &self,
+        system: String,
+        user: String,
+        max_tokens: u16,
+        temperature: f32,
+    ) -> GeminiGenerateContentRequest {
         GeminiGenerateContentRequest {
             system_instruction: Some(GeminiInstruction {
                 parts: vec![GeminiPart { text: system }],
@@ -234,6 +241,49 @@ impl AiProvider for GeminiProvider {
         };
 
         let suggestions = parse_recovery_suggestion_items(&request, &content);
+        if suggestions.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(SuggestionResponse {
+            suggestions,
+            latency_ms: started_at.elapsed().as_millis() as u64,
+        }))
+    }
+
+    async fn suggest_intent(
+        &self,
+        request: AiIntentSuggestionRequest,
+    ) -> Result<Option<SuggestionResponse>> {
+        if request.api_key.trim().is_empty()
+            || request.model.trim().is_empty()
+            || request.draft.trim().is_empty()
+        {
+            return Ok(None);
+        }
+
+        let started_at = Instant::now();
+        let (system, user) = build_intent_suggestion_prompt_messages(&request);
+        let base_url = if request.base_url.trim().is_empty() {
+            self.descriptor().default_base_url.to_string()
+        } else {
+            request.base_url.trim().to_string()
+        };
+        let response = self
+            .send_request(
+                &self.completion_client,
+                &base_url,
+                request.api_key.trim(),
+                &request.model,
+                &self.build_request(system, user, GEMINI_MAX_TOKENS, GEMINI_TEMPERATURE),
+            )
+            .await?;
+
+        let Some(content) = Self::extract_text(response) else {
+            return Ok(None);
+        };
+
+        let suggestions = parse_intent_suggestion_items(&content);
         if suggestions.is_empty() {
             return Ok(None);
         }

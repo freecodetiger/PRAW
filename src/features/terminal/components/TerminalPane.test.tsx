@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDialogState } from "../../../domain/terminal/dialog";
+import { createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -363,6 +363,41 @@ describe("TerminalPane", () => {
     });
 
     expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(0);
+  });
+
+  it("offers a manual AI mode action for live command console commands and enables voice bypass after switching", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...submitDialogCommand(createDialogState("/bin/bash", "/workspace"), "bun run dev", () => "cmd:bun-dev"),
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<TerminalPane tabId="tab:1" />);
+    });
+
+    expect(latestPaneHeaderActionClusterProps).not.toBeNull();
+    const menuActions = (latestPaneHeaderActionClusterProps?.menuActions ?? []) as Array<{ id: string }>;
+    expect(menuActions.some((action) => action.id === "enter-ai-mode")).toBe(true);
+
+    await act(async () => {
+      await (latestPaneHeaderActionClusterProps?.onMenuSelect as ((value: string) => void))("enter-ai-mode");
+    });
+
+    expect((latestBlockWorkspaceProps?.paneState as { presentation?: string } | undefined)?.presentation).toBe(
+      "agent-workflow",
+    );
+
+    await act(async () => {
+      useWorkspaceStore.getState().requestAiVoiceBypassForActiveTab();
+    });
+
+    expect(latestBlockWorkspaceProps?.voiceBypassToggleRequestKey).toBe(1);
   });
 
   it("increments the quick prompt request key when the header trigger is clicked", async () => {

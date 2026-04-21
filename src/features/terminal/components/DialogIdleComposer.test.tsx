@@ -34,14 +34,16 @@ const tauriWindowApi = vi.hoisted(() => {
   };
 });
 
-const { requestAiRecoverySuggestions, requestAiInlineSuggestions, requestLocalCompletion } = vi.hoisted(() => ({
+const { requestAiRecoverySuggestions, requestAiInlineSuggestions, requestAiIntentSuggestions, requestLocalCompletion } = vi.hoisted(() => ({
   requestAiRecoverySuggestions: vi.fn(),
   requestAiInlineSuggestions: vi.fn(),
+  requestAiIntentSuggestions: vi.fn(),
   requestLocalCompletion: vi.fn(),
 }));
 
 vi.mock("../../../lib/tauri/ai", () => ({
   requestAiInlineSuggestions,
+  requestAiIntentSuggestions,
   requestAiRecoverySuggestions,
 }));
 
@@ -93,6 +95,25 @@ function createIdlePaneState() {
   };
 }
 
+function createLocalCompletionContext() {
+  return {
+    pwd: "/workspace",
+    gitBranch: "main",
+    gitStatusSummary: [],
+    recentHistory: ["git status"],
+    cwdSummary: {
+      dirs: ["src"],
+      files: ["package.json"],
+    },
+    systemSummary: {
+      os: "ubuntu" as const,
+      shell: "/bin/bash",
+      packageManager: "apt",
+    },
+    toolAvailability: ["git"],
+  };
+}
+
 async function flush() {
   await act(async () => {
     vi.runAllTimers();
@@ -112,8 +133,10 @@ describe("DialogIdleComposer", () => {
     requestAiRecoverySuggestions.mockReset();
     tauriWindowApi.reset();
     requestAiInlineSuggestions.mockReset();
+    requestAiIntentSuggestions.mockReset();
     requestLocalCompletion.mockReset();
     requestAiInlineSuggestions.mockResolvedValue(null);
+    requestAiIntentSuggestions.mockResolvedValue(null);
     requestLocalCompletion.mockResolvedValue(null);
     requestAiRecoverySuggestions.mockResolvedValue({
       suggestions: [
@@ -350,6 +373,587 @@ describe("DialogIdleComposer", () => {
     await flush();
 
     expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("git status");
+  });
+
+  it("labels visible suggestions by source", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "git status",
+          source: "local",
+          score: 950,
+          kind: "git",
+        },
+      ],
+      context: {
+        pwd: "/workspace",
+        gitBranch: "main",
+        gitStatusSummary: [" M src/main.tsx"],
+        recentHistory: ["git status"],
+        cwdSummary: {
+          dirs: ["src"],
+          files: ["package.json"],
+        },
+        systemSummary: {
+          os: "ubuntu",
+          shell: "/bin/bash",
+          packageManager: "apt",
+        },
+        toolAvailability: ["git"],
+      },
+    });
+    requestAiInlineSuggestions.mockResolvedValue({
+      suggestions: [
+        {
+          id: "ai:inline:1",
+          text: "git diff --stat",
+          kind: "intent",
+          source: "ai",
+          score: 900,
+          group: "inline",
+          applyMode: "replace",
+          replacement: {
+            type: "replace-all",
+            value: "git diff --stat",
+          },
+        },
+      ],
+      latencyMs: 2400,
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git ");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain("Local");
+    expect(host.textContent).toContain("System");
+    expect(host.textContent).toContain("AI");
+  });
+
+  it("shows AI loading while local suggestions remain available", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [{ text: "git status", source: "local", score: 950, kind: "git" }],
+      context: createLocalCompletionContext(),
+    });
+    requestAiInlineSuggestions.mockReturnValue(new Promise(() => undefined));
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain("git status");
+    expect(host.textContent).toContain("AI loading...");
+  });
+
+  it("shows AI timeout without clearing local suggestions", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [{ text: "git status", source: "local", score: 950, kind: "git" }],
+      context: createLocalCompletionContext(),
+    });
+    requestAiInlineSuggestions.mockResolvedValue({
+      status: "timeout",
+      suggestions: [],
+      message: "request timed out",
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain("git status");
+    expect(host.textContent).toContain("AI timed out");
+  });
+
+  it("shows AI empty results without clearing local suggestions", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [{ text: "git status", source: "local", score: 950, kind: "git" }],
+      context: createLocalCompletionContext(),
+    });
+    requestAiInlineSuggestions.mockResolvedValue({
+      status: "empty",
+      suggestions: [],
+      latencyMs: 1800,
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "git");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    expect(host.textContent).toContain("git status");
+    expect(host.textContent).toContain("AI returned 0 suggestions");
+  });
+
+  it("shows mysql command continuation suggestions for mysql prefixes", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "mysql -u root -p",
+          source: "local",
+          score: 950,
+          kind: "database",
+        },
+        {
+          text: "mysqldump mydb > mydb.sql",
+          source: "local",
+          score: 920,
+          kind: "database",
+        },
+      ],
+      context: createLocalCompletionContext(),
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "my");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    const options = Array.from(host.querySelectorAll('[role="option"]'));
+    expect(options[0]?.textContent).toContain("mysql -u root -p");
+    expect(options[1]?.textContent).toContain("mysqldump mydb > mydb.sql");
+  });
+
+  it("uses Tab to request AI intent suggestions for natural language without filling or executing immediately", async () => {
+    const onSubmitCommand = vi.fn();
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [],
+      context: createLocalCompletionContext(),
+    });
+    requestAiIntentSuggestions.mockResolvedValue({
+      status: "success",
+      suggestions: [
+        {
+          id: "ai:intent:1",
+          text: "lsof -i :3000",
+          kind: "intent",
+          source: "ai",
+          score: 900,
+          group: "intent",
+          applyMode: "replace",
+          replacement: {
+            type: "replace-all",
+            value: "lsof -i :3000",
+          },
+          reason: "find process using port",
+        },
+      ],
+      latencyMs: 1200,
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={onSubmitCommand} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "查看 3000 端口被谁占用");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(requestAiIntentSuggestions).toHaveBeenCalled();
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("查看 3000 端口被谁占用");
+    expect(onSubmitCommand).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("AI");
+    expect(host.textContent).toContain("intent");
+    expect(host.textContent).toContain("lsof -i :3000");
+    expect(host.textContent).toContain("find process using port");
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+
+    await flush();
+
+    expect((host.querySelector("textarea") as HTMLTextAreaElement | null)?.value).toBe("lsof -i :3000");
+    expect(onSubmitCommand).not.toHaveBeenCalled();
+  });
+
+  it("requests mysql-oriented ai intent suggestions for mysql natural language", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [],
+      context: createLocalCompletionContext(),
+    });
+    requestAiIntentSuggestions.mockResolvedValue({
+      status: "success",
+      suggestions: [
+        {
+          id: "ai:intent:mysql:1",
+          text: "mysql -u root -p -e \"SHOW DATABASES;\"",
+          kind: "intent",
+          source: "ai",
+          score: 900,
+          group: "intent",
+          applyMode: "replace",
+          replacement: {
+            type: "replace-all",
+            value: "mysql -u root -p -e \"SHOW DATABASES;\"",
+          },
+          reason: "list databases",
+        },
+      ],
+      latencyMs: 1200,
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "查看 mysql 所有数据库");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(requestAiIntentSuggestions).toHaveBeenCalled();
+    expect(host.textContent).toContain("mysql -u root -p -e \"SHOW DATABASES;\"");
+    expect(host.textContent).toContain("list databases");
+  });
+
+  it("re-ranks later inline suggestions using current-session accepted feedback", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [
+        {
+          text: "pnpm run dev",
+          source: "local",
+          score: 930,
+          kind: "package",
+        },
+        {
+          text: "pnpm test",
+          source: "local",
+          score: 500,
+          kind: "package",
+        },
+      ],
+      context: createLocalCompletionContext(),
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "pn");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    let options = Array.from(host.querySelectorAll('[role="option"]'));
+    expect(options[0]?.textContent).toContain("pnpm run dev");
+    expect(options[1]?.textContent).toContain("pnpm test");
+
+    const preferredOption = options.find((option) => option.textContent?.includes("pnpm test"));
+    expect(preferredOption).not.toBeUndefined();
+
+    act(() => {
+      preferredOption?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      preferredOption?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "pn");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+
+    options = Array.from(host.querySelectorAll('[role="option"]'));
+    expect(options[0]?.textContent).toContain("pnpm test");
+  });
+
+  it("passes rejected AI intent suggestions back as session hints after dismissal", async () => {
+    requestLocalCompletion.mockResolvedValue({
+      suggestions: [],
+      context: createLocalCompletionContext(),
+    });
+    requestAiIntentSuggestions.mockResolvedValue({
+      status: "success",
+      suggestions: [
+        {
+          id: "ai:intent:1",
+          text: "lsof -i :3000",
+          kind: "intent",
+          source: "ai",
+          score: 900,
+          group: "intent",
+          applyMode: "replace",
+          replacement: {
+            type: "replace-all",
+            value: "lsof -i :3000",
+          },
+          reason: "find process using port",
+        },
+      ],
+      latencyMs: 1200,
+    });
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={createIdlePaneState()} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    const input = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      input?.focus();
+      input?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "查看 3000 端口被谁占用");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(host.textContent).toContain("lsof -i :3000");
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "查看 4000 端口被谁占用");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await flush();
+
+    act(() => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    await flush();
+    await flush();
+
+    expect(requestAiIntentSuggestions).toHaveBeenCalledTimes(2);
+    expect(requestAiIntentSuggestions.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        contextPack: expect.objectContaining({
+          userPreferenceHints: expect.arrayContaining(["rejected:lsof -i :3000"]),
+        }),
+      }),
+    );
   });
 
   it("prefers the workflow continuation over repeating the previous git history entry", async () => {

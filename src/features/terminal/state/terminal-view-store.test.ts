@@ -102,6 +102,39 @@ describe("terminal-view-store AI transcript", () => {
     });
   });
 
+  it("allows manually switching a running command into agent workflow mode", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "bun run dev");
+    store.enterAiWorkflowMode("tab:1");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState).toMatchObject({
+      presentation: "agent-workflow",
+      mode: "classic",
+      modeSource: "auto-interactive",
+    });
+    expect(tabState?.aiSession).toEqual({
+      provider: "unknown",
+      rawOnly: true,
+    });
+  });
+
+  it("resolves provider metadata when manually switching a recognized agent command into ai mode", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "claude");
+    store.enterAiWorkflowMode("tab:1");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.aiSession).toEqual({
+      provider: "claude",
+      rawOnly: true,
+    });
+  });
+
   it.each([
     { commandEntry: "npx codex", expectedProvider: "codex" as const },
     { commandEntry: "pnpm dlx codex", expectedProvider: "codex" as const },

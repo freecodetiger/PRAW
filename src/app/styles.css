@@ -1457,6 +1457,16 @@ button {
   letter-spacing: 0.04em;
 }
 
+.dialog-terminal__suggestion-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog-terminal__suggestion-ai-status {
+  color: var(--text-muted);
+}
+
 .dialog-terminal__suggestion-list {
   display: flex;
   flex-direction: column;
@@ -1465,7 +1475,7 @@ button {
 
 .dialog-terminal__suggestion {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -1480,6 +1490,32 @@ button {
 .dialog-terminal__suggestion--active {
   border-color: var(--border);
   background: var(--surface-muted);
+}
+
+.dialog-terminal__suggestion-source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-muted);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dialog-terminal__suggestion-source--ai {
+  border-color: var(--history-command);
+  color: var(--history-command);
+}
+
+.dialog-terminal__suggestion-source--local {
+  color: var(--history-success);
+}
+
+.dialog-terminal__suggestion-source--system {
+  color: var(--history-warning);
 }
 
 .dialog-terminal__suggestion-kind {
@@ -1508,9 +1544,25 @@ button {
   color: var(--history-command);
 }
 
+.dialog-terminal__suggestion-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .dialog-terminal__suggestion-text {
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-terminal__suggestion-reason {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

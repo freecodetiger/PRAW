@@ -2,7 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   AiInlineSuggestionRequest,
+  AiIntentSuggestionRequest,
   AiRecoverySuggestionRequest,
+  AiSuggestionCommandResult,
   SuggestionResponse,
 } from "../../domain/suggestion/types";
 import type {
@@ -22,21 +24,46 @@ export async function requestGhostCompletion(request: CompletionRequest): Promis
 
 export async function requestAiInlineSuggestions(
   request: AiInlineSuggestionRequest,
-): Promise<SuggestionResponse | null> {
+): Promise<AiSuggestionCommandResult | null> {
   try {
-    return await invoke<SuggestionResponse | null>("request_ai_inline_suggestions", { request });
+    return normalizeSuggestionCommandResult(
+      await invoke<AiSuggestionCommandResult | SuggestionResponse | null>("request_ai_inline_suggestions", { request }),
+    );
   } catch {
-    return null;
+    return {
+      status: "networkError",
+      suggestions: [],
+    };
   }
 }
 
 export async function requestAiRecoverySuggestions(
   request: AiRecoverySuggestionRequest,
-): Promise<SuggestionResponse | null> {
+): Promise<AiSuggestionCommandResult | null> {
   try {
-    return await invoke<SuggestionResponse | null>("request_ai_recovery_suggestions", { request });
+    return normalizeSuggestionCommandResult(
+      await invoke<AiSuggestionCommandResult | SuggestionResponse | null>("request_ai_recovery_suggestions", { request }),
+    );
   } catch {
-    return null;
+    return {
+      status: "networkError",
+      suggestions: [],
+    };
+  }
+}
+
+export async function requestAiIntentSuggestions(
+  request: AiIntentSuggestionRequest,
+): Promise<AiSuggestionCommandResult | null> {
+  try {
+    return normalizeSuggestionCommandResult(
+      await invoke<AiSuggestionCommandResult | SuggestionResponse | null>("request_ai_intent_suggestions", { request }),
+    );
+  } catch {
+    return {
+      status: "networkError",
+      suggestions: [],
+    };
   }
 }
 
@@ -49,4 +76,22 @@ export async function testAiConnection(request: AiConnectionTestRequest): Promis
       message: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function normalizeSuggestionCommandResult(
+  response: AiSuggestionCommandResult | SuggestionResponse | null,
+): AiSuggestionCommandResult | null {
+  if (!response) {
+    return null;
+  }
+
+  if ("status" in response) {
+    return response;
+  }
+
+  return {
+    status: response.suggestions.length > 0 ? "success" : "empty",
+    suggestions: response.suggestions,
+    latencyMs: response.latencyMs,
+  };
 }

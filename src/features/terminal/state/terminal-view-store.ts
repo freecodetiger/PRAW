@@ -35,6 +35,7 @@ interface TerminalViewStore {
   removeTabBuffer: (tabId: string) => void;
   syncTabState: (tabId: string, shell: string, cwd: string, preferredMode: PaneRenderMode) => void;
   submitCommand: (tabId: string, command: string) => void;
+  enterAiWorkflowMode: (tabId: string) => void;
   recordAiPrompt: (tabId: string, prompt: string) => void;
   recordAiSystemMessage: (
     tabId: string,
@@ -124,6 +125,43 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         tabStates: {
           ...state.tabStates,
           [key]: nextTabState,
+        },
+      };
+    }),
+
+  enterAiWorkflowMode: (tabId) =>
+    set((state) => {
+      const key = getTerminalBufferKey(tabId);
+      const tabState = state.tabStates[key];
+      if (
+        !tabState ||
+        tabState.activeCommandBlockId === null ||
+        tabState.presentation === "agent-workflow"
+      ) {
+        return state;
+      }
+
+      const activeCommand = tabState.blocks.find((block) => block.id === tabState.activeCommandBlockId);
+      const commandEntry = activeCommand?.command ?? undefined;
+      const nextState = applyTerminalSemanticEvent(tabState, {
+        sessionId: "",
+        kind: "agent-workflow",
+        reason: "manual-escalation",
+        confidence: "strong",
+        commandEntry,
+      });
+
+      return {
+        tabStates: {
+          ...state.tabStates,
+          [key]: {
+            ...tabState,
+            ...nextState,
+            aiSession: {
+              provider: resolveAgentProvider(commandEntry),
+              rawOnly: true,
+            },
+          },
         },
       };
     }),

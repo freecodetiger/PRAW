@@ -63,6 +63,9 @@ export function DialogIdleComposer({
     ghostSuggestion,
     visibleSuggestions,
     activeGroup,
+    aiStatus,
+    inputMode,
+    requestIntentSuggestions,
     acceptGhostSuggestion,
     acceptSuggestion,
     dismissSuggestions,
@@ -92,7 +95,7 @@ export function DialogIdleComposer({
   const showSuggestionBar =
     (suggestionBarVisible || autoSuggestionBarEnabled) &&
     phraseMatches.length === 0 &&
-    visibleSuggestions.length > 0 &&
+    (visibleSuggestions.length > 0 || aiStatus.state !== "idle") &&
     isFocused &&
     cursorAtEnd &&
     !isComposing &&
@@ -289,6 +292,7 @@ export function DialogIdleComposer({
             suggestions={visibleSuggestions}
             activeIndex={suggestionIndex}
             activeGroup={activeGroup}
+            aiStatus={aiStatus}
             onAccept={acceptVisibleSuggestion}
           />
         ) : null}
@@ -389,6 +393,13 @@ export function DialogIdleComposer({
                 return;
               }
 
+              if (event.key === "Tab" && !isComposing && inputMode === "intent") {
+                event.preventDefault();
+                setSuggestionBarVisible(true);
+                requestIntentSuggestions();
+                return;
+              }
+
               if (
                 event.key === "ArrowRight" &&
                 showSuggestionBar &&
@@ -422,6 +433,7 @@ export function DialogIdleComposer({
               if (event.key === "Escape" && (suggestionBarVisible || visibleSuggestions.length > 0 || suggestion)) {
                 event.preventDefault();
                 setSuggestionBarVisible(false);
+                dismissSuggestions();
                 return;
               }
 
