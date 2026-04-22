@@ -62,7 +62,7 @@ describe("release workflow contract", () => {
     const workflow = readWorkflow("desktop-release.yml");
 
     expect(workflow).toContain(
-      "if: github.event_name != 'push' || github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message, 'chore: release v')",
+      "if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message || '', 'chore: release v') }}",
     );
   });
 
