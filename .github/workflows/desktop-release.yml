@@ -13,7 +13,12 @@ permissions:
 
 jobs:
   build-desktop:
-    if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message || '', 'chore: release v') }}
+    if: >-
+      ${{
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        !startsWith(github.event.head_commit.message || '', 'chore: release v')
+      }}
     name: build-desktop (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     strategy:

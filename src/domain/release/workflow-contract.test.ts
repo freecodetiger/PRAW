@@ -61,9 +61,10 @@ describe("release workflow contract", () => {
   it("skips the entire main-branch build matrix for dedicated release commits", () => {
     const workflow = readWorkflow("desktop-release.yml");
 
-    expect(workflow).toContain(
-      "if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message || '', 'chore: release v') }}",
-    );
+    expect(workflow).toContain("if: >-");
+    expect(workflow).toContain("github.event_name != 'push'");
+    expect(workflow).toContain("github.ref != 'refs/heads/main'");
+    expect(workflow).toContain("!startsWith(github.event.head_commit.message || '', 'chore: release v')");
   });
 
   it("routes Linux system dependency installation through the hardened helper script", () => {
