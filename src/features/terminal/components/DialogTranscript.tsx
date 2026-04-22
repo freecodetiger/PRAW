@@ -68,6 +68,7 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
             </button>
           </div>
           <CommandBlockOutput output={block.output || (block.status === "running" ? "" : " ")} />
+          <CommandCompletionNoteView block={block} />
         </article>
       ))}
       <div ref={bottomRef} className="dialog-terminal__bottom-sentinel" aria-hidden="true" />
@@ -90,7 +91,7 @@ export function DialogTranscript({ blocks, scrollRef, bottomRef, onScroll }: Dia
 
 function formatBlockForCopy(block: CommandBlock): string {
   if (block.kind === "command") {
-    return `$ ${block.command ?? ""}\n${stripTerminalControlSequences(block.output)}`;
+    return `$ ${block.command ?? ""}\n${stripTerminalControlSequences(block.output)}${formatCompletionNoteForCopy(block)}`;
   }
 
   return stripTerminalControlSequences(block.output);
@@ -106,6 +107,19 @@ function CommandBlockOutput({ output }: { output: string }) {
   );
 }
 
+function CommandCompletionNoteView({ block }: { block: CommandBlock }) {
+  if (!block.completionNote || block.completionNote.kind !== "resume-hint") {
+    return null;
+  }
+
+  return (
+    <p className="command-block__completion-note">
+      <span className="command-block__completion-note-label">Resume:</span>{" "}
+      <code>{block.completionNote.command}</code>
+    </p>
+  );
+}
+
 function CommandTranscriptHeader({ block }: { block: CommandBlock }) {
   return (
     <p className="command-block__header">
@@ -116,6 +130,14 @@ function CommandTranscriptHeader({ block }: { block: CommandBlock }) {
       </span>
     </p>
   );
+}
+
+function formatCompletionNoteForCopy(block: CommandBlock): string {
+  if (!block.completionNote || block.completionNote.kind !== "resume-hint") {
+    return "";
+  }
+
+  return `\nResume: ${block.completionNote.command}`;
 }
 
 function HighlightedTokens({ tokens }: { tokens: Array<HistoryHighlightToken | DialogOutputToken> }) {

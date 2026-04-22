@@ -15,6 +15,12 @@ export type CommandBlockKind = "command" | "session";
 
 export type CommandBlockStatus = "running" | "completed";
 
+export interface CommandCompletionNote {
+  kind: "resume-hint";
+  provider: string;
+  command: string;
+}
+
 export interface CommandBlock {
   id: string;
   kind: CommandBlockKind;
@@ -24,6 +30,7 @@ export interface CommandBlock {
   status: CommandBlockStatus;
   interactive: boolean;
   exitCode: number | null;
+  completionNote?: CommandCompletionNote;
 }
 
 export interface LiveConsoleState {
@@ -50,7 +57,7 @@ export interface DialogState {
 
 export type ShellLifecycleEvent =
   | { type: "command-start"; entry?: string }
-  | { type: "command-end"; exitCode: number; archivedOutput?: string }
+  | { type: "command-end"; exitCode: number; archivedOutput?: string; completionNote?: CommandCompletionNote }
   | { type: "prompt-state"; cwd: string };
 
 export function createDialogState(shell: string, cwd: string, preferredMode: PaneRenderMode = "dialog"): DialogState {
@@ -198,6 +205,7 @@ export function applyShellLifecycleEvent(state: DialogState, event: ShellLifecyc
                       output: typeof event.archivedOutput === "string" ? event.archivedOutput : block.output,
                       status: "completed",
                       exitCode: event.exitCode,
+                      completionNote: event.completionNote,
                     } satisfies CommandBlock)
                   : block,
               ),

@@ -5,6 +5,7 @@ import {
   appendDialogOutput,
   applyPreferredMode,
   applyShellLifecycleEvent,
+  type CommandCompletionNote,
   createDialogState,
   isDialogShellSupported,
   submitDialogCommand,
@@ -13,7 +14,7 @@ import {
   type PaneRenderModeSource,
 } from "../../../domain/terminal/dialog";
 import type { TerminalSemanticEvent } from "../../../domain/terminal/types";
-import { normalizeDialogOutput } from "../lib/dialog-output";
+import { normalizeDialogOutput, stripTerminalControlSequences } from "../lib/dialog-output";
 import {
   consumeShellIntegrationChunk,
   createShellIntegrationParserState,
@@ -312,12 +313,16 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
                 activeCommand?.command ?? null,
               )
             : undefined;
+        const completionNote =
+          event.type === "command-end" && exitingAgentWorkflow
+            ? extractAgentWorkflowCompletionNote(finalizedOutputSource, nextState.aiSession?.provider)
+            : undefined;
 
         nextState = {
           ...nextState,
           ...applyShellLifecycleEvent(
             nextState,
-            event.type === "command-end" ? { ...event, archivedOutput } : event,
+            event.type === "command-end" ? { ...event, archivedOutput, completionNote } : event,
           ),
           activeArchiveBaseline: event.type === "command-end" ? null : nextState.activeArchiveBaseline,
           activeCapturedOutput: event.type === "command-end" ? null : nextState.activeCapturedOutput,
@@ -639,6 +644,28 @@ function sanitizeArchivedCommandOutput(archiveText: string | undefined, command:
   }
 
   return trimmedLeading || undefined;
+}
+
+function extractAgentWorkflowCompletionNote(
+  archiveText: string | undefined,
+  provider: AiSessionProvider | undefined,
+): CommandCompletionNote | undefined {
+  if (!archiveText || provider !== "codex") {
+    return undefined;
+  }
+
+  const tail = stripTerminalControlSequences(archiveText).replace(/\r\n/g, "\n").slice(-4096);
+  const matches = [...tail.matchAll(/To continue this session, run (codex resume [0-9a-f-]+)/gi)];
+  const command = matches[matches.length - 1]?.[1]?.trim();
+  if (!command) {
+    return undefined;
+  }
+
+  return {
+    kind: "resume-hint",
+    provider,
+    command,
+  };
 }
 
 function stripPromptEchoThroughLastCommand(archiveText: string, command: string): string | undefined {

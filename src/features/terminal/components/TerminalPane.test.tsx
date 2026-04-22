@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { collectLeafIds } from "../../../domain/layout/tree";
 import { createDialogState, submitDialogCommand } from "../../../domain/terminal/dialog";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { useTerminalViewStore } from "../state/terminal-view-store";
@@ -19,8 +20,8 @@ vi.mock("../lib/ai-prompt-transport", () => ({
 }));
 
 vi.mock("../hooks/useTerminalSession", () => ({
-  useTerminalSession: () => ({
-    tab: useWorkspaceStore.getState().window?.tabs["tab:1"] ?? null,
+  useTerminalSession: (tabId: string) => ({
+    tab: useWorkspaceStore.getState().window?.tabs[tabId] ?? null,
     currentStreamSessionId: "session-1",
     write: async () => undefined,
     resize: async () => undefined,
@@ -83,6 +84,7 @@ describe("TerminalPane", () => {
         activeTabId: "tab:1",
         nextTabNumber: 2,
       },
+      focusMode: null,
       dragState: null,
       dragPreview: null,
       noteEditorTabId: null,
@@ -113,6 +115,7 @@ describe("TerminalPane", () => {
       root.unmount();
     });
     host.remove();
+    document.body.classList.remove("pane-dragging");
     vi.unstubAllGlobals();
   });
 
@@ -506,5 +509,153 @@ describe("TerminalPane", () => {
     expect(latestPaneHeaderActionClusterProps?.canSplitDown).toBe(false);
     expect(latestPaneHeaderActionClusterProps?.canClose).toBe(false);
     expect(host.textContent).toContain("FOCUSED");
+  });
+
+  it("reorders panes by dragging the header with mouse events instead of relying on native HTML drag and drop", async () => {
+    useWorkspaceStore.setState((state) => ({
+      ...state,
+      window: {
+        layout: {
+          kind: "container",
+          id: "root",
+          axis: "horizontal",
+          children: [
+            { kind: "pane", id: "pane:tab:1", paneId: "tab:1" },
+            { kind: "pane", id: "pane:tab:2", paneId: "tab:2" },
+          ],
+          sizes: [1, 1],
+        },
+        tabs: {
+          "tab:1": {
+            tabId: "tab:1",
+            title: "Tab 1",
+            shell: "/bin/bash",
+            cwd: "/workspace",
+            status: "running",
+            sessionId: "session-1",
+          },
+          "tab:2": {
+            tabId: "tab:2",
+            title: "Tab 2",
+            shell: "/bin/bash",
+            cwd: "/workspace",
+            status: "running",
+            sessionId: "session-2",
+          },
+        },
+        activeTabId: "tab:1",
+        nextTabNumber: 3,
+      },
+    }));
+
+    const originalElementFromPoint = document.elementFromPoint;
+    const elementFromPointSpy = vi.fn((x: number) => {
+      if (x >= 200) {
+        return host.querySelector('[data-pane-id="tab:2"]');
+      }
+
+      return host.querySelector('[data-pane-id="tab:1"]');
+    });
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: elementFromPointSpy,
+    });
+    const getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const paneId = this.dataset.paneId;
+      if (paneId === "tab:1") {
+        return {
+          left: 0,
+          top: 0,
+          right: 200,
+          bottom: 100,
+          width: 200,
+          height: 100,
+          x: 0,
+          y: 0,
+          toJSON() {
+            return {};
+          },
+        } as DOMRect;
+      }
+
+      if (paneId === "tab:2") {
+        return {
+          left: 200,
+          top: 0,
+          right: 400,
+          bottom: 100,
+          width: 200,
+          height: 100,
+          x: 200,
+          y: 0,
+          toJSON() {
+            return {};
+          },
+        } as DOMRect;
+      }
+
+      return {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON() {
+          return {};
+        },
+      } as DOMRect;
+    });
+
+    await act(async () => {
+      root.render(
+        <>
+          <TerminalPane tabId="tab:1" />
+          <TerminalPane tabId="tab:2" />
+        </>,
+      );
+    });
+
+    const header = host.querySelector('[data-pane-id="tab:1"] .terminal-pane__header');
+    expect(header).not.toBeNull();
+    expect(document.body.classList.contains("pane-dragging")).toBe(false);
+
+    await act(async () => {
+      header?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, clientX: 60, clientY: 20 }));
+      document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 62, clientY: 22 }));
+    });
+
+    expect(document.body.classList.contains("pane-dragging")).toBe(false);
+
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 380, clientY: 20 }));
+    });
+
+    expect(document.body.classList.contains("pane-dragging")).toBe(true);
+    expect(useWorkspaceStore.getState().dragPreview).toEqual({
+      sourceLeafId: "tab:1",
+      targetLeafId: "tab:2",
+      axis: "horizontal",
+      order: "after",
+    });
+
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0, clientX: 380, clientY: 20 }));
+    });
+
+    expect(document.body.classList.contains("pane-dragging")).toBe(false);
+    expect(collectLeafIds(useWorkspaceStore.getState().window!.layout)).toEqual(["tab:2", "tab:1"]);
+    expect(useWorkspaceStore.getState().dragState).toBeNull();
+    expect(useWorkspaceStore.getState().dragPreview).toBeNull();
+
+    getBoundingClientRectSpy.mockRestore();
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: originalElementFromPoint,
+    });
   });
 });

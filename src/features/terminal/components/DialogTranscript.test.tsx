@@ -162,6 +162,50 @@ describe("DialogTranscript", () => {
     expect(writeText).toHaveBeenCalledWith("$ printf color\nred\nplain\n");
   });
 
+  it("renders a structured resume hint below the command output and includes it in copied block text", async () => {
+    const blocks: CommandBlock[] = [
+      {
+        id: "cmd:resume",
+        kind: "command",
+        cwd: "/workspace",
+        command: "codex",
+        output: "",
+        status: "completed",
+        interactive: true,
+        exitCode: 0,
+        completionNote: {
+          kind: "resume-hint",
+          provider: "codex",
+          command: "codex resume 019db45d-5705-74a1-b3f4-16db594c4576",
+        },
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        <DialogTranscript
+          blocks={blocks}
+          scrollRef={{ current: null }}
+          onScroll={() => undefined}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("Resume:");
+    expect(host.textContent).toContain("codex resume 019db45d-5705-74a1-b3f4-16db594c4576");
+
+    const copyButton = host.querySelector('button[aria-label="Copy command block"]');
+    expect(copyButton).not.toBeNull();
+
+    await act(async () => {
+      copyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith(
+      "$ codex\n\nResume: codex resume 019db45d-5705-74a1-b3f4-16db594c4576",
+    );
+  });
+
   it("never renders session output blocks even if stale state still contains them", async () => {
     const blocks: CommandBlock[] = [
       {

@@ -560,6 +560,45 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
+  it("captures only the codex resume hint from an AI workflow exit tail without polluting command output history", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.submitCommand("tab:1", "codex");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    writeDirect(
+      "tab:1",
+      [
+        "OpenAI Codex\n",
+        "assistant: working through a long task\n".repeat(12),
+        "final summary line that should not enter command history\n",
+        "To continue this session, run codex resume 019db45d-5705-74a1-b3f4-16db594c4576\n",
+      ].join(""),
+    );
+    store.consumeOutput("tab:1", "\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07");
+
+    const tabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, "tab:1");
+    expect(tabState?.blocks).toEqual([
+      expect.objectContaining({
+        kind: "command",
+        command: "codex",
+        output: "",
+        completionNote: {
+          kind: "resume-hint",
+          provider: "codex",
+          command: "codex resume 019db45d-5705-74a1-b3f4-16db594c4576",
+        },
+      }),
+    ]);
+  });
+
   it("reuses the default transcript viewport snapshot for tabs that are not in the store", () => {
     const first = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");
     const second = selectTranscriptViewportState(useTerminalViewStore.getState().tabStates, "missing-tab");

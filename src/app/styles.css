@@ -56,6 +56,12 @@ body {
   color: var(--text-primary);
 }
 
+body.pane-dragging,
+body.pane-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 button,
 input,
 select {
