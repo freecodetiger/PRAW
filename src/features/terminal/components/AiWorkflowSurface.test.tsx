@@ -401,6 +401,44 @@ describe("AiWorkflowSurface", () => {
     expect(pasteText).not.toHaveBeenCalled();
   });
 
+  it("treats drag-drop coordinates as logical pane coordinates on high-DPI displays", async () => {
+    const pasteText = vi.fn();
+    terminalRegistryApi.getTerminal.mockReturnValue({ pasteText });
+    Object.defineProperty(window, "devicePixelRatio", {
+      configurable: true,
+      value: 2,
+    });
+    getBoundingClientRectSpy.mockImplementation(() => ({
+      left: 400,
+      top: 40,
+      right: 620,
+      bottom: 180,
+      width: 220,
+      height: 140,
+      x: 400,
+      y: 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect));
+
+    renderSurface(root);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "drop",
+        paths: ["/tmp/retina.png"],
+        position: { x: 480, y: 120 },
+      });
+    });
+
+    expect(pasteText).toHaveBeenCalledWith("'/tmp/retina.png'");
+  });
+
   it("opens the bypass capsule on request while keeping the raw terminal surface active", () => {
     renderSurface(root, createAgentWorkflowPaneState(), {
       quickPromptOpenRequestKey: 1,

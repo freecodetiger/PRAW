@@ -165,7 +165,6 @@ export function DialogIdleComposer({
       return isDragPositionInsidePane(
         payload.position,
         composer.getBoundingClientRect(),
-        window.devicePixelRatio || 1,
       );
     };
 

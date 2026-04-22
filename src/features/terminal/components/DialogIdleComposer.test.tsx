@@ -140,6 +140,22 @@ describe("DialogIdleComposer", () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
+    const storage = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+        },
+        clear: () => {
+          storage.clear();
+        },
+      },
+    });
     resetConfigStore();
     requestAiRecoverySuggestions.mockReset();
     tauriWindowApi.reset();
@@ -242,6 +258,51 @@ describe("DialogIdleComposer", () => {
     });
 
     expect(host.querySelector('[aria-label="Dialog file drop target"]')).toBeNull();
+  });
+
+  it("routes dropped paths using logical drag coordinates on high-DPI displays", async () => {
+    Object.defineProperty(window, "devicePixelRatio", {
+      configurable: true,
+      value: 2,
+    });
+    getBoundingClientRectSpy.mockImplementation(() => ({
+      left: 400,
+      top: 40,
+      right: 720,
+      bottom: 140,
+      width: 320,
+      height: 100,
+      x: 400,
+      y: 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect));
+
+    const paneState = createIdlePaneState();
+
+    act(() => {
+      root.render(
+        <DialogIdleComposer paneState={paneState} status="running" isActive={true} onSubmitCommand={vi.fn()} />,
+      );
+    });
+
+    await flush();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      tauriWindowApi.emitDragDropEvent({
+        type: "drop",
+        paths: ["/tmp/retina.txt"],
+        position: { x: 480, y: 80 },
+      });
+    });
+
+    expect((host.querySelector(".dialog-terminal__input") as HTMLTextAreaElement | null)?.value).toContain(
+      "'/tmp/retina.txt'",
+    );
   });
 
   it("inserts dropped file paths into the idle dialog composer draft", async () => {

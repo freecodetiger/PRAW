@@ -27,13 +27,13 @@ describe("ai-drop-paths", () => {
 
   it("detects whether a physical drag position is inside the pane bounds", () => {
     const rect = {
-      left: 100,
+      left: 400,
       top: 40,
-      right: 320,
+      right: 620,
       bottom: 180,
     };
 
-    expect(isDragPositionInsidePane({ x: 420, y: 160 }, rect, 2)).toBe(true);
-    expect(isDragPositionInsidePane({ x: 700, y: 160 }, rect, 2)).toBe(false);
+    expect(isDragPositionInsidePane({ x: 480, y: 160 }, rect)).toBe(true);
+    expect(isDragPositionInsidePane({ x: 700, y: 160 }, rect)).toBe(false);
   });
 });

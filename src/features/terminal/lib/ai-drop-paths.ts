@@ -33,13 +33,8 @@ export function appendDroppedPathsToDraft(currentDraft: string, droppedText: str
 export function isDragPositionInsidePane(
   position: PhysicalDragPosition,
   rect: PaneRectLike,
-  scaleFactor = 1,
 ): boolean {
-  const normalizedScale = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
-  const x = position.x / normalizedScale;
-  const y = position.y / normalizedScale;
-
-  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  return position.x >= rect.left && position.x <= rect.right && position.y >= rect.top && position.y <= rect.bottom;
 }
 
 function quoteShellPath(path: string): string {

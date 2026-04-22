@@ -12,6 +12,7 @@ import type { PaneBorderMask } from "../lib/layout-presentation";
 import { resolvePaneActions, type PaneActionId } from "../lib/pane-actions";
 import { sendAiPrompt } from "../lib/ai-prompt-transport";
 import { resolveTerminalRenderFont } from "../lib/terminal-fonts";
+import { beginPaneHeaderMouseDrag } from "../lib/pane-drag";
 import { selectTerminalTabState, useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
 import { BlockWorkspaceSurface } from "./BlockWorkspaceSurface";
@@ -34,6 +35,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   const dragState = useWorkspaceStore((state) => state.dragState);
   const dragPreview = useWorkspaceStore((state) => state.dragPreview);
   const beginTabDrag = useWorkspaceStore((state) => state.beginTabDrag);
+  const clearDragPreview = useWorkspaceStore((state) => state.clearDragPreview);
   const setDragPreview = useWorkspaceStore((state) => state.setDragPreview);
   const applyDragPreview = useWorkspaceStore((state) => state.applyDragPreview);
   const clearPaneDrag = useWorkspaceStore((state) => state.clearPaneDrag);
@@ -264,6 +266,7 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
   return (
     <section
       ref={paneRef}
+      data-pane-id={tabId}
       className={`terminal-pane${isActive ? " terminal-pane--active" : ""}${isDragSource ? " terminal-pane--drag-source" : ""}${isAgentWorkflow ? " terminal-pane--agent-workflow" : ""}${borderMask?.top ? " terminal-pane--flush-top" : ""}${borderMask?.right ? " terminal-pane--flush-right" : ""}${borderMask?.bottom ? " terminal-pane--flush-bottom" : ""}${borderMask?.left ? " terminal-pane--flush-left" : ""}`}
       style={paneStyle}
       onMouseDown={() => {
@@ -272,18 +275,33 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
     >
       <div
         className="terminal-pane__header"
-        draggable={!isEditingNote && !isFocusModeActive}
-        onDragStart={(event) => {
+        onMouseDown={(event) => {
           if (isEditingNote || isFocusModeActive) {
-            event.preventDefault();
             return;
           }
 
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", tabId);
-          beginTabDrag(tabId);
+          beginPaneHeaderMouseDrag({
+            sourceTabId: tabId,
+            startEvent: event,
+            onStart: () => {
+              beginTabDrag(tabId);
+            },
+            onTargetChange: (target) => {
+              if (!target) {
+                clearDragPreview();
+                return;
+              }
+
+              setDragPreview(target.targetTabId, target.edge);
+            },
+            onCommit: () => {
+              applyDragPreview();
+            },
+            onCancel: () => {
+              clearPaneDrag();
+            },
+          });
         }}
-        onDragEnd={() => clearPaneDrag()}
       >
         <div
           className={`terminal-pane__title${isEditingNote ? " terminal-pane__title--editing" : ""}`}
@@ -398,29 +416,6 @@ export function TerminalPane({ tabId, borderMask }: TerminalPaneProps) {
           <div className="empty-state">Terminal state not ready.</div>
         )}
       </div>
-
-      {dragState && !isDragSource ? (
-        <div className="terminal-pane__drop-targets" aria-hidden="true">
-          {(["left", "right", "top", "bottom"] as PaneDropEdge[]).map((edge) => (
-            <div
-              key={edge}
-              className={`terminal-pane__drop-zone terminal-pane__drop-zone--${edge}${previewEdge === edge ? " terminal-pane__drop-zone--active" : ""}`}
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setDragPreview(tabId, edge);
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragPreview(tabId, edge);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                applyDragPreview();
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
 
       {previewEdge ? <div className={`terminal-pane__drop-preview terminal-pane__drop-preview--${previewEdge}`} /> : null}
 

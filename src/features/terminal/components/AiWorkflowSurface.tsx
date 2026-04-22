@@ -438,7 +438,6 @@ ${transcript}` : transcript));
       return isDragPositionInsidePane(
         payload.position,
         surface.getBoundingClientRect(),
-        window.devicePixelRatio || 1,
       );
     };
 

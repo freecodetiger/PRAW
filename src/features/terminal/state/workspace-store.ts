@@ -51,6 +51,7 @@ interface WorkspaceStore {
   focusAdjacentTab: (direction: FocusDirection) => void;
   closeTab: (tabId: string) => void;
   beginTabDrag: (tabId: string) => void;
+  clearDragPreview: () => void;
   setDragPreview: (targetTabId: string, edge: PaneDropEdge) => void;
   applyDragPreview: () => void;
   clearPaneDrag: () => void;
@@ -236,6 +237,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
         dragState: {
           sourceTabId: tabId,
         },
+        dragPreview: null,
+      };
+    }),
+
+  clearDragPreview: () =>
+    set((state) => {
+      if (!state.dragState || !state.dragPreview) {
+        return state;
+      }
+
+      return {
         dragPreview: null,
       };
     }),
