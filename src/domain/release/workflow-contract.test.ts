@@ -58,6 +58,21 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("!startsWith(github.event.head_commit.message, 'chore: release v')");
   });
 
+  it("skips the entire main-branch build matrix for dedicated release commits", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+
+    expect(workflow).toContain(
+      "if: github.event_name != 'push' || github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message, 'chore: release v')",
+    );
+  });
+
+  it("routes Linux system dependency installation through the hardened helper script", () => {
+    const workflow = readWorkflow("desktop-release.yml");
+
+    expect(workflow).toContain("bash ./scripts/install-linux-deps.sh");
+    expect(workflow).not.toContain("sudo apt-get install -y \\");
+  });
+
   it("documents and wires the macOS signing secrets expected by CI", () => {
     const workflow = readWorkflow("desktop-release.yml");
 
