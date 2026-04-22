@@ -136,6 +136,7 @@ describe("terminal-view-store AI transcript", () => {
   });
 
   it.each([
+    { commandEntry: "omx", expectedProvider: "codex" as const },
     { commandEntry: "npx codex", expectedProvider: "codex" as const },
     { commandEntry: "pnpm dlx codex", expectedProvider: "codex" as const },
     { commandEntry: "bunx --bun qwen-code", expectedProvider: "qwen" as const },

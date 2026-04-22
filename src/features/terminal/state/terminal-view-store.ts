@@ -707,6 +707,10 @@ function resolveAgentProvider(commandEntry: string | undefined): AiSessionProvid
       return "codex";
     }
 
+    if (entry === "omx") {
+      return "codex";
+    }
+
     if (entry === "claude" || entry === "claude-code") {
       return "claude";
     }

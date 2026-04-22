@@ -90,10 +90,12 @@ mod tests {
         assert!(script.contains("entry="));
         assert!(script.contains("printf '\\033]133;C;entry=%s\\a' \"$command\""));
         assert!(script.contains("function codex()"));
+        assert!(script.contains("function omx()"));
         assert!(script.contains("function claude()"));
         assert!(script.contains("function qwen()"));
         assert!(script.contains("printf '\\033]133;PRAW_AGENT;provider=%s\\a' \"$provider\""));
         assert!(script.contains("__praw_agent_wrapper codex \"$@\""));
+        assert!(script.contains("__praw_agent_wrapper omx \"$@\""));
     }
 
     #[test]
@@ -114,6 +116,7 @@ mod tests {
         assert!(script.contains("printf '\\033]133;P;cwd=%s\\a' \"$PWD\""));
         assert!(script.contains("printf '\\033]133;PRAW_AGENT;provider=%s\\a' \"$provider\""));
         assert!(script.contains("function codex()"));
+        assert!(script.contains("function omx()"));
         assert!(script.contains("function claude()"));
         assert!(script.contains("function qwen()"));
     }
@@ -213,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn zsh_runtime_registers_codex_wrapper_without_startup_errors() {
+    fn zsh_runtime_registers_codex_and_omx_wrappers_without_startup_errors() {
         if !Path::new("/bin/zsh").exists() {
             return;
         }
@@ -265,7 +268,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(250));
         writer
-            .write_all(b"whence -w codex\nexit\n")
+            .write_all(b"whence -w codex\nwhence -w omx\nexit\n")
             .expect("commands should write to zsh");
         writer.flush().expect("commands should flush");
         drop(writer);
@@ -284,6 +287,7 @@ mod tests {
 
         assert_eq!(status.exit_code(), 0);
         assert!(output.contains("codex: function"), "expected codex wrapper in output: {output:?}");
+        assert!(output.contains("omx: function"), "expected omx wrapper in output: {output:?}");
         assert!(
             !output.contains("bad math expression"),
             "zsh integration should not emit startup math errors: {output:?}"

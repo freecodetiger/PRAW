@@ -14,6 +14,10 @@ mod tests {
             Some(ProviderBridgeKind::Codex)
         );
         assert_eq!(
+            ProviderBridgeKind::from_cli_name("omx"),
+            Some(ProviderBridgeKind::Omx)
+        );
+        assert_eq!(
             ProviderBridgeKind::from_cli_name("claude"),
             Some(ProviderBridgeKind::Claude)
         );
@@ -57,6 +61,17 @@ mod tests {
             .map(|value: &std::ffi::OsStr| value.to_string_lossy().into_owned())
             .collect();
         assert_eq!(args, vec!["code", "--model", "qwen3"]);
+    }
+
+    #[test]
+    fn builds_omx_provider_command_with_omx_binary() {
+        let command = build_raw_provider_command_for_test(
+            ProviderBridgeKind::Omx,
+            std::path::Path::new("/workspace/project"),
+            &[],
+        );
+
+        assert_eq!(command.get_program().to_string_lossy(), "omx");
     }
 
     #[test]

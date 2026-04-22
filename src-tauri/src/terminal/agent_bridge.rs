@@ -10,6 +10,7 @@ pub const PRAW_APP_BIN_ENV: &str = "PRAW_APP_BIN";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderBridgeKind {
     Codex,
+    Omx,
     Claude,
     Qwen,
 }
@@ -18,6 +19,7 @@ impl ProviderBridgeKind {
     pub fn from_cli_name(value: &str) -> Option<Self> {
         match value {
             "codex" => Some(Self::Codex),
+            "omx" => Some(Self::Omx),
             "claude" => Some(Self::Claude),
             "qwen" | "qwen-code" => Some(Self::Qwen),
             _ => None,
@@ -27,6 +29,7 @@ impl ProviderBridgeKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Codex => "codex",
+            Self::Omx => "omx",
             Self::Claude => "claude",
             Self::Qwen => "qwen",
         }

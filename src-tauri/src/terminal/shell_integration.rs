@@ -134,6 +134,10 @@ function codex() {{
   __praw_agent_wrapper codex "$@"
 }}
 
+function omx() {{
+  __praw_agent_wrapper omx "$@"
+}}
+
 function claude() {{
   __praw_agent_wrapper claude "$@"
 }}
@@ -235,6 +239,10 @@ __praw_agent_wrapper() {{
 
 function codex() {{
   __praw_agent_wrapper codex "$@"
+}}
+
+function omx() {{
+  __praw_agent_wrapper omx "$@"
 }}
 
 function claude() {{

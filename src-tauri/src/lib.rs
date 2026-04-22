@@ -15,7 +15,10 @@ use commands::ai::{
     request_completion, test_ai_connection,
 };
 use commands::bootstrap::{load_app_bootstrap_state, save_app_config, save_window_snapshot};
-use commands::completion::request_local_completion;
+use commands::completion::{
+    record_completion_command_execution, record_completion_suggestion_acceptance,
+    request_local_completion,
+};
 use commands::terminal::{
     close_terminal_session, create_terminal_session, resize_terminal_session,
     write_terminal_session,
@@ -85,6 +88,8 @@ pub fn run() {
             request_ai_recovery_suggestions,
             test_ai_connection,
             request_local_completion,
+            record_completion_command_execution,
+            record_completion_suggestion_acceptance,
             start_voice_transcription,
             stop_voice_transcription,
             cancel_voice_transcription

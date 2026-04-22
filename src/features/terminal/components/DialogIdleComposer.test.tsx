@@ -34,11 +34,20 @@ const tauriWindowApi = vi.hoisted(() => {
   };
 });
 
-const { requestAiRecoverySuggestions, requestAiInlineSuggestions, requestAiIntentSuggestions, requestLocalCompletion } = vi.hoisted(() => ({
+const {
+  requestAiRecoverySuggestions,
+  requestAiInlineSuggestions,
+  requestAiIntentSuggestions,
+  requestLocalCompletion,
+  recordCompletionCommandExecution,
+  recordCompletionSuggestionAcceptance,
+} = vi.hoisted(() => ({
   requestAiRecoverySuggestions: vi.fn(),
   requestAiInlineSuggestions: vi.fn(),
   requestAiIntentSuggestions: vi.fn(),
   requestLocalCompletion: vi.fn(),
+  recordCompletionCommandExecution: vi.fn(),
+  recordCompletionSuggestionAcceptance: vi.fn(),
 }));
 
 vi.mock("../../../lib/tauri/ai", () => ({
@@ -49,6 +58,8 @@ vi.mock("../../../lib/tauri/ai", () => ({
 
 vi.mock("../../../lib/tauri/completion", () => ({
   requestLocalCompletion,
+  recordCompletionCommandExecution,
+  recordCompletionSuggestionAcceptance,
 }));
 
 vi.mock("@tauri-apps/api/window", () => tauriWindowApi);
@@ -135,9 +146,13 @@ describe("DialogIdleComposer", () => {
     requestAiInlineSuggestions.mockReset();
     requestAiIntentSuggestions.mockReset();
     requestLocalCompletion.mockReset();
+    recordCompletionCommandExecution.mockReset();
+    recordCompletionSuggestionAcceptance.mockReset();
     requestAiInlineSuggestions.mockResolvedValue(null);
     requestAiIntentSuggestions.mockResolvedValue(null);
     requestLocalCompletion.mockResolvedValue(null);
+    recordCompletionCommandExecution.mockResolvedValue(undefined);
+    recordCompletionSuggestionAcceptance.mockResolvedValue(undefined);
     requestAiRecoverySuggestions.mockResolvedValue({
       suggestions: [
         {

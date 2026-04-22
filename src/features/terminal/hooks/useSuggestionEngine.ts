@@ -24,7 +24,11 @@ import type {
 } from "../../../domain/suggestion/types";
 import { deriveWorkflowSuggestions } from "../../../domain/suggestion/workflow";
 import { requestAiInlineSuggestions, requestAiIntentSuggestions, requestAiRecoverySuggestions } from "../../../lib/tauri/ai";
-import { requestLocalCompletion } from "../../../lib/tauri/completion";
+import {
+  recordCompletionCommandExecution,
+  recordCompletionSuggestionAcceptance,
+  requestLocalCompletion,
+} from "../../../lib/tauri/completion";
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import { runAiIntentSource } from "../lib/suggestion-sources";
 import {
@@ -42,6 +46,7 @@ import type { TerminalTabViewState } from "../state/terminal-view-store";
 const INLINE_SUGGESTION_DEBOUNCE_MS = 180;
 const RECOVERY_SUGGESTION_DEBOUNCE_MS = 120;
 const USER_ID_STORAGE_KEY = "praw-completion-user-id";
+const reportedCompletedCommandKeys = new Set<string>();
 
 interface UseSuggestionEngineOptions {
   paneState: TerminalTabViewState;
@@ -207,6 +212,28 @@ export function useSuggestionEngine({
   useEffect(() => {
     setLocalContextSnapshot(null);
   }, [blockVersionKey, historyVersionKey, paneState.cwd, paneState.shell]);
+
+  useEffect(() => {
+    for (const block of paneState.blocks) {
+      if (block.kind !== "command" || block.status !== "completed" || !block.command) {
+        continue;
+      }
+
+      const reportKey = `${paneState.shell}|${block.id}|${block.cwd}|${block.command}|${block.exitCode ?? ""}`;
+      if (reportedCompletedCommandKeys.has(reportKey)) {
+        continue;
+      }
+
+      reportedCompletedCommandKeys.add(reportKey);
+      void recordCompletionCommandExecution({
+        commandText: block.command,
+        cwd: block.cwd,
+        shell: paneState.shell,
+        exitCode: block.exitCode,
+        executedAt: Date.now(),
+      });
+    }
+  }, [paneState.blocks, paneState.shell]);
 
   useEffect(() => {
     setIntentSourceResults([]);
@@ -496,6 +523,12 @@ export function useSuggestionEngine({
       setSessionFeedback((current) =>
         applyFeedbackSelection(current, paneState, draft, ghostSuggestion, visibleSuggestions),
       );
+      void recordCompletionSuggestionAcceptance({
+        draft,
+        acceptedText: ghostSuggestion.text,
+        cwd: paneState.cwd,
+        acceptedAt: Date.now(),
+      });
       inlineGenerationRef.current += 1;
       intentGenerationRef.current += 1;
       recoveryGenerationRef.current += 1;
@@ -517,6 +550,12 @@ export function useSuggestionEngine({
       setSessionFeedback((current) =>
         applyFeedbackSelection(current, paneState, draft, suggestion, visibleSuggestions),
       );
+      void recordCompletionSuggestionAcceptance({
+        draft,
+        acceptedText: suggestion.text,
+        cwd: paneState.cwd,
+        acceptedAt: Date.now(),
+      });
       inlineGenerationRef.current += 1;
       intentGenerationRef.current += 1;
       recoveryGenerationRef.current += 1;
