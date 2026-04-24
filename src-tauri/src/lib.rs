@@ -4,6 +4,7 @@ mod commands;
 mod completion;
 mod config;
 mod events;
+mod release;
 mod storage;
 mod terminal;
 mod voice;
@@ -19,6 +20,7 @@ use commands::completion::{
     record_completion_command_execution, record_completion_suggestion_acceptance,
     request_local_completion,
 };
+use commands::release::check_app_update;
 use commands::terminal::{
     close_terminal_session, create_terminal_session, resize_terminal_session,
     write_terminal_session,
@@ -90,6 +92,7 @@ pub fn run() {
             request_local_completion,
             record_completion_command_execution,
             record_completion_suggestion_acceptance,
+            check_app_update,
             start_voice_transcription,
             stop_voice_transcription,
             cancel_voice_transcription

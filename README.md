@@ -45,14 +45,14 @@ PRAW 是一个基于 `Tauri + React + Rust` 构建的桌面终端应用。它保
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./PRAW_0.1.3_amd64.deb
+sudo apt install ./PRAW_0.1.5_amd64.deb
 
 # Fedora / RHEL / openSUSE 等 rpm 系发行版
-sudo rpm -i ./PRAW-0.1.3-1.x86_64.rpm
+sudo rpm -i ./PRAW-0.1.5-1.x86_64.rpm
 
 # AppImage
-chmod +x ./PRAW_0.1.3_amd64.AppImage
-./PRAW_0.1.3_amd64.AppImage
+chmod +x ./PRAW_0.1.5_amd64.AppImage
+./PRAW_0.1.5_amd64.AppImage
 ```
 
 ## macOS 安装
@@ -136,14 +136,14 @@ Choose the package for your distribution:
 
 ```bash
 # Debian / Ubuntu
-sudo apt install ./PRAW_0.1.3_amd64.deb
+sudo apt install ./PRAW_0.1.5_amd64.deb
 
 # Fedora / RHEL / openSUSE and other rpm-based distributions
-sudo rpm -i ./PRAW-0.1.3-1.x86_64.rpm
+sudo rpm -i ./PRAW-0.1.5-1.x86_64.rpm
 
 # AppImage
-chmod +x ./PRAW_0.1.3_amd64.AppImage
-./PRAW_0.1.3_amd64.AppImage
+chmod +x ./PRAW_0.1.5_amd64.AppImage
+./PRAW_0.1.5_amd64.AppImage
 ```
 
 ## Install on macOS

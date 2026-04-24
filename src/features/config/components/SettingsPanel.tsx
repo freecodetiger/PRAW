@@ -11,8 +11,10 @@ import {
 import type { CompletionProvider, AiConnectionTestResult } from "../../../domain/ai/types";
 import type { AiConfig, SpeechConfig } from "../../../domain/config/types";
 import { THEME_PRESET_OPTIONS, type ThemePresetId } from "../../../domain/theme/presets";
+import { APP_VERSION } from "../../../domain/release/app-version";
 import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
 import { testAiConnection } from "../../../lib/tauri/ai";
+import { checkForAppUpdate, openAppReleasePage, type AppUpdateCheckResult } from "../lib/app-update";
 import { describeAiConnectionResult } from "../lib/ai-connection";
 import { getSettingsPanelCopy } from "../lib/settings-panel-copy";
 import { useAppConfigStore } from "../state/app-config-store";
@@ -37,6 +39,8 @@ export function SettingsPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<AiConnectionTestResult | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateCheckResult, setUpdateCheckResult] = useState<AppUpdateCheckResult | null>(null);
   const [phraseImportError, setPhraseImportError] = useState<"empty" | "failed" | null>(null);
   const [shortcutErrors, setShortcutErrors] = useState<
     Partial<Record<TerminalShortcutConfigKey, TerminalShortcutConfigKey>>
@@ -182,6 +186,33 @@ export function SettingsPanel() {
       setIsTestingConnection(false);
     }
   };
+
+  const runUpdateCheck = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateCheckResult(null);
+
+    try {
+      setUpdateCheckResult(await checkForAppUpdate());
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const updateStatusCopy = (() => {
+    if (!updateCheckResult) {
+      return null;
+    }
+
+    if (updateCheckResult.status === "available") {
+      return copy.updates.available(updateCheckResult.latestVersion);
+    }
+
+    if (updateCheckResult.status === "up-to-date") {
+      return copy.updates.upToDate(updateCheckResult.latestVersion);
+    }
+
+    return copy.updates.failed(updateCheckResult.message);
+  })();
 
   return (
     <>
@@ -530,6 +561,42 @@ export function SettingsPanel() {
 
             <p className="settings-panel__summary">{copy.speech.presetSummary}</p>
             <p className="settings-panel__summary">{copy.speech.localKeySummary}</p>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section__title">
+              <strong>{copy.updates.sectionTitle}</strong>
+              <p>{copy.updates.sectionDescription}</p>
+            </div>
+
+            <p className="settings-panel__summary">
+              {copy.updates.currentVersion}: v{APP_VERSION}
+            </p>
+
+            <div className="settings-actions">
+              <button className="button" type="button" disabled={isCheckingUpdate} onClick={() => void runUpdateCheck()}>
+                {isCheckingUpdate ? copy.updates.checking : copy.updates.check}
+              </button>
+              {updateCheckResult && "releaseUrl" in updateCheckResult ? (
+                <button
+                  className="button button--ghost"
+                  type="button"
+                  onClick={() => void openAppReleasePage(updateCheckResult.releaseUrl)}
+                >
+                  {copy.updates.openDownloadPage}
+                </button>
+              ) : null}
+            </div>
+
+            {updateStatusCopy ? (
+              <p
+                className={`settings-status${
+                  updateCheckResult?.status === "error" ? " settings-status--error" : " settings-status--success"
+                }`}
+              >
+                {updateStatusCopy}
+              </p>
+            ) : null}
           </section>
         </div>
       </aside>

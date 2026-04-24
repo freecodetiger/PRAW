@@ -122,12 +122,28 @@ unset __praw_saved_vte_version
 __praw_agent_wrapper() {{
   local provider="$1"
   shift
+  if __praw_agent_command_is_non_interactive "$@"; then
+    command "$provider" "$@"
+    return $?
+  fi
   printf '\033]133;PRAW_AGENT;provider=%s\a' "$provider"
   if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
     command "$provider" "$@"
     return $?
   fi
   "$PRAW_APP_BIN" --praw-agent-host "$provider" --session-id "$PRAW_SESSION_ID" --cwd "$PWD" -- "$@"
+}}
+
+__praw_agent_command_is_non_interactive() {{
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --version|-V|-v|version|--help|-h|help)
+        return 0
+        ;;
+    esac
+  done
+  return 1
 }}
 
 function codex() {{
@@ -229,12 +245,28 @@ typeset -g __praw_prompt_ready=''
 __praw_agent_wrapper() {{
   local provider="$1"
   shift
+  if __praw_agent_command_is_non_interactive "$@"; then
+    command "$provider" "$@"
+    return $?
+  fi
   printf '\033]133;PRAW_AGENT;provider=%s\a' "$provider"
   if [[ -z "${{PRAW_APP_BIN:-}}" ]]; then
     command "$provider" "$@"
     return $?
   fi
   "$PRAW_APP_BIN" --praw-agent-host "$provider" --session-id "$PRAW_SESSION_ID" --cwd "$PWD" -- "$@"
+}}
+
+__praw_agent_command_is_non_interactive() {{
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --version|-V|-v|version|--help|-h|help)
+        return 0
+        ;;
+    esac
+  done
+  return 1
 }}
 
 function codex() {{

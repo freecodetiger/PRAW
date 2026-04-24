@@ -6,11 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
 import { testAiConnection } from "../../../lib/tauri/ai";
+import { checkForAppUpdate, openAppReleasePage } from "../lib/app-update";
 import { SettingsPanel } from "./SettingsPanel";
 import { useAppConfigStore } from "../state/app-config-store";
 
 vi.mock("../../../lib/tauri/ai", () => ({
   testAiConnection: vi.fn(),
+}));
+
+vi.mock("../lib/app-update", () => ({
+  checkForAppUpdate: vi.fn(),
+  openAppReleasePage: vi.fn(),
 }));
 
 function resetStore() {
@@ -29,6 +35,8 @@ function findLabel(container: HTMLElement, text: string) {
 }
 
 const mockedTestAiConnection = vi.mocked(testAiConnection);
+const mockedCheckForAppUpdate = vi.mocked(checkForAppUpdate);
+const mockedOpenAppReleasePage = vi.mocked(openAppReleasePage);
 
 describe("SettingsPanel", () => {
   let host: HTMLDivElement;
@@ -44,6 +52,15 @@ describe("SettingsPanel", () => {
       message: "ok",
       latencyMs: 42,
     });
+    mockedCheckForAppUpdate.mockReset();
+    mockedCheckForAppUpdate.mockResolvedValue({
+      status: "up-to-date",
+      currentVersion: "0.1.5",
+      latestVersion: "0.1.5",
+      releaseUrl: "https://github.com/freecodetiger/PRAW/releases/tag/v0.1.5",
+    });
+    mockedOpenAppReleasePage.mockReset();
+    mockedOpenAppReleasePage.mockResolvedValue();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -367,5 +384,97 @@ describe("SettingsPanel", () => {
       apiKey: "secret-key",
       baseUrl: "https://proxy.example.com/v1",
     });
+  });
+
+  it("shows the current app version in settings", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("About & Updates");
+    expect(host.textContent).toContain("Current version");
+    expect(host.textContent).toContain("v0.1.5");
+  });
+
+  it("checks for updates manually and opens the available release page", async () => {
+    mockedCheckForAppUpdate.mockResolvedValueOnce({
+      status: "available",
+      currentVersion: "0.1.5",
+      latestVersion: "0.1.6",
+      releaseUrl: "https://github.com/freecodetiger/PRAW/releases/tag/v0.1.6",
+    });
+
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const checkButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Check for Updates"),
+    );
+    expect(checkButton).not.toBeUndefined();
+
+    await act(async () => {
+      checkButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(mockedCheckForAppUpdate).toHaveBeenCalledTimes(1);
+    expect(host.textContent).toContain("PRAW v0.1.6 is available.");
+
+    const openButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Open Download Page"),
+    );
+    expect(openButton).not.toBeUndefined();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(mockedOpenAppReleasePage).toHaveBeenCalledWith("https://github.com/freecodetiger/PRAW/releases/tag/v0.1.6");
+  });
+
+  it("keeps the manual release page available when automatic update checks fail", async () => {
+    mockedCheckForAppUpdate.mockResolvedValueOnce({
+      status: "error",
+      currentVersion: "0.1.5",
+      message: "GitHub API rate limited the release check",
+      releaseUrl: "https://github.com/freecodetiger/PRAW/releases",
+    });
+
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const checkButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Check for Updates"),
+    );
+
+    await act(async () => {
+      checkButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Update check failed: GitHub API rate limited the release check");
+
+    const openButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Open Download Page"),
+    );
+    expect(openButton).not.toBeUndefined();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(mockedOpenAppReleasePage).toHaveBeenCalledWith("https://github.com/freecodetiger/PRAW/releases");
   });
 });

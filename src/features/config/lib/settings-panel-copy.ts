@@ -93,6 +93,17 @@ interface SettingsPanelCopy {
     };
     localKeySummary: string;
   };
+  updates: {
+    sectionTitle: string;
+    sectionDescription: string;
+    currentVersion: string;
+    check: string;
+    checking: string;
+    openDownloadPage: string;
+    upToDate: (version: string) => string;
+    available: (version: string) => string;
+    failed: (message: string) => string;
+  };
 }
 
 const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
@@ -194,6 +205,17 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       },
       localKeySummary: "This speech key is stored separately from the main AI provider key.",
     },
+    updates: {
+      sectionTitle: "About & Updates",
+      sectionDescription: "Check the public release channel manually when you want to upgrade.",
+      currentVersion: "Current version",
+      check: "Check for Updates",
+      checking: "Checking...",
+      openDownloadPage: "Open Download Page",
+      upToDate: (version) => `PRAW v${version} is the latest version.`,
+      available: (version) => `PRAW v${version} is available.`,
+      failed: (message) => `Update check failed: ${message}`,
+    },
   },
   "zh-CN": {
     header: {
@@ -292,6 +314,17 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
         en: "English",
       },
       localKeySummary: "这个语音 key 与主 AI provider key 分开存储。",
+    },
+    updates: {
+      sectionTitle: "关于与更新",
+      sectionDescription: "需要升级时，可手动检查公开发布通道。",
+      currentVersion: "当前版本",
+      check: "检查更新",
+      checking: "检查中...",
+      openDownloadPage: "打开下载页",
+      upToDate: (version) => `PRAW v${version} 已是最新版本。`,
+      available: (version) => `发现 PRAW v${version} 可用。`,
+      failed: (message) => `检查更新失败：${message}`,
     },
   },
 };

@@ -295,6 +295,132 @@ mod tests {
     }
 
     #[test]
+    fn bash_runtime_bypasses_agent_bridge_for_non_interactive_ai_cli_flags() {
+        if !Path::new("/bin/bash").exists() {
+            return;
+        }
+
+        let temp_home = create_temp_home("bash-non-interactive-ai");
+        let temp_bin = temp_home.join("bin");
+        std::fs::create_dir_all(&temp_bin).expect("temp bin should create");
+        for binary in ["codex", "claude", "qwen", "omx"] {
+            std::fs::write(
+                temp_bin.join(binary),
+                format!("#!/bin/sh\necho {binary}-direct \"$@\"\n"),
+            )
+            .expect("fake ai cli should write");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+
+                let mut permissions = std::fs::metadata(temp_bin.join(binary))
+                    .expect("fake ai cli should stat")
+                    .permissions();
+                permissions.set_mode(0o755);
+                std::fs::set_permissions(temp_bin.join(binary), permissions)
+                    .expect("fake ai cli should be executable");
+            }
+        }
+
+        let session_id = unique_session_id("session");
+        let mut command = build_shell_integration_command("/bin/bash", &session_id, "/tmp")
+            .expect("bash integration should be supported");
+        let cleanup_paths = install_shell_integration("/bin/bash", &session_id)
+            .expect("bash integration files should install");
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+        command.env("HOME", &temp_home);
+        command.env("PRAW_APP_BIN", "/bin/echo");
+        command.env(
+            "PATH",
+            format!(
+                "{}:{}",
+                temp_bin.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        );
+
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("pty should open");
+
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .expect("bash should spawn in pty");
+        drop(pair.slave);
+
+        let mut writer = pair.master.take_writer().expect("writer should be available");
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .expect("reader should be cloneable");
+
+        let read_handle = thread::spawn(move || {
+            let mut buffer = [0_u8; 4096];
+            let mut output = Vec::new();
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(read) => output.extend_from_slice(&buffer[..read]),
+                    Err(_) => break,
+                }
+            }
+            String::from_utf8_lossy(&output).into_owned()
+        });
+
+        thread::sleep(Duration::from_millis(250));
+        writer
+            .write_all(b"codex --version\nclaude --help\nqwen -V\nqwen code --version\nomx version\nexit\n")
+            .expect("commands should write to bash");
+        writer.flush().expect("commands should flush");
+        drop(writer);
+
+        let status = child.wait().expect("bash should exit cleanly");
+        let output = read_handle.join().expect("reader thread should join");
+
+        for path in cleanup_paths {
+            if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            } else {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+        let _ = std::fs::remove_dir_all(temp_home);
+
+        assert_eq!(status.exit_code(), 0);
+        assert!(
+            output.contains("codex-direct --version"),
+            "expected codex --version to bypass agent bridge: {output:?}"
+        );
+        assert!(
+            output.contains("claude-direct --help"),
+            "expected claude --help to bypass agent bridge: {output:?}"
+        );
+        assert!(
+            output.contains("qwen-direct -V"),
+            "expected qwen -V to bypass agent bridge: {output:?}"
+        );
+        assert!(
+            output.contains("qwen-direct code --version"),
+            "expected qwen code --version to bypass agent bridge: {output:?}"
+        );
+        assert!(
+            output.contains("omx-direct version"),
+            "expected omx version to bypass agent bridge: {output:?}"
+        );
+        assert!(
+            !output.contains("PRAW_AGENT") && !output.contains("--praw-agent-host"),
+            "expected non-interactive ai cli commands to avoid agent bridge markers: {output:?}"
+        );
+    }
+
+    #[test]
     fn zsh_runtime_silences_startup_noise_and_emits_agent_bridge_marker() {
         if !Path::new("/bin/zsh").exists() {
             return;
