@@ -7,6 +7,7 @@ mod events;
 mod release;
 mod storage;
 mod terminal;
+mod timer_sound;
 mod voice;
 mod workspace;
 
@@ -28,6 +29,7 @@ use commands::terminal::{
     close_terminal_session, create_terminal_session, resize_terminal_session,
     write_terminal_session,
 };
+use commands::timer::play_timer_completion_sound;
 use commands::voice::{
     cancel_voice_transcription, start_voice_transcription, stop_voice_transcription,
 };
@@ -97,6 +99,7 @@ pub fn run() {
             record_completion_command_execution,
             record_completion_suggestion_acceptance,
             check_app_update,
+            play_timer_completion_sound,
             start_voice_transcription,
             stop_voice_transcription,
             cancel_voice_transcription
@@ -111,6 +114,8 @@ pub fn run_special_mode_from_args(args: &[String]) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::timer_sound::{resolve_timer_completion_sound, TimerCompletionSound};
+
     #[cfg(target_os = "linux")]
     use super::should_allow_linux_webview_permission_request;
 
@@ -124,5 +129,26 @@ mod tests {
     #[test]
     fn does_not_auto_allow_other_linux_webview_permissions() {
         assert!(!should_allow_linux_webview_permission_request(false));
+    }
+
+    #[test]
+    fn resolves_known_timer_completion_sound_assets() {
+        let resolved = resolve_timer_completion_sound("sound7").expect("sound7 should resolve");
+
+        assert!(matches!(resolved, TimerCompletionSound::Asset(bytes) if !bytes.is_empty()));
+    }
+
+    #[test]
+    fn skips_timer_completion_sound_when_off() {
+        let resolved = resolve_timer_completion_sound("off").expect("off should resolve");
+
+        assert!(matches!(resolved, TimerCompletionSound::Off));
+    }
+
+    #[test]
+    fn rejects_unknown_timer_completion_sound_keys() {
+        let error = resolve_timer_completion_sound("missing").expect_err("missing should be rejected");
+
+        assert!(error.contains("unknown timer completion sound"));
     }
 }

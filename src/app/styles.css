@@ -34,6 +34,11 @@
   --ai-badge-text: #ffffff;
   --selection-background: #cfe2ff;
   --selection-foreground: #102647;
+  --timer-completion-surface: #ffffff;
+  --timer-completion-border: #111111;
+  --timer-completion-highlight: rgba(255, 255, 255, 0.88);
+  --timer-completion-shadow: rgba(0, 0, 0, 0.16);
+  --timer-mono-font-family: "CaskaydiaCove Nerd Font Mono", "CaskaydiaCove Nerd Font", monospace;
 }
 
 * {
@@ -107,6 +112,10 @@ button {
   --ghost-text: #7f8999;
   --selection-background: #456ca7;
   --selection-foreground: #f5f7fb;
+  --timer-completion-surface: #171d28;
+  --timer-completion-border: #6b7280;
+  --timer-completion-highlight: rgba(255, 255, 255, 0.12);
+  --timer-completion-shadow: rgba(0, 0, 0, 0.34);
 }
 
 .app-shell[data-theme="sepia"] {
@@ -132,6 +141,10 @@ button {
   --ghost-text: #8a7a66;
   --selection-background: #d8c19c;
   --selection-foreground: #2f2419;
+  --timer-completion-surface: #fbf3e4;
+  --timer-completion-border: #6e5a46;
+  --timer-completion-highlight: rgba(255, 255, 255, 0.5);
+  --timer-completion-shadow: rgba(47, 36, 25, 0.18);
 }
 
 .app-header {
@@ -368,6 +381,11 @@ button {
   min-width: 0;
   align-items: center;
   gap: 8px;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    var(--timer-mono-font-family);
 }
 
 .global-timer__display {
@@ -410,50 +428,49 @@ button {
 
 .global-timer__completion-cue {
   position: absolute;
-  top: calc(100% + 9px);
+  top: calc(100% + 12px);
   left: 50%;
   z-index: 22;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  width: min(260px, calc(100vw - 32px));
+  width: min(328px, calc(100vw - 32px));
   align-items: center;
   justify-items: center;
-  gap: 6px;
-  padding: 12px 14px 10px;
+  gap: 10px;
+  padding: 18px 22px 16px;
   opacity: 1;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  border-radius: 10px;
+  border: 1px solid var(--timer-completion-border);
+  background: var(--timer-completion-surface);
   box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.16),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 42%, transparent),
+    0 18px 42px var(--timer-completion-shadow),
+    inset 0 1px 0 var(--timer-completion-highlight),
     inset 0 -1px 0 color-mix(in srgb, var(--border-muted) 18%, transparent);
   transform: translateX(-50%);
 }
 
 .global-timer__completion-cue::before {
   position: absolute;
-  top: -7px;
+  top: -8px;
   left: 50%;
-  width: 17px;
-  height: 5px;
+  width: 21px;
+  height: 6px;
   background:
-    linear-gradient(var(--ai-theme-color) 0 0) 0 0 / 5px 5px no-repeat,
-    linear-gradient(color-mix(in srgb, var(--ai-theme-color) 68%, transparent) 0 0) 6px 0 / 5px 5px no-repeat,
-    linear-gradient(color-mix(in srgb, var(--ai-theme-color) 38%, transparent) 0 0) 12px 0 / 5px 5px no-repeat;
+    linear-gradient(var(--ai-theme-color) 0 0) 0 0 / 6px 6px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--ai-theme-color) 68%, transparent) 0 0) 7px 0 / 6px 6px no-repeat,
+    linear-gradient(color-mix(in srgb, var(--ai-theme-color) 38%, transparent) 0 0) 14px 0 / 6px 6px no-repeat;
   content: "";
   transform: translateX(-50%);
 }
 
 .global-timer__pixel-face {
   position: relative;
-  width: 48px;
-  height: 20px;
+  width: 64px;
+  height: 26px;
   color: var(--ai-theme-color);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 26px;
 }
 
 .global-timer__pixel-face-open,
@@ -477,7 +494,7 @@ button {
   display: grid;
   min-width: 0;
   width: 100%;
-  gap: 3px;
+  gap: 5px;
   justify-items: center;
   text-align: center;
 }
@@ -491,23 +508,23 @@ button {
 
 .global-timer__completion-copy strong {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .global-timer__completion-copy span {
   color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.45;
   white-space: normal;
 }
 
 .global-timer__confirm {
   border: 0;
-  margin-top: 1px;
-  padding: 2px 3px;
+  margin-top: 2px;
+  padding: 4px 6px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
 }

@@ -174,16 +174,16 @@ mod tests {
     #[test]
     fn builds_available_update_result_from_github_latest_payload() {
         let result = build_update_result(GitHubLatestReleasePayload {
-            tag_name: Some("v0.1.6".to_string()),
-            html_url: Some("https://github.com/freecodetiger/PRAW/releases/tag/v0.1.6".to_string()),
+            tag_name: Some("v9.9.9".to_string()),
+            html_url: Some("https://github.com/freecodetiger/PRAW/releases/tag/v9.9.9".to_string()),
         });
 
         assert_eq!(
             result,
             AppUpdateCheckResult::Available {
                 current_version: current_version(),
-                latest_version: "0.1.6".to_string(),
-                release_url: "https://github.com/freecodetiger/PRAW/releases/tag/v0.1.6".to_string(),
+                latest_version: "9.9.9".to_string(),
+                release_url: "https://github.com/freecodetiger/PRAW/releases/tag/v9.9.9".to_string(),
             },
         );
     }

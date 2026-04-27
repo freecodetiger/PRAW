@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import {
   formatCountdownDuration,
@@ -27,6 +27,7 @@ const PRESET_MINUTES = [15, 25, 45, 60];
 export function GlobalTimer() {
   const restMessageTone = useAppConfigStore((state) => state.config.ui.timerRestMessageTone);
   const completionSound = useAppConfigStore((state) => state.config.ui.timerCompletionSound);
+  const dialogFontFamily = useAppConfigStore((state) => state.config.terminal.dialogFontFamily);
   const [isOpen, setIsOpen] = useState(false);
   const [completionCue, setCompletionCue] = useState<{ durationMinutes: number; message: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -178,8 +179,12 @@ export function GlobalTimer() {
     setIsOpen(false);
   };
 
+  const timerStyle = {
+    "--timer-mono-font-family": dialogFontFamily,
+  } as CSSProperties;
+
   return (
-    <div className={`global-timer global-timer--${timer.mode}`}>
+    <div className={`global-timer global-timer--${timer.mode}`} style={timerStyle}>
       <button
         className="global-timer__display"
         type="button"

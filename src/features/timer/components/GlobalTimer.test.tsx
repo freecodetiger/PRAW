@@ -62,6 +62,20 @@ describe("GlobalTimer", () => {
     expect(host.querySelector<HTMLInputElement>("[aria-label='Work duration minutes']")?.value).toBe("25");
   });
 
+  it("uses the configured terminal mono font as the timer font fallback", () => {
+    useAppConfigStore.getState().patchTerminalConfig({
+      dialogFontFamily: '"JetBrains Mono", monospace',
+    });
+
+    act(() => {
+      root.render(<GlobalTimer />);
+    });
+
+    expect(host.querySelector<HTMLElement>(".global-timer")?.style.getPropertyValue("--timer-mono-font-family")).toBe(
+      '"JetBrains Mono", monospace',
+    );
+  });
+
   it("closes the timer settings when clicking outside the panel", () => {
     act(() => {
       root.render(<GlobalTimer />);
