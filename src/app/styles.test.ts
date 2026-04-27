@@ -72,4 +72,10 @@ describe("styles selection contract", () => {
     expect(styles).toContain(".workspace--focus-mode");
     expect(styles).toContain(".terminal-pane__focus-badge");
   });
+
+  it("uses the AI theme color for the active workspace switcher item", () => {
+    const activeWorkspace = readRuleBlock(".workspace-switcher-item--active");
+
+    expect(activeWorkspace).toContain("var(--ai-theme-color)");
+  });
 });

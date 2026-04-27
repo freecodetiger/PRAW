@@ -108,6 +108,50 @@ describe("workspace-store", () => {
     expect(persisted?.workspaces[0].window.layout).toEqual(layoutBeforeFocus);
   });
 
+  it("deletes a workspace and activates a surviving neighbor without touching its sessions", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "/workspace",
+    });
+    useWorkspaceStore.getState().attachSession("ws:1:tab:1", "session-one", "/bin/bash", "/workspace");
+    useWorkspaceStore.getState().createWorkspace({
+      shell: "/bin/zsh",
+      cwd: "/workspace/ui",
+    });
+    useWorkspaceStore.getState().attachSession("ws:2:tab:1", "session-two", "/bin/zsh", "/workspace/ui");
+
+    useWorkspaceStore.getState().deleteWorkspace("ws:2", {
+      shell: "/bin/bash",
+      cwd: "/workspace",
+    });
+
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe("ws:1");
+    expect(useWorkspaceStore.getState().workspaceCollection?.workspaces.map((workspace) => workspace.workspaceId)).toEqual([
+      "ws:1",
+    ]);
+    expect(useWorkspaceStore.getState().window?.tabs["ws:1:tab:1"]?.sessionId).toBe("session-one");
+  });
+
+  it("replaces the last deleted workspace with a new default workspace", () => {
+    useWorkspaceStore.getState().bootstrapWindow({
+      shell: "/bin/bash",
+      cwd: "/workspace",
+    });
+
+    useWorkspaceStore.getState().deleteWorkspace("ws:1", {
+      shell: "/bin/zsh",
+      cwd: "/replacement",
+    });
+
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe("ws:2");
+    expect(useWorkspaceStore.getState().workspaceCollection?.workspaces).toHaveLength(1);
+    expect(useWorkspaceStore.getState().window?.activeTabId).toBe("ws:2:tab:1");
+    expect(useWorkspaceStore.getState().window?.tabs["ws:2:tab:1"]).toMatchObject({
+      shell: "/bin/zsh",
+      cwd: "/replacement",
+    });
+  });
+
   it("stores drag preview separately from the persisted window layout model", () => {
     useWorkspaceStore.getState().bootstrapWindow({
       shell: "/bin/bash",

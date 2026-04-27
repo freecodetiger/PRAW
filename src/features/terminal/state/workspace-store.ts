@@ -52,6 +52,7 @@ interface WorkspaceStore {
   createWorkspace: (options: BootstrapWindowOptions) => string;
   switchWorkspace: (workspaceId: string) => void;
   renameWorkspace: (workspaceId: string, title: string) => void;
+  deleteWorkspace: (workspaceId: string, options: BootstrapWindowOptions) => void;
   setActiveTab: (tabId: string) => void;
   setTabNote: (tabId: string, note: string) => void;
   splitTab: (tabId: string, axis: SplitAxis) => void;
@@ -225,6 +226,70 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
               : workspace,
           ),
         },
+      };
+    }),
+
+  deleteWorkspace: (workspaceId, { shell, cwd }) =>
+    set((state) => {
+      if (!state.workspaceCollection) {
+        return state;
+      }
+
+      const currentCollection = commitActiveWindowToCollection(state.workspaceCollection, state);
+      const deletedIndex = currentCollection.workspaces.findIndex((workspace) => workspace.workspaceId === workspaceId);
+      if (deletedIndex < 0) {
+        return state;
+      }
+
+      const remainingWorkspaces = currentCollection.workspaces.filter((workspace) => workspace.workspaceId !== workspaceId);
+      if (remainingWorkspaces.length === 0) {
+        const workspaceNumber = currentCollection.nextWorkspaceNumber;
+        const replacementWorkspaceId = `ws:${workspaceNumber}`;
+        const now = Date.now();
+        const replacementWorkspace = {
+          workspaceId: replacementWorkspaceId,
+          title: `Workspace ${workspaceNumber}`,
+          window: createBootstrapWindowModel(replacementWorkspaceId, shell, cwd),
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        return {
+          workspaceCollection: {
+            version: 1,
+            activeWorkspaceId: replacementWorkspaceId,
+            nextWorkspaceNumber: workspaceNumber + 1,
+            workspaces: [replacementWorkspace],
+          },
+          activeWorkspaceId: replacementWorkspaceId,
+          window: replacementWorkspace.window,
+          focusMode: null,
+          dragState: null,
+          dragPreview: null,
+          noteEditorTabId: null,
+          voiceBypassTabId: null,
+        };
+      }
+
+      const deletingActiveWorkspace = currentCollection.activeWorkspaceId === workspaceId;
+      const activeWorkspaceId = deletingActiveWorkspace
+        ? remainingWorkspaces[Math.max(0, Math.min(deletedIndex, remainingWorkspaces.length - 1))].workspaceId
+        : currentCollection.activeWorkspaceId;
+      const activeWorkspace = remainingWorkspaces.find((workspace) => workspace.workspaceId === activeWorkspaceId);
+
+      return {
+        workspaceCollection: {
+          ...currentCollection,
+          activeWorkspaceId,
+          workspaces: remainingWorkspaces,
+        },
+        activeWorkspaceId,
+        window: activeWorkspace?.window ?? null,
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
       };
     }),
 
