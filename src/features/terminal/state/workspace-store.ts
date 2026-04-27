@@ -21,6 +21,9 @@ import {
 import type { FocusDirection, LayoutNode, PaneDragPreview, PaneDropEdge, SplitAxis } from "../../../domain/layout/types";
 import { fromWindowSnapshot, type WindowSnapshot } from "../../../domain/window/snapshot";
 import type { TabModel, WindowModel } from "../../../domain/window/types";
+import { windowSnapshotToWorkspaceCollectionSnapshot } from "../../../domain/workspaces/restore";
+import { fromWorkspaceCollectionSnapshot, type WorkspaceCollectionSnapshot } from "../../../domain/workspaces/snapshot";
+import type { WorkspaceCollection } from "../../../domain/workspaces/types";
 import { selectTerminalTabState, useTerminalViewStore } from "./terminal-view-store";
 
 interface BootstrapWindowOptions {
@@ -35,6 +38,8 @@ interface WorkspaceFocusMode {
 }
 
 interface WorkspaceStore {
+  workspaceCollection: WorkspaceCollection | null;
+  activeWorkspaceId: string | null;
   window: WindowModel | null;
   focusMode: WorkspaceFocusMode | null;
   dragState: { sourceTabId: string } | null;
@@ -43,6 +48,10 @@ interface WorkspaceStore {
   voiceBypassTabId: string | null;
   bootstrapWindow: (options: BootstrapWindowOptions) => void;
   hydrateWindow: (snapshot: WindowSnapshot) => void;
+  hydrateWorkspaceCollection: (snapshot: WorkspaceCollectionSnapshot) => void;
+  createWorkspace: (options: BootstrapWindowOptions) => string;
+  switchWorkspace: (workspaceId: string) => void;
+  renameWorkspace: (workspaceId: string, title: string) => void;
   setActiveTab: (tabId: string) => void;
   setTabNote: (tabId: string, note: string) => void;
   splitTab: (tabId: string, axis: SplitAxis) => void;
@@ -75,6 +84,8 @@ interface WorkspaceStore {
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
+  workspaceCollection: null,
+  activeWorkspaceId: null,
   window: null,
   focusMode: null,
   dragState: null,
@@ -83,24 +94,139 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   voiceBypassTabId: null,
 
   bootstrapWindow: ({ shell, cwd }) =>
-    set(() => ({
-      window: createBootstrapWindowModel(shell, cwd),
-      focusMode: null,
-      dragState: null,
-      dragPreview: null,
-      noteEditorTabId: null,
-      voiceBypassTabId: null,
-    })),
+    set(() => {
+      const collection = createBootstrapWorkspaceCollection(shell, cwd);
+      return {
+        workspaceCollection: collection,
+        activeWorkspaceId: collection.activeWorkspaceId,
+        window: collection.workspaces[0].window,
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
+      };
+    }),
 
   hydrateWindow: (snapshot) =>
-    set(() => ({
-      window: fromWindowSnapshot(snapshot),
-      focusMode: null,
-      dragState: null,
-      dragPreview: null,
-      noteEditorTabId: null,
-      voiceBypassTabId: null,
-    })),
+    set(() => {
+      const collectionSnapshot = windowSnapshotToWorkspaceCollectionSnapshot(snapshot);
+      const collection = collectionSnapshot ? fromWorkspaceCollectionSnapshot(collectionSnapshot) : null;
+      return {
+        workspaceCollection: collection,
+        activeWorkspaceId: collection?.activeWorkspaceId ?? null,
+        window: getActiveWorkspace(collection)?.window ?? fromWindowSnapshot(snapshot),
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
+      };
+    }),
+
+  hydrateWorkspaceCollection: (snapshot) =>
+    set(() => {
+      const collection = fromWorkspaceCollectionSnapshot(snapshot);
+      return {
+        workspaceCollection: collection,
+        activeWorkspaceId: collection.activeWorkspaceId,
+        window: getActiveWorkspace(collection)?.window ?? null,
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
+      };
+    }),
+
+  createWorkspace: ({ shell, cwd }) => {
+    let createdWorkspaceId = "";
+    set((state) => {
+      const currentCollection = commitActiveWindowToCollection(
+        state.workspaceCollection ?? createBootstrapWorkspaceCollection(shell, cwd),
+        state,
+      );
+      const workspaceNumber = currentCollection.nextWorkspaceNumber;
+      const workspaceId = `ws:${workspaceNumber}`;
+      const now = Date.now();
+      const workspace = {
+        workspaceId,
+        title: `Workspace ${workspaceNumber}`,
+        window: createBootstrapWindowModel(workspaceId, shell, cwd),
+        createdAt: now,
+        updatedAt: now,
+      };
+      const collection: WorkspaceCollection = {
+        ...currentCollection,
+        activeWorkspaceId: workspaceId,
+        nextWorkspaceNumber: workspaceNumber + 1,
+        workspaces: [...currentCollection.workspaces, workspace],
+      };
+      createdWorkspaceId = workspaceId;
+
+      return {
+        workspaceCollection: collection,
+        activeWorkspaceId: workspaceId,
+        window: workspace.window,
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
+      };
+    });
+    return createdWorkspaceId;
+  },
+
+  switchWorkspace: (workspaceId) =>
+    set((state) => {
+      if (!state.workspaceCollection || state.activeWorkspaceId === workspaceId) {
+        return state;
+      }
+
+      const collection = commitActiveWindowToCollection(state.workspaceCollection, state);
+      const workspace = collection.workspaces.find((entry) => entry.workspaceId === workspaceId);
+      if (!workspace) {
+        return state;
+      }
+
+      return {
+        workspaceCollection: {
+          ...collection,
+          activeWorkspaceId: workspaceId,
+        },
+        activeWorkspaceId: workspaceId,
+        window: workspace.window,
+        focusMode: null,
+        dragState: null,
+        dragPreview: null,
+        noteEditorTabId: null,
+        voiceBypassTabId: null,
+      };
+    }),
+
+  renameWorkspace: (workspaceId, title) =>
+    set((state) => {
+      const normalizedTitle = title.trim();
+      if (!state.workspaceCollection || !normalizedTitle) {
+        return state;
+      }
+
+      return {
+        workspaceCollection: {
+          ...state.workspaceCollection,
+          workspaces: state.workspaceCollection.workspaces.map((workspace) =>
+            workspace.workspaceId === workspaceId
+              ? {
+                  ...workspace,
+                  title: normalizedTitle,
+                  updatedAt: Date.now(),
+                }
+              : workspace,
+          ),
+        },
+      };
+    }),
 
   setActiveTab: (tabId) =>
     set((state) => {
@@ -484,13 +610,38 @@ export function selectWindowForPersistence(state: Pick<WorkspaceStore, "window" 
   };
 }
 
+export function selectWorkspaceCollectionForPersistence(
+  state: Pick<WorkspaceStore, "workspaceCollection" | "activeWorkspaceId" | "window" | "focusMode">,
+): WorkspaceCollection | null {
+  if (!state.workspaceCollection) {
+    return null;
+  }
+
+  return commitActiveWindowToCollection(state.workspaceCollection, state);
+}
+
+export function selectAllWorkspaceTabs(state: Pick<WorkspaceStore, "workspaceCollection" | "window" | "activeWorkspaceId">): TabModel[] {
+  if (!state.workspaceCollection) {
+    return state.window ? Object.values(state.window.tabs) : [];
+  }
+
+  const committed = state.window
+    ? commitActiveWindowToCollection(state.workspaceCollection, {
+        ...state,
+        focusMode: null,
+      })
+    : state.workspaceCollection;
+
+  return committed.workspaces.flatMap((workspace) => Object.values(workspace.window.tabs));
+}
+
 function splitWindowTab(state: WorkspaceStore, tabId: string, axis: SplitAxis): Partial<WorkspaceStore> | WorkspaceStore {
   if (!state.window?.tabs[tabId]) {
     return state;
   }
 
   const nextTabNumber = state.window.nextTabNumber;
-  const newTabId = `tab:${nextTabNumber}`;
+  const newTabId = `${state.activeWorkspaceId ?? "ws:1"}:tab:${nextTabNumber}`;
   const sourceTab = state.window.tabs[tabId];
 
   return {
@@ -511,13 +662,33 @@ function splitWindowTab(state: WorkspaceStore, tabId: string, axis: SplitAxis): 
   };
 }
 
-function createBootstrapWindowModel(shell: string, cwd: string): WindowModel {
+function createBootstrapWorkspaceCollection(shell: string, cwd: string): WorkspaceCollection {
+  const now = Date.now();
+  const workspaceId = "ws:1";
   return {
-    layout: createLeafLayout("tab:1"),
+    version: 1,
+    activeWorkspaceId: workspaceId,
+    nextWorkspaceNumber: 2,
+    workspaces: [
+      {
+        workspaceId,
+        title: "Workspace 1",
+        window: createBootstrapWindowModel(workspaceId, shell, cwd),
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  };
+}
+
+function createBootstrapWindowModel(workspaceId: string, shell: string, cwd: string): WindowModel {
+  const firstTabId = `${workspaceId}:tab:1`;
+  return {
+    layout: createLeafLayout(firstTabId),
     tabs: {
-      "tab:1": createTabModel("tab:1", "Tab 1", shell, cwd),
+      [firstTabId]: createTabModel(firstTabId, "Tab 1", shell, cwd),
     },
-    activeTabId: "tab:1",
+    activeTabId: firstTabId,
     nextTabNumber: 2,
   };
 }
@@ -541,24 +712,93 @@ function updateTabState(
   tabId: string,
   updater: (tab: TabModel) => TabModel,
 ): Partial<WorkspaceStore> | WorkspaceStore {
-  if (!state.window?.tabs[tabId]) {
+  if (!state.window?.tabs[tabId] && !state.workspaceCollection?.workspaces.some((workspace) => workspace.window.tabs[tabId])) {
     return state;
   }
 
-  const currentTab = state.window.tabs[tabId];
-  const nextTab = updater(currentTab);
-  if (nextTab === currentTab) {
+  if (state.window?.tabs[tabId]) {
+    const currentTab = state.window.tabs[tabId];
+    const nextTab = updater(currentTab);
+    if (nextTab === currentTab) {
+      return state;
+    }
+
+    return {
+      window: {
+        ...state.window,
+        tabs: {
+          ...state.window.tabs,
+          [tabId]: nextTab,
+        },
+      },
+    };
+  }
+
+  if (!state.workspaceCollection) {
     return state;
   }
 
   return {
-    window: {
-      ...state.window,
-      tabs: {
-        ...state.window.tabs,
-        [tabId]: nextTab,
-      },
+    workspaceCollection: {
+      ...state.workspaceCollection,
+      workspaces: state.workspaceCollection.workspaces.map((workspace) => {
+        const currentTab = workspace.window.tabs[tabId];
+        if (!currentTab) {
+          return workspace;
+        }
+
+        const nextTab = updater(currentTab);
+        if (nextTab === currentTab) {
+          return workspace;
+        }
+
+        return {
+          ...workspace,
+          updatedAt: Date.now(),
+          window: {
+            ...workspace.window,
+            tabs: {
+              ...workspace.window.tabs,
+              [tabId]: nextTab,
+            },
+          },
+        };
+      }),
     },
+  };
+}
+
+function getActiveWorkspace(collection: WorkspaceCollection | null): WorkspaceCollection["workspaces"][number] | null {
+  if (!collection) {
+    return null;
+  }
+
+  return collection.workspaces.find((workspace) => workspace.workspaceId === collection.activeWorkspaceId) ?? null;
+}
+
+function commitActiveWindowToCollection(
+  collection: WorkspaceCollection,
+  state: Pick<WorkspaceStore, "activeWorkspaceId" | "window" | "focusMode">,
+): WorkspaceCollection {
+  const persistedWindow = selectWindowForPersistence({
+    window: state.window,
+    focusMode: state.focusMode,
+  });
+  if (!persistedWindow || !state.activeWorkspaceId) {
+    return collection;
+  }
+
+  return {
+    ...collection,
+    workspaces: collection.workspaces.map((workspace) =>
+      workspace.workspaceId === state.activeWorkspaceId
+        ? {
+            ...workspace,
+            window: persistedWindow,
+            updatedAt: Date.now(),
+          }
+        : workspace,
+    ),
   };
 }
 

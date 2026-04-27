@@ -10,28 +10,42 @@ import App from "./App";
 const bootstrapApi = vi.hoisted(() => ({
   loadAppBootstrapState: vi.fn(async () => ({
     config: null,
-    windowSnapshot: {
-      version: 2 as const,
-      layout: {
-        kind: "container" as const,
-        id: "root",
-        axis: "horizontal" as const,
-        children: [
-          { kind: "pane" as const, id: "pane:tab:1", paneId: "tab:1" },
-          { kind: "pane" as const, id: "pane:tab:2", paneId: "tab:2" },
-        ],
-        sizes: [1, 1],
-      },
-      tabs: [
-        { tabId: "tab:1", title: "Tab 1", shell: "/bin/bash", cwd: "/workspace" },
-        { tabId: "tab:2", title: "Tab 2", shell: "/bin/bash", cwd: "/workspace" },
+    workspaceCollectionSnapshot: {
+      version: 1 as const,
+      activeWorkspaceId: "ws:1",
+      nextWorkspaceNumber: 2,
+      workspaces: [
+        {
+          workspaceId: "ws:1",
+          title: "Workspace 1",
+          createdAt: 1,
+          updatedAt: 1,
+          window: {
+            version: 2 as const,
+            layout: {
+              kind: "container" as const,
+              id: "root",
+              axis: "horizontal" as const,
+              children: [
+                { kind: "pane" as const, id: "pane:ws:1:tab:1", paneId: "ws:1:tab:1" },
+                { kind: "pane" as const, id: "pane:ws:1:tab:2", paneId: "ws:1:tab:2" },
+              ],
+              sizes: [1, 1],
+            },
+            tabs: [
+              { tabId: "ws:1:tab:1", title: "Tab 1", shell: "/bin/bash", cwd: "/workspace" },
+              { tabId: "ws:1:tab:2", title: "Tab 2", shell: "/bin/bash", cwd: "/workspace" },
+            ],
+            activeTabId: "ws:1:tab:2",
+            nextTabNumber: 3,
+          },
+        },
       ],
-      activeTabId: "tab:2",
-      nextTabNumber: 3,
     },
+    windowSnapshot: null,
   })),
   saveAppConfig: vi.fn(async () => undefined),
-  saveWindowSnapshot: vi.fn(async () => undefined),
+  saveWorkspaceCollectionSnapshot: vi.fn(async () => undefined),
 }));
 
 vi.mock("../lib/tauri/bootstrap", () => bootstrapApi);
@@ -54,7 +68,7 @@ describe("App", () => {
     vi.useFakeTimers();
     bootstrapApi.loadAppBootstrapState.mockClear();
     bootstrapApi.saveAppConfig.mockClear();
-    bootstrapApi.saveWindowSnapshot.mockClear();
+    bootstrapApi.saveWorkspaceCollectionSnapshot.mockClear();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -78,27 +92,75 @@ describe("App", () => {
     });
 
     act(() => {
-      useWorkspaceStore.getState().enterFocusMode("tab:2");
+      useWorkspaceStore.getState().enterFocusMode("ws:1:tab:2");
     });
 
     await act(async () => {
       vi.advanceTimersByTime(200);
     });
 
-    expect(bootstrapApi.saveWindowSnapshot).toHaveBeenLastCalledWith(
+    expect(bootstrapApi.saveWorkspaceCollectionSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        layout: {
-          kind: "container",
-          id: "root",
-          axis: "horizontal",
-          children: [
-            { kind: "pane", id: "pane:tab:1", paneId: "tab:1" },
-            { kind: "pane", id: "pane:tab:2", paneId: "tab:2" },
-          ],
-          sizes: [1, 1],
-        },
-        activeTabId: "tab:2",
+        workspaces: [
+          expect.objectContaining({
+            window: expect.objectContaining({
+              layout: {
+                kind: "container",
+                id: "root",
+                axis: "horizontal",
+                children: [
+                  { kind: "pane", id: "pane:ws:1:tab:1", paneId: "ws:1:tab:1" },
+                  { kind: "pane", id: "pane:ws:1:tab:2", paneId: "ws:1:tab:2" },
+                ],
+                sizes: [1, 1],
+              },
+              activeTabId: "ws:1:tab:2",
+            }),
+          }),
+        ],
       }),
     );
+  });
+
+  it("uses the top-left workspace logo button instead of the PRAW brand text", async () => {
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    const header = host.querySelector(".app-header");
+    const workspaceButton = header?.querySelector<HTMLButtonElement>("[aria-label='Open workspaces']");
+
+    expect(header?.querySelector("h1")).toBeNull();
+    expect(header?.textContent).not.toContain("PRAW");
+    expect(workspaceButton).not.toBeNull();
+
+    act(() => {
+      workspaceButton?.click();
+    });
+
+    expect(host.querySelector(".workspace-switcher-panel--open")).not.toBeNull();
+  });
+
+  it("migrates a legacy window snapshot into a workspace collection", async () => {
+    bootstrapApi.loadAppBootstrapState.mockResolvedValueOnce({
+      config: null,
+      workspaceCollectionSnapshot: null,
+      windowSnapshot: {
+        version: 2 as const,
+        layout: { kind: "pane" as const, id: "pane:tab:1", paneId: "tab:1" },
+        tabs: [{ tabId: "tab:1", title: "Tab 1", shell: "/bin/bash", cwd: "/workspace" }],
+        activeTabId: "tab:1",
+        nextTabNumber: 2,
+      },
+    } as any);
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe("ws:1");
+    expect(useWorkspaceStore.getState().window?.activeTabId).toBe("ws:1:tab:1");
   });
 });

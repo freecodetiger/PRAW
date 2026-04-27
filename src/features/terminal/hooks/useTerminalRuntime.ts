@@ -13,7 +13,7 @@ import {
   selectTerminalTabState,
   useTerminalViewStore,
 } from "../state/terminal-view-store";
-import { useWorkspaceStore } from "../state/workspace-store";
+import { selectAllWorkspaceTabs, useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
 import { hardResetTerminalRuntime, writeDirect } from "../lib/terminal-registry";
 
@@ -94,6 +94,8 @@ function asMessage(error: unknown): string {
 
 export function useTerminalRuntime() {
   const preferredMode = useAppConfigStore((state) => state.config.terminal.preferredMode);
+  const workspaceCollection = useWorkspaceStore((state) => state.workspaceCollection);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const windowModel = useWorkspaceStore((state) => state.window);
   const attachSession = useWorkspaceStore((state) => state.attachSession);
   const markTabExited = useWorkspaceStore((state) => state.markTabExited);
@@ -111,17 +113,17 @@ export function useTerminalRuntime() {
   const previousSessionIdsRef = useRef(new Set<string>());
   const previousTabKeysRef = useRef(new Set<string>());
   const pendingAgentWorkflowEntryCutsRef = useRef(new Map<string, string | undefined>());
-  const windowRef = useRef(windowModel);
-
-  windowRef.current = windowModel;
-
-  const tabs = useMemo(() => {
-    if (!windowModel) {
-      return [];
-    }
-
-    return Object.values(windowModel.tabs);
-  }, [windowModel]);
+  const tabs = useMemo(
+    () =>
+      selectAllWorkspaceTabs({
+        workspaceCollection,
+        activeWorkspaceId,
+        window: windowModel,
+      }),
+    [activeWorkspaceId, windowModel, workspaceCollection],
+  );
+  const tabsByIdRef = useRef(new Map(tabs.map((tab) => [tab.tabId, tab])));
+  tabsByIdRef.current = new Map(tabs.map((tab) => [tab.tabId, tab]));
 
   const sessionIndex = useMemo(() => {
     const index = new Map<string, SessionTabRef>();
@@ -172,8 +174,7 @@ export function useTerminalRuntime() {
           pendingSessionIdsRef.current.delete(tab.tabId);
           pendingSessionRefsRef.current.delete(response.sessionId);
 
-          const currentWindow = windowRef.current;
-          const currentTab = currentWindow?.tabs[tab.tabId];
+          const currentTab = tabsByIdRef.current.get(tab.tabId);
           if (!currentTab || currentTab.sessionId || currentTab.status !== "starting") {
             return closeTerminalSession(response.sessionId).catch(() => undefined);
           }

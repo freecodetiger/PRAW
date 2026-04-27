@@ -296,4 +296,97 @@ describe("useTerminalRuntime", () => {
 
     expect(getTerminalSnapshot("tab:1").content).toContain("assistant: hello from raw-only mode\n");
   });
+
+  it("starts terminal sessions for inactive workspace tabs", async () => {
+    terminalApi.createTerminalSession.mockImplementation(async (request?: any) => ({
+      sessionId: request.sessionId,
+      shell: request.shell,
+      cwd: request.cwd,
+    }));
+
+    useWorkspaceStore.setState((state) => ({
+      ...state,
+      activeWorkspaceId: "ws:1",
+      workspaceCollection: {
+        version: 1,
+        activeWorkspaceId: "ws:1",
+        nextWorkspaceNumber: 3,
+        workspaces: [
+          {
+            workspaceId: "ws:1",
+            title: "Workspace 1",
+            createdAt: 1,
+            updatedAt: 1,
+            window: {
+              layout: { kind: "pane", id: "pane:ws:1:tab:1", paneId: "ws:1:tab:1" },
+              tabs: {
+                "ws:1:tab:1": {
+                  tabId: "ws:1:tab:1",
+                  title: "Tab 1",
+                  shell: "/bin/bash",
+                  cwd: "/workspace",
+                  status: "running",
+                  sessionId: "session-1",
+                },
+              },
+              activeTabId: "ws:1:tab:1",
+              nextTabNumber: 2,
+            },
+          },
+          {
+            workspaceId: "ws:2",
+            title: "Workspace 2",
+            createdAt: 2,
+            updatedAt: 2,
+            window: {
+              layout: { kind: "pane", id: "pane:ws:2:tab:1", paneId: "ws:2:tab:1" },
+              tabs: {
+                "ws:2:tab:1": {
+                  tabId: "ws:2:tab:1",
+                  title: "Tab 1",
+                  shell: "/bin/zsh",
+                  cwd: "/workspace/ui",
+                  status: "starting",
+                },
+              },
+              activeTabId: "ws:2:tab:1",
+              nextTabNumber: 2,
+            },
+          },
+        ],
+      },
+      window: {
+        layout: { kind: "pane", id: "pane:ws:1:tab:1", paneId: "ws:1:tab:1" },
+        tabs: {
+          "ws:1:tab:1": {
+            tabId: "ws:1:tab:1",
+            title: "Tab 1",
+            shell: "/bin/bash",
+            cwd: "/workspace",
+            status: "running",
+            sessionId: "session-1",
+          },
+        },
+        activeTabId: "ws:1:tab:1",
+        nextTabNumber: 2,
+      },
+    }) as any);
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    expect(terminalApi.createTerminalSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shell: "/bin/zsh",
+        cwd: "/workspace/ui",
+      }),
+    );
+    expect(useWorkspaceStore.getState().workspaceCollection?.workspaces[1].window.tabs["ws:2:tab:1"]).toMatchObject({
+      status: "running",
+      shell: "/bin/zsh",
+      cwd: "/workspace/ui",
+    });
+  });
 });

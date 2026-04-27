@@ -15,7 +15,10 @@ use commands::ai::{
     request_ai_inline_suggestions, request_ai_intent_suggestions, request_ai_recovery_suggestions,
     request_completion, test_ai_connection,
 };
-use commands::bootstrap::{load_app_bootstrap_state, save_app_config, save_window_snapshot};
+use commands::bootstrap::{
+    load_app_bootstrap_state, save_app_config, save_window_snapshot,
+    save_workspace_collection_snapshot,
+};
 use commands::completion::{
     record_completion_command_execution, record_completion_suggestion_acceptance,
     request_local_completion,
@@ -80,6 +83,7 @@ pub fn run() {
             load_app_bootstrap_state,
             save_app_config,
             save_window_snapshot,
+            save_workspace_collection_snapshot,
             create_terminal_session,
             write_terminal_session,
             resize_terminal_session,

@@ -1,29 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { loadAppBootstrapState, saveAppConfig, saveWindowSnapshot } from "../lib/tauri/bootstrap";
+import { loadAppBootstrapState, saveAppConfig, saveWorkspaceCollectionSnapshot } from "../lib/tauri/bootstrap";
 import { DEFAULT_APP_CONFIG, resolveAppConfig } from "../domain/config/model";
 import { getThemePreset } from "../domain/theme/presets";
 import { normalizeWindowSnapshot } from "../domain/window/restore";
-import { toWindowSnapshot } from "../domain/window/snapshot";
+import { normalizeWorkspaceCollectionSnapshot, windowSnapshotToWorkspaceCollectionSnapshot } from "../domain/workspaces/restore";
+import { toWorkspaceCollectionSnapshot } from "../domain/workspaces/snapshot";
 import { SettingsPanel } from "../features/config/components/SettingsPanel";
 import { useAppConfigStore } from "../features/config/state/app-config-store";
 import { TerminalWorkspace } from "../features/terminal/components/TerminalWorkspace";
 import { useTerminalRuntime } from "../features/terminal/hooks/useTerminalRuntime";
-import { selectWindowForPersistence, useWorkspaceStore } from "../features/terminal/state/workspace-store";
+import { selectWorkspaceCollectionForPersistence, useWorkspaceStore } from "../features/terminal/state/workspace-store";
+import { WorkspaceSwitcherPanel } from "../features/workspaces/components/WorkspaceSwitcherPanel";
 
 function App() {
   const config = useAppConfigStore((state) => state.config);
   const hydrateConfig = useAppConfigStore((state) => state.hydrateConfig);
   const bootstrapWindow = useWorkspaceStore((state) => state.bootstrapWindow);
   const hydrateWindow = useWorkspaceStore((state) => state.hydrateWindow);
+  const hydrateWorkspaceCollection = useWorkspaceStore((state) => state.hydrateWorkspaceCollection);
   const windowModel = useWorkspaceStore((state) => state.window);
   const focusMode = useWorkspaceStore((state) => state.focusMode);
+  const workspaceCollection = useWorkspaceStore((state) => state.workspaceCollection);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [bootState, setBootState] = useState<"loading" | "ready" | "error">("loading");
   const [bootMessage, setBootMessage] = useState<string>("");
   const themePreset = useMemo(() => getThemePreset(config.terminal.themePreset), [config.terminal.themePreset]);
   const persistedWindowModel = useMemo(
-    () => selectWindowForPersistence({ window: windowModel, focusMode }),
-    [focusMode, windowModel],
+    () => selectWorkspaceCollectionForPersistence({ workspaceCollection, activeWorkspaceId, window: windowModel, focusMode }),
+    [activeWorkspaceId, focusMode, windowModel, workspaceCollection],
   );
 
   useTerminalRuntime();
@@ -40,17 +45,23 @@ function App() {
         const nextConfig = resolveAppConfig(bootstrap.config);
         hydrateConfig(nextConfig);
 
-        const restoredSnapshot = normalizeWindowSnapshot(bootstrap.windowSnapshot);
-        if (restoredSnapshot) {
-          hydrateWindow(restoredSnapshot);
+        const restoredCollectionSnapshot = normalizeWorkspaceCollectionSnapshot(bootstrap.workspaceCollectionSnapshot);
+        const restoredLegacyWindowSnapshot = normalizeWindowSnapshot(bootstrap.windowSnapshot);
+        const migratedCollectionSnapshot =
+          restoredCollectionSnapshot ?? windowSnapshotToWorkspaceCollectionSnapshot(restoredLegacyWindowSnapshot);
+
+        if (migratedCollectionSnapshot) {
+          hydrateWorkspaceCollection(migratedCollectionSnapshot);
+        } else if (restoredLegacyWindowSnapshot) {
+          hydrateWindow(restoredLegacyWindowSnapshot);
         } else {
           bootstrapWindow({
             shell: nextConfig.terminal.defaultShell,
             cwd: nextConfig.terminal.defaultCwd,
           });
 
-          if (bootstrap.windowSnapshot) {
-            setBootMessage("Stored window snapshot was invalid and has been reset.");
+          if (bootstrap.workspaceCollectionSnapshot || bootstrap.windowSnapshot) {
+            setBootMessage("Stored workspace snapshot was invalid and has been reset.");
           }
         }
 
@@ -72,7 +83,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [bootstrapWindow, hydrateConfig, hydrateWindow]);
+  }, [bootstrapWindow, hydrateConfig, hydrateWindow, hydrateWorkspaceCollection]);
 
   useEffect(() => {
     if (bootState === "loading") {
@@ -94,7 +105,7 @@ function App() {
     }
 
     const timer = window.setTimeout(() => {
-      void saveWindowSnapshot(toWindowSnapshot(persistedWindowModel));
+      void saveWorkspaceCollectionSnapshot(toWorkspaceCollectionSnapshot(persistedWindowModel));
     }, 180);
 
     return () => {
@@ -105,15 +116,17 @@ function App() {
   return (
     <div className="app-shell" data-theme={themePreset.id} style={{ colorScheme: themePreset.colorScheme }}>
       <header className="app-header">
-        <h1>PRAW</h1>
+        <WorkspaceSwitcherPanel />
         <div className="app-header__actions">
           <SettingsPanel />
         </div>
       </header>
-      <main className="app-main">
-        {bootMessage ? <p className="boot-warning">{bootMessage}</p> : null}
-        <TerminalWorkspace />
-      </main>
+      <div className="app-body">
+        <main className="app-main">
+          {bootMessage ? <p className="boot-warning">{bootMessage}</p> : null}
+          <TerminalWorkspace />
+        </main>
+      </div>
     </div>
   );
 }

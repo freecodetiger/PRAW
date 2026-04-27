@@ -48,7 +48,7 @@ describe("TerminalWorkspace", () => {
   });
 
   it("adds workspace focus chrome when focus mode is active", () => {
-    useWorkspaceStore.getState().enterFocusMode("tab:1");
+    useWorkspaceStore.getState().enterFocusMode("ws:1:tab:1");
 
     act(() => {
       root.render(<TerminalWorkspace />);
@@ -121,7 +121,7 @@ describe("TerminalWorkspace", () => {
       );
     });
 
-    expect(useWorkspaceStore.getState().focusMode?.focusedTabId).toBe("tab:1");
+    expect(useWorkspaceStore.getState().focusMode?.focusedTabId).toBe("ws:1:tab:1");
     expect(host.querySelector(".workspace")?.className).toContain("workspace--focus-mode");
   });
 });

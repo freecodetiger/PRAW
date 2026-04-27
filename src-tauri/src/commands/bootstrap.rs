@@ -9,6 +9,7 @@ use crate::{config::AppConfig, storage, workspace::WindowSnapshot};
 #[serde(rename_all = "camelCase")]
 pub struct AppBootstrapState {
     pub config: AppConfig,
+    pub workspace_collection_snapshot: Option<Value>,
     pub window_snapshot: Option<Value>,
 }
 
@@ -16,11 +17,13 @@ pub struct AppBootstrapState {
 pub fn load_app_bootstrap_state(app: AppHandle) -> Result<AppBootstrapState, String> {
     let config = storage::load_or_default::<_, AppConfig>(&app, "config/app-config.json")
         .map_err(|e| e.to_string())?;
-    let snapshot = load_window_snapshot(&app).map_err(|e| e.to_string())?;
+    let collection_snapshot = load_workspace_collection_snapshot(&app).map_err(|e| e.to_string())?;
+    let window_snapshot = load_window_snapshot(&app).map_err(|e| e.to_string())?;
 
     Ok(AppBootstrapState {
         config,
-        window_snapshot: snapshot,
+        workspace_collection_snapshot: collection_snapshot,
+        window_snapshot,
     })
 }
 
@@ -32,6 +35,20 @@ pub fn save_app_config(app: AppHandle, config: AppConfig) -> Result<(), String> 
 #[tauri::command]
 pub fn save_window_snapshot(app: AppHandle, snapshot: WindowSnapshot) -> Result<(), String> {
     storage::save_json(&app, "workspace/window.json", &snapshot).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_workspace_collection_snapshot(app: AppHandle, snapshot: Value) -> Result<(), String> {
+    storage::save_json(&app, "workspace/workspaces.json", &snapshot).map_err(|e| e.to_string())
+}
+
+fn load_workspace_collection_snapshot(app: &AppHandle) -> Result<Option<Value>> {
+    if let Some(raw) = storage::load_raw(app, "workspace/workspaces.json")? {
+        let value = parse_json_value(&raw, "workspace/workspaces.json")?;
+        return Ok(Some(value));
+    }
+
+    Ok(None)
 }
 
 fn load_window_snapshot(app: &AppHandle) -> Result<Option<Value>> {
