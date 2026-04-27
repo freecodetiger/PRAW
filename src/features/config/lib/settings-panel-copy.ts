@@ -24,6 +24,19 @@ interface SettingsPanelCopy {
       "zh-CN": string;
     };
   };
+  timer: {
+    sectionTitle: string;
+    sectionDescription: string;
+    endingTone: string;
+    completionSound: string;
+    endingToneOptions: {
+      restrained: string;
+      healing: string;
+    };
+    completionSoundOptions: {
+      off: string;
+    };
+  };
   terminal: {
     sectionTitle: string;
     sectionDescription: string;
@@ -128,6 +141,19 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       options: {
         en: "English",
         "zh-CN": "中文",
+      },
+    },
+    timer: {
+      sectionTitle: "Timer",
+      sectionDescription: "Choose how the global countdown speaks and sounds when a work block ends.",
+      endingTone: "Timer ending tone",
+      completionSound: "Completion sound",
+      endingToneOptions: {
+        restrained: "Restrained",
+        healing: "Healing",
+      },
+      completionSoundOptions: {
+        off: "Off",
       },
     },
     terminal: {
@@ -238,6 +264,19 @@ const SETTINGS_PANEL_COPY: Record<SettingsPanelLanguage, SettingsPanelCopy> = {
       options: {
         en: "English",
         "zh-CN": "中文",
+      },
+    },
+    timer: {
+      sectionTitle: "计时器",
+      sectionDescription: "选择工作倒计时结束时的提示语气和提示音。",
+      endingTone: "结束语风格",
+      completionSound: "结束提示音",
+      endingToneOptions: {
+        restrained: "克制感",
+        healing: "治愈感",
+      },
+      completionSoundOptions: {
+        off: "关闭",
       },
     },
     terminal: {

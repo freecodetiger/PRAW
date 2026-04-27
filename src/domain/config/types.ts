@@ -1,4 +1,5 @@
 import type { ThemePresetId } from "../theme/presets";
+import type { TimerCompletionSound, TimerRestMessageTone } from "../timer/model";
 import type { SettingsPanelLanguage } from "./settings-panel-language";
 import type { SpeechPreset } from "./speech-preset";
 import type { TerminalShortcutConfig } from "./terminal-shortcuts";
@@ -46,6 +47,8 @@ export interface SpeechConfig {
 
 export interface UiConfig {
   settingsPanelLanguage: SettingsPanelLanguage;
+  timerRestMessageTone: TimerRestMessageTone;
+  timerCompletionSound: TimerCompletionSound;
 }
 
 export interface AppConfig {

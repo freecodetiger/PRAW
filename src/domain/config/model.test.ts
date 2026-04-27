@@ -452,6 +452,8 @@ describe("resolveAppConfig", () => {
   it("defaults settings panel language to english", () => {
     expect(resolveAppConfig()).toEqual(DEFAULT_APP_CONFIG);
     expect(DEFAULT_APP_CONFIG.ui.settingsPanelLanguage).toBe("en");
+    expect(DEFAULT_APP_CONFIG.ui.timerRestMessageTone).toBe("restrained");
+    expect(DEFAULT_APP_CONFIG.ui.timerCompletionSound).toBe("sound1");
   });
 
   it("accepts zh-CN for settings panel language", () => {
@@ -467,6 +469,46 @@ describe("resolveAppConfig", () => {
       speech: DEFAULT_APP_CONFIG.speech,
       ui: {
         settingsPanelLanguage: "zh-CN",
+        timerRestMessageTone: DEFAULT_APP_CONFIG.ui.timerRestMessageTone,
+        timerCompletionSound: DEFAULT_APP_CONFIG.ui.timerCompletionSound,
+      },
+    });
+  });
+
+  it("accepts healing timer rest message tone", () => {
+    expect(
+      resolveAppConfig({
+        ui: {
+          timerRestMessageTone: "healing",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
+      ui: {
+        settingsPanelLanguage: DEFAULT_APP_CONFIG.ui.settingsPanelLanguage,
+        timerRestMessageTone: "healing",
+        timerCompletionSound: DEFAULT_APP_CONFIG.ui.timerCompletionSound,
+      },
+    });
+  });
+
+  it("accepts timer completion sound settings", () => {
+    expect(
+      resolveAppConfig({
+        ui: {
+          timerCompletionSound: "sound7",
+        },
+      }),
+    ).toEqual({
+      terminal: DEFAULT_APP_CONFIG.terminal,
+      ai: DEFAULT_APP_CONFIG.ai,
+      speech: DEFAULT_APP_CONFIG.speech,
+      ui: {
+        settingsPanelLanguage: DEFAULT_APP_CONFIG.ui.settingsPanelLanguage,
+        timerRestMessageTone: DEFAULT_APP_CONFIG.ui.timerRestMessageTone,
+        timerCompletionSound: "sound7",
       },
     });
   });
@@ -476,6 +518,8 @@ describe("resolveAppConfig", () => {
       resolveAppConfig({
         ui: {
           settingsPanelLanguage: "fr" as never,
+          timerRestMessageTone: "loud" as never,
+          timerCompletionSound: "alarm" as never,
         },
       }),
     ).toEqual(DEFAULT_APP_CONFIG);

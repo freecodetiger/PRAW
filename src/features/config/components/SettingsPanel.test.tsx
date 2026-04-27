@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
 import { testAiConnection } from "../../../lib/tauri/ai";
 import { checkForAppUpdate, openAppReleasePage } from "../lib/app-update";
+import { playTimerCompletionSound } from "../../timer/lib/completion-sound";
 import { SettingsPanel } from "./SettingsPanel";
 import { useAppConfigStore } from "../state/app-config-store";
 
@@ -17,6 +18,10 @@ vi.mock("../../../lib/tauri/ai", () => ({
 vi.mock("../lib/app-update", () => ({
   checkForAppUpdate: vi.fn(),
   openAppReleasePage: vi.fn(),
+}));
+
+vi.mock("../../timer/lib/completion-sound", () => ({
+  playTimerCompletionSound: vi.fn(),
 }));
 
 function resetStore() {
@@ -37,6 +42,7 @@ function findLabel(container: HTMLElement, text: string) {
 const mockedTestAiConnection = vi.mocked(testAiConnection);
 const mockedCheckForAppUpdate = vi.mocked(checkForAppUpdate);
 const mockedOpenAppReleasePage = vi.mocked(openAppReleasePage);
+const mockedPlayTimerCompletionSound = vi.mocked(playTimerCompletionSound);
 
 describe("SettingsPanel", () => {
   let host: HTMLDivElement;
@@ -55,12 +61,13 @@ describe("SettingsPanel", () => {
     mockedCheckForAppUpdate.mockReset();
     mockedCheckForAppUpdate.mockResolvedValue({
       status: "up-to-date",
-      currentVersion: "0.1.5",
-      latestVersion: "0.1.5",
-      releaseUrl: "https://github.com/freecodetiger/PRAW/releases/tag/v0.1.5",
+      currentVersion: "0.2.0",
+      latestVersion: "0.2.0",
+      releaseUrl: "https://github.com/freecodetiger/PRAW/releases/tag/v0.2.0",
     });
     mockedOpenAppReleasePage.mockReset();
     mockedOpenAppReleasePage.mockResolvedValue();
+    mockedPlayTimerCompletionSound.mockReset();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -114,6 +121,80 @@ describe("SettingsPanel", () => {
 
     expect(useAppConfigStore.getState().config.ui.settingsPanelLanguage).toBe("zh-CN");
     expect(host.textContent).toContain("运行配置");
+  });
+
+  it("renders and updates the timer rest message tone selector", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const toneField = findLabel(host, "Timer ending tone");
+    const toneSelect = toneField?.querySelector("select") ?? null;
+    expect(toneSelect).not.toBeNull();
+    expect((toneSelect as HTMLSelectElement).value).toBe("restrained");
+
+    act(() => {
+      if (toneSelect instanceof HTMLSelectElement) {
+        toneSelect.value = "healing";
+      }
+      toneSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.ui.timerRestMessageTone).toBe("healing");
+  });
+
+  it("renders and updates the timer completion sound selector", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const soundField = findLabel(host, "Completion sound");
+    const soundSelect = soundField?.querySelector("select") ?? null;
+    expect(soundSelect).not.toBeNull();
+    expect((soundSelect as HTMLSelectElement).value).toBe("sound1");
+    expect(Array.from((soundSelect as HTMLSelectElement).options).map((option) => option.text)).toContain("Sound 11");
+
+    act(() => {
+      if (soundSelect instanceof HTMLSelectElement) {
+        soundSelect.value = "sound7";
+      }
+      soundSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.ui.timerCompletionSound).toBe("sound7");
+    expect(mockedPlayTimerCompletionSound).toHaveBeenCalledWith("sound7");
+  });
+
+  it("does not preview a timer completion sound when selecting off", () => {
+    act(() => {
+      root.render(<SettingsPanel />);
+    });
+
+    act(() => {
+      host.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const soundField = findLabel(host, "Completion sound");
+    const soundSelect = soundField?.querySelector("select") ?? null;
+    expect(soundSelect).not.toBeNull();
+
+    act(() => {
+      if (soundSelect instanceof HTMLSelectElement) {
+        soundSelect.value = "off";
+      }
+      soundSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(useAppConfigStore.getState().config.ui.timerCompletionSound).toBe("off");
+    expect(mockedPlayTimerCompletionSound).not.toHaveBeenCalled();
   });
 
   it("renders and updates the smart suggestion bubble toggle", () => {
@@ -397,7 +478,7 @@ describe("SettingsPanel", () => {
 
     expect(host.textContent).toContain("About & Updates");
     expect(host.textContent).toContain("Current version");
-    expect(host.textContent).toContain("v0.1.5");
+    expect(host.textContent).toContain("v0.2.0");
   });
 
   it("checks for updates manually and opens the available release page", async () => {
@@ -443,7 +524,7 @@ describe("SettingsPanel", () => {
   it("keeps the manual release page available when automatic update checks fail", async () => {
     mockedCheckForAppUpdate.mockResolvedValueOnce({
       status: "error",
-      currentVersion: "0.1.5",
+      currentVersion: "0.2.0",
       message: "GitHub API rate limited the release check",
       releaseUrl: "https://github.com/freecodetiger/PRAW/releases",
     });

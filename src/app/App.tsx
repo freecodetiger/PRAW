@@ -11,6 +11,7 @@ import { useAppConfigStore } from "../features/config/state/app-config-store";
 import { TerminalWorkspace } from "../features/terminal/components/TerminalWorkspace";
 import { useTerminalRuntime } from "../features/terminal/hooks/useTerminalRuntime";
 import { selectWorkspaceCollectionForPersistence, useWorkspaceStore } from "../features/terminal/state/workspace-store";
+import { GlobalTimer } from "../features/timer/components/GlobalTimer";
 import { WorkspaceSwitcherPanel } from "../features/workspaces/components/WorkspaceSwitcherPanel";
 
 function App() {
@@ -117,6 +118,9 @@ function App() {
     <div className="app-shell" data-theme={themePreset.id} style={{ colorScheme: themePreset.colorScheme }}>
       <header className="app-header">
         <WorkspaceSwitcherPanel />
+        <div className="app-header__center">
+          <GlobalTimer />
+        </div>
         <div className="app-header__actions">
           <SettingsPanel />
         </div>

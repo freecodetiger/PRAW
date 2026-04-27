@@ -101,12 +101,18 @@ impl Default for SpeechConfig {
 pub struct UiConfig {
     #[serde(default = "default_settings_panel_language")]
     pub settings_panel_language: String,
+    #[serde(default = "default_timer_rest_message_tone")]
+    pub timer_rest_message_tone: String,
+    #[serde(default = "default_timer_completion_sound")]
+    pub timer_completion_sound: String,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
             settings_panel_language: default_settings_panel_language(),
+            timer_rest_message_tone: default_timer_rest_message_tone(),
+            timer_completion_sound: default_timer_completion_sound(),
         }
     }
 }
@@ -136,6 +142,14 @@ fn default_terminal_dialog_font_size() -> u16 {
 
 fn default_terminal_theme_preset() -> String {
     "light".to_string()
+}
+
+fn default_timer_rest_message_tone() -> String {
+    "restrained".to_string()
+}
+
+fn default_timer_completion_sound() -> String {
+    "sound1".to_string()
 }
 
 fn default_terminal_shortcuts() -> TerminalShortcutConfig {
@@ -281,7 +295,9 @@ mod tests {
                     "backgroundColor": "#eef4ff"
                 },
                 "ui": {
-                    "settingsPanelLanguage": "zh-CN"
+                    "settingsPanelLanguage": "zh-CN",
+                    "timerRestMessageTone": "healing",
+                    "timerCompletionSound": "sound7"
                 }
             }"##,
         )
@@ -295,6 +311,8 @@ mod tests {
         assert_eq!(config.ai.theme_color, "#1f5eff");
         assert_eq!(config.ai.background_color, "#eef4ff");
         assert_eq!(config.ui.settings_panel_language, "zh-CN");
+        assert_eq!(config.ui.timer_rest_message_tone, "healing");
+        assert_eq!(config.ui.timer_completion_sound, "sound7");
         assert!(!config.speech.enabled);
         assert_eq!(config.speech.provider, "aliyun-paraformer-realtime");
         assert_eq!(config.speech.language, "auto");
@@ -576,6 +594,16 @@ mod tests {
             ui.get("settingsPanelLanguage")
                 .and_then(|value| value.as_str()),
             Some("en")
+        );
+        assert_eq!(
+            ui.get("timerRestMessageTone")
+                .and_then(|value| value.as_str()),
+            Some("restrained")
+        );
+        assert_eq!(
+            ui.get("timerCompletionSound")
+                .and_then(|value| value.as_str()),
+            Some("sound1")
         );
     }
 

@@ -2,6 +2,7 @@ import { DEFAULT_BUNDLED_MONO_FONT_FAMILY, DEFAULT_DIALOG_FONT_SIZE } from "./fo
 import { DEFAULT_TERMINAL_SHELL } from "./default-shell";
 import { DEFAULT_SETTINGS_PANEL_LANGUAGE, normalizeSettingsPanelLanguage } from "./settings-panel-language";
 import { isSpeechPreset } from "./speech-preset";
+import { isTimerCompletionSound, type TimerCompletionSound, type TimerRestMessageTone } from "../timer/model";
 import { isThemePresetId } from "../theme/presets";
 import type {
   AiConfig,
@@ -50,6 +51,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
   ui: {
     settingsPanelLanguage: DEFAULT_SETTINGS_PANEL_LANGUAGE,
+    timerRestMessageTone: "restrained",
+    timerCompletionSound: "sound1",
   },
 };
 
@@ -121,6 +124,8 @@ export function resolveAppConfig(input?: AppConfigInput | null): AppConfig {
     },
     ui: {
       settingsPanelLanguage: normalizeSettingsPanelLanguage(ui?.settingsPanelLanguage),
+      timerRestMessageTone: normalizeTimerRestMessageTone(ui?.timerRestMessageTone),
+      timerCompletionSound: normalizeTimerCompletionSound(ui?.timerCompletionSound),
     },
   };
 }
@@ -203,6 +208,14 @@ function normalizePreferredMode(value: string | undefined): TerminalPreferredMod
 
 function normalizeThemePreset(value: string | undefined): TerminalConfig["themePreset"] {
   return isThemePresetId(value) ? value : DEFAULT_APP_CONFIG.terminal.themePreset;
+}
+
+function normalizeTimerRestMessageTone(value: unknown): TimerRestMessageTone {
+  return value === "healing" || value === "restrained" ? value : DEFAULT_APP_CONFIG.ui.timerRestMessageTone;
+}
+
+function normalizeTimerCompletionSound(value: unknown): TimerCompletionSound {
+  return isTimerCompletionSound(value) ? value : DEFAULT_APP_CONFIG.ui.timerCompletionSound;
 }
 
 function normalizeHexColor(value: string | undefined, fallback: string): string {

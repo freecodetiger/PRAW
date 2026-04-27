@@ -58,6 +58,9 @@ vi.mock("../features/config/components/SettingsPanel", () => ({
 vi.mock("../features/terminal/components/TerminalWorkspace", () => ({
   TerminalWorkspace: () => <div data-testid="workspace" />,
 }));
+vi.mock("../features/timer/components/GlobalTimer", () => ({
+  GlobalTimer: () => <div data-testid="global-timer" />,
+}));
 
 describe("App", () => {
   let host: HTMLDivElement;
@@ -140,6 +143,20 @@ describe("App", () => {
     });
 
     expect(host.querySelector(".workspace-switcher-panel--open")).not.toBeNull();
+  });
+
+  it("renders the global timer in the center of the app header", async () => {
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    const headerCenter = host.querySelector(".app-header__center");
+
+    expect(headerCenter).not.toBeNull();
+    expect(headerCenter!.querySelector("[data-testid='global-timer']")).not.toBeNull();
+    expect(host.querySelector(".app-header__actions [data-testid='settings-panel']")).not.toBeNull();
+    expect(host.querySelector(".app-header [aria-label='Open workspaces']")).not.toBeNull();
   });
 
   it("migrates a legacy window snapshot into a workspace collection", async () => {

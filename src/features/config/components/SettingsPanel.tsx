@@ -9,7 +9,8 @@ import {
   type TerminalShortcutConfigKey,
 } from "../../../domain/config/terminal-shortcuts";
 import type { CompletionProvider, AiConnectionTestResult } from "../../../domain/ai/types";
-import type { AiConfig, SpeechConfig } from "../../../domain/config/types";
+import type { AiConfig, SpeechConfig, UiConfig } from "../../../domain/config/types";
+import { TIMER_COMPLETION_SOUND_OPTIONS } from "../../../domain/timer/model";
 import { THEME_PRESET_OPTIONS, type ThemePresetId } from "../../../domain/theme/presets";
 import { APP_VERSION } from "../../../domain/release/app-version";
 import { normalizeImportedPhraseText } from "../../../domain/terminal/phrase-completion";
@@ -18,6 +19,7 @@ import { checkForAppUpdate, openAppReleasePage, type AppUpdateCheckResult } from
 import { describeAiConnectionResult } from "../lib/ai-connection";
 import { getSettingsPanelCopy } from "../lib/settings-panel-copy";
 import { useAppConfigStore } from "../state/app-config-store";
+import { playTimerCompletionSound } from "../../timer/lib/completion-sound";
 import { ShortcutRecorder } from "./ShortcutRecorder";
 
 const CLASSIC_FONT_FAMILY = "CaskaydiaCove Nerd Font Mono";
@@ -91,6 +93,16 @@ export function SettingsPanel() {
           }
         : {}),
     });
+  };
+
+  const updateTimerCompletionSound = (sound: UiConfig["timerCompletionSound"]) => {
+    patchUiConfig({
+      timerCompletionSound: sound,
+    });
+
+    if (sound !== "off") {
+      playTimerCompletionSound(sound);
+    }
   };
 
   const shortcutLabels = copy.terminal.shortcutLabels;
@@ -258,6 +270,43 @@ export function SettingsPanel() {
               >
                 <option value="en">{copy.panelLanguage.options.en}</option>
                 <option value="zh-CN">{copy.panelLanguage.options["zh-CN"]}</option>
+              </select>
+            </label>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section__title">
+              <strong>{copy.timer.sectionTitle}</strong>
+              <p>{copy.timer.sectionDescription}</p>
+            </div>
+
+            <label className="settings-field">
+              <span>{copy.timer.endingTone}</span>
+              <select
+                value={config.ui.timerRestMessageTone}
+                onChange={(event) =>
+                  patchUiConfig({
+                    timerRestMessageTone: event.target.value as UiConfig["timerRestMessageTone"],
+                  })
+                }
+              >
+                <option value="restrained">{copy.timer.endingToneOptions.restrained}</option>
+                <option value="healing">{copy.timer.endingToneOptions.healing}</option>
+              </select>
+            </label>
+
+            <label className="settings-field">
+              <span>{copy.timer.completionSound}</span>
+              <select
+                value={config.ui.timerCompletionSound}
+                onChange={(event) => updateTimerCompletionSound(event.target.value as UiConfig["timerCompletionSound"])}
+              >
+                {TIMER_COMPLETION_SOUND_OPTIONS.map((sound, index) => (
+                  <option key={sound} value={sound}>
+                    Sound {index + 1}
+                  </option>
+                ))}
+                <option value="off">{copy.timer.completionSoundOptions.off}</option>
               </select>
             </label>
           </section>
