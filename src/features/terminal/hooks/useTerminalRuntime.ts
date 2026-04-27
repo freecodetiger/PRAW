@@ -84,6 +84,39 @@ function isMatchingAgentWorkflowCommandMarker(payload: string, commandEntry: str
   return payload.slice("C;entry=".length) === commandEntry;
 }
 
+function extractAgentWorkflowStartupFrame(data: string): { commandEntry?: string; data: string } | null {
+  let cursor = 0;
+  let commandEntry: string | undefined;
+
+  while (cursor < data.length) {
+    const markerStart = data.indexOf("\u001b]133;", cursor);
+    if (markerStart === -1) {
+      return null;
+    }
+
+    const markerEnd = findShellMarkerEnd(data, markerStart + "\u001b]133;".length);
+    if (!markerEnd) {
+      return null;
+    }
+
+    const payload = data.slice(markerStart + "\u001b]133;".length, markerEnd.index);
+    if (payload === "C") {
+      commandEntry = undefined;
+    } else if (payload.startsWith("C;entry=")) {
+      commandEntry = payload.slice("C;entry=".length);
+    } else if (payload.startsWith("PRAW_AGENT;provider=")) {
+      return {
+        commandEntry,
+        data: data.slice(markerEnd.index + markerEnd.length),
+      };
+    }
+
+    cursor = markerEnd.index + markerEnd.length;
+  }
+
+  return null;
+}
+
 function asMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -226,6 +259,21 @@ export function useTerminalRuntime() {
       }
 
       let directOutput = event.data;
+      const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
+      const startupFrame = extractAgentWorkflowStartupFrame(event.data);
+      if (startupFrame && existingTabState?.presentation !== "agent-workflow") {
+        hardResetTerminalRuntime(tabRef.tabId);
+        consumeSemantic(tabRef.tabId, {
+          sessionId: event.sessionId,
+          kind: "agent-workflow",
+          reason: "shell-entry",
+          confidence: "strong",
+          commandEntry: startupFrame.commandEntry,
+        });
+        directOutput = startupFrame.data;
+        pendingAgentWorkflowEntryCutsRef.current.delete(tabRef.tabId);
+      }
+
       if (pendingAgentWorkflowEntryCutsRef.current.has(tabRef.tabId)) {
         const commandEntry = pendingAgentWorkflowEntryCutsRef.current.get(tabRef.tabId);
         const stripped = stripAgentWorkflowEntryPrefix(event.data, commandEntry);

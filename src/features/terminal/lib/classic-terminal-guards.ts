@@ -69,9 +69,9 @@ export function shouldSwallowCsiQuery(identifier: string, params: ReadonlyArray<
     case ">c":
       return firstParam === undefined || firstParam === 0;
     case "n":
-      return firstParam === 5 || firstParam === 6;
+      return firstParam === 5;
     case "?n":
-      return firstParam === 6 || firstParam === 15 || firstParam === 25 || firstParam === 26 || firstParam === 53;
+      return firstParam === 15 || firstParam === 25 || firstParam === 26 || firstParam === 53;
     case "?h":
     case "?l":
       return firstParam === 1004;
@@ -111,14 +111,6 @@ export function resolveClassicCsiQueryResponse(
     case "n":
       if (firstParam === 5) {
         return "\u001b[0n";
-      }
-      if (firstParam === 6) {
-        return "\u001b[1;1R";
-      }
-      return null;
-    case "?n":
-      if (firstParam === 6) {
-        return "\u001b[?1;1R";
       }
       return null;
     default:

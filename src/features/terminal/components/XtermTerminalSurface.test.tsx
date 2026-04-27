@@ -8,7 +8,7 @@ import { getThemePreset } from "../../../domain/theme/presets";
 import { clearRegistry, exportTerminalArchive, getTerminalSnapshot, resetDirect, writeDirect } from "../lib/terminal-registry";
 import { XtermTerminalSurface } from "./XtermTerminalSurface";
 
-const { MockTerminal, terminalInstances } = vi.hoisted(() => {
+const { MockTerminal, MockUnicode11Addon, terminalInstances } = vi.hoisted(() => {
   const instances: Array<{
     focus: ReturnType<typeof vi.fn>;
     textarea: HTMLTextAreaElement;
@@ -20,6 +20,10 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     scrollToLine: ReturnType<typeof vi.fn>;
     scrollToBottom: ReturnType<typeof vi.fn>;
     paste: ReturnType<typeof vi.fn>;
+    loadAddon: ReturnType<typeof vi.fn>;
+    unicode: {
+      activeVersion: string;
+    };
     triggerScroll: (position: number) => void;
     buffer: {
       active: {
@@ -44,6 +48,9 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     paste = vi.fn();
     getSelection = vi.fn(() => "");
     loadAddon = vi.fn();
+    unicode = {
+      activeVersion: "6",
+    };
     instanceId = 0;
     open = vi.fn((element: HTMLElement) => {
       const marker = document.createElement("div");
@@ -78,7 +85,11 @@ const { MockTerminal, terminalInstances } = vi.hoisted(() => {
     }
   }
 
-  return { terminalInstances: instances, MockTerminal };
+  class MockUnicode11Addon {
+    readonly kind = "unicode11";
+  }
+
+  return { terminalInstances: instances, MockTerminal, MockUnicode11Addon };
 });
 
 vi.mock("@xterm/xterm", () => ({
@@ -89,6 +100,10 @@ vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class MockFitAddon {
     fit = vi.fn();
   },
+}));
+
+vi.mock("@xterm/addon-unicode11", () => ({
+  Unicode11Addon: MockUnicode11Addon,
 }));
 
 
@@ -154,6 +169,29 @@ describe("XtermTerminalSurface", () => {
     });
 
     expect(terminalInstances[0]?.focus).toHaveBeenCalled();
+  });
+
+  it("loads the Unicode 11 width table before fitting the terminal", async () => {
+    await act(async () => {
+      root.render(
+        <XtermTerminalSurface
+          tabId="tab:1"
+          sessionId="session-1"
+          fontFamily="monospace"
+          fontSize={14}
+          theme={theme}
+          isActive={true}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const loadedAddons = terminalInstances[0]?.loadAddon.mock.calls.map(([addon]) => addon) ?? [];
+    expect(loadedAddons.some((addon) => addon instanceof MockUnicode11Addon)).toBe(true);
+    expect(terminalInstances[0]?.unicode.activeVersion).toBe("11");
   });
 
   it("does not steal focus while terminal input is suspended", () => {

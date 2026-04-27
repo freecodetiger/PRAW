@@ -17,7 +17,7 @@ pub enum ProviderBridgeKind {
 
 impl ProviderBridgeKind {
     pub fn from_cli_name(value: &str) -> Option<Self> {
-        match value {
+        match value.trim().to_ascii_lowercase().as_str() {
             "codex" => Some(Self::Codex),
             "omx" => Some(Self::Omx),
             "claude" => Some(Self::Claude),

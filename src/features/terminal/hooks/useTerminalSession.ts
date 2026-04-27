@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { closeTerminalSession, resizeTerminalSession, writeTerminalSession } from "../../../lib/tauri/terminal";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -7,10 +7,7 @@ export function useTerminalSession(tabId: string) {
   const tab = useWorkspaceStore((state) => state.window?.tabs[tabId]);
   const restartTab = useWorkspaceStore((state) => state.restartTab);
   const activeSessionIdRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    activeSessionIdRef.current = tab?.sessionId;
-  }, [tab?.sessionId]);
+  activeSessionIdRef.current = tab?.sessionId;
 
   const controls = useMemo(
     () => ({

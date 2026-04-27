@@ -92,6 +92,8 @@ mod tests {
         assert!(script.contains("function codex()"));
         assert!(script.contains("function omx()"));
         assert!(script.contains("function claude()"));
+        assert!(script.contains("function Claude()"));
+        assert!(script.contains("function CLAUDE()"));
         assert!(script.contains("function qwen()"));
         assert!(script.contains("printf '\\033]133;PRAW_AGENT;provider=%s\\a' \"$provider\""));
         assert!(script.contains("__praw_agent_wrapper codex \"$@\""));
@@ -118,6 +120,8 @@ mod tests {
         assert!(script.contains("function codex()"));
         assert!(script.contains("function omx()"));
         assert!(script.contains("function claude()"));
+        assert!(script.contains("function Claude()"));
+        assert!(script.contains("function CLAUDE()"));
         assert!(script.contains("function qwen()"));
     }
 
@@ -268,7 +272,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(250));
         writer
-            .write_all(b"whence -w codex\nwhence -w omx\nexit\n")
+            .write_all(b"whence -w codex\nwhence -w omx\nwhence -w Claude\nexit\n")
             .expect("commands should write to zsh");
         writer.flush().expect("commands should flush");
         drop(writer);
@@ -288,6 +292,7 @@ mod tests {
         assert_eq!(status.exit_code(), 0);
         assert!(output.contains("codex: function"), "expected codex wrapper in output: {output:?}");
         assert!(output.contains("omx: function"), "expected omx wrapper in output: {output:?}");
+        assert!(output.contains("Claude: function"), "expected Claude wrapper in output: {output:?}");
         assert!(
             !output.contains("bad math expression"),
             "zsh integration should not emit startup math errors: {output:?}"
@@ -497,7 +502,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(250));
         writer
-            .write_all(b"codex\nexit\n")
+            .write_all(b"Claude\nexit\n")
             .expect("commands should write to zsh");
         writer.flush().expect("commands should flush");
         drop(writer);
@@ -528,7 +533,7 @@ mod tests {
             "expected zsh hook setup to avoid bad math errors: {output:?}"
         );
         assert!(
-            output.contains("133;PRAW_AGENT;provider=codex"),
+            output.contains("133;PRAW_AGENT;provider=claude"),
             "expected agent bridge marker in output: {output:?}"
         );
     }

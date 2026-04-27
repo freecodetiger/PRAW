@@ -232,6 +232,48 @@ describe("useTerminalRuntime", () => {
     expect(snapshot).not.toContain("zpc@zpc");
   });
 
+  it("keeps the agent startup frame when output arrives before the semantic event", async () => {
+    useTerminalViewStore.setState((state) => ({
+      ...state,
+      tabStates: {
+        "tab:1": {
+          ...createDialogState("/bin/bash", "/workspace"),
+          mode: "dialog",
+          modeSource: "default",
+          presentation: "default",
+          shell: "/bin/bash",
+          parserState: createShellIntegrationParserState(),
+        },
+      },
+    }));
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "zpc@zpc:~$ claude\r\n\x1b]133;C;entry=claude\x07\x1b]133;PRAW_AGENT;provider=claude\x07Claude Code\n",
+      });
+    });
+
+    await act(async () => {
+      terminalApi.emitSemantic({
+        sessionId: "session-1",
+        kind: "agent-workflow",
+        reason: "shell-entry",
+        confidence: "strong",
+        commandEntry: "claude",
+      });
+    });
+
+    const snapshot = getTerminalSnapshot("tab:1").content;
+    expect(snapshot).toBe("Claude Code\n");
+    expect(snapshot).not.toContain("zpc@zpc");
+  });
+
   it("hard-resets terminal state when the tab first transitions into agent workflow mode", async () => {
     useTerminalViewStore.setState((state) => ({
       ...state,

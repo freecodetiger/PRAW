@@ -21,21 +21,21 @@ describe("classic terminal guards", () => {
     expect(resolveClassicCsiQueryResponse("c", [])).toBe("\u001b[?62;4;c");
     expect(resolveClassicCsiQueryResponse(">c", [0])).toBe("\u001b[>0;10;1c");
     expect(resolveClassicCsiQueryResponse("n", [5])).toBe("\u001b[0n");
-    expect(resolveClassicCsiQueryResponse("n", [6])).toBe("\u001b[1;1R");
-    expect(resolveClassicCsiQueryResponse("?n", [6])).toBe("\u001b[?1;1R");
+    expect(resolveClassicCsiQueryResponse("n", [6])).toBeNull();
+    expect(resolveClassicCsiQueryResponse("?n", [6])).toBeNull();
     expect(resolveClassicOscColorQueryResponse(10, "?")).toBe("\u001b]10;rgb:ffff/ffff/ffff\u001b\\");
     expect(resolveClassicOscColorQueryResponse(11, "?")).toBe("\u001b]11;rgb:0000/0000/0000\u001b\\");
     expect(resolveClassicOscColorQueryResponse(12, "?")).toBe("\u001b]12;rgb:ffff/ffff/ffff\u001b\\");
     expect(resolveClassicCsiQueryResponse("n", [2])).toBeNull();
   });
 
-  it("suppresses device and cursor query CSI sequences that leak back into the shell line", () => {
+  it("suppresses device query CSI sequences while delegating cursor position reports to xterm", () => {
     expect(shouldSwallowCsiQuery("c", [0])).toBe(true);
     expect(shouldSwallowCsiQuery("c", [])).toBe(true);
     expect(shouldSwallowCsiQuery(">c", [0])).toBe(true);
     expect(shouldSwallowCsiQuery("n", [5])).toBe(true);
-    expect(shouldSwallowCsiQuery("n", [6])).toBe(true);
-    expect(shouldSwallowCsiQuery("?n", [6])).toBe(true);
+    expect(shouldSwallowCsiQuery("n", [6])).toBe(false);
+    expect(shouldSwallowCsiQuery("?n", [6])).toBe(false);
     expect(shouldSwallowCsiQuery("?n", [15])).toBe(true);
     expect(shouldSwallowCsiQuery("?h", [1004])).toBe(true);
     expect(shouldSwallowCsiQuery("?l", [1004])).toBe(true);
@@ -83,10 +83,10 @@ describe("classic terminal guards", () => {
     expect(writes).toContain("\u001b[?62;4;c");
     expect(csiHandlers.get(">c")?.([0])).toBe(true);
     expect(writes).toContain("\u001b[>0;10;1c");
-    expect(csiHandlers.get("n")?.([6])).toBe(true);
-    expect(writes).toContain("\u001b[1;1R");
-    expect(csiHandlers.get("?n")?.([6])).toBe(true);
-    expect(writes).toContain("\u001b[?1;1R");
+    expect(csiHandlers.get("n")?.([6])).toBe(false);
+    expect(writes).not.toContain("\u001b[1;1R");
+    expect(csiHandlers.get("?n")?.([6])).toBe(false);
+    expect(writes).not.toContain("\u001b[?1;1R");
     expect(csiHandlers.get("?h")?.([1004])).toBe(true);
     expect(csiHandlers.get("?l")?.([1004])).toBe(true);
     expect(csiHandlers.get("n")?.([2])).toBe(false);

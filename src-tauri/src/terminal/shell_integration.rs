@@ -158,6 +158,14 @@ function claude() {{
   __praw_agent_wrapper claude "$@"
 }}
 
+function Claude() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
+function CLAUDE() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
 function qwen() {{
   __praw_agent_wrapper qwen "$@"
 }}
@@ -278,6 +286,14 @@ function omx() {{
 }}
 
 function claude() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
+function Claude() {{
+  __praw_agent_wrapper claude "$@"
+}}
+
+function CLAUDE() {{
   __praw_agent_wrapper claude "$@"
 }}
 

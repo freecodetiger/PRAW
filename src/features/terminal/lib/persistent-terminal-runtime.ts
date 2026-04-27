@@ -1,4 +1,5 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { Terminal } from "@xterm/xterm";
 
 import type { ThemeTerminalPalette } from "../../../domain/theme/presets";
@@ -191,6 +192,10 @@ class PersistentTerminalRuntime {
         theme: this.config.theme,
       }),
     );
+
+    const unicode11Addon = new Unicode11Addon();
+    terminal.loadAddon(unicode11Addon);
+    terminal.unicode.activeVersion = "11";
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);

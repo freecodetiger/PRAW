@@ -11,8 +11,9 @@ interface PersistentTerminalOptionConfig {
 export function createPersistentTerminalOptions(config: PersistentTerminalOptionConfig): ITerminalOptions {
   return {
     allowTransparency: false,
+    allowProposedApi: true,
     altClickMovesCursor: false,
-    convertEol: true,
+    convertEol: false,
     cursorBlink: true,
     fontFamily: config.fontFamily,
     fontSize: config.fontSize,

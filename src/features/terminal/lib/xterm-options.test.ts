@@ -4,7 +4,7 @@ import { getThemePreset } from "../../../domain/theme/presets";
 import { createPersistentTerminalOptions } from "./xterm-options";
 
 describe("xterm options", () => {
-  it("disables alt click cursor moves for persistent terminals", () => {
+  it("uses PTY-safe defaults for persistent terminals", () => {
     expect(
       createPersistentTerminalOptions({
         fontFamily: "IBM Plex Mono",
@@ -16,8 +16,9 @@ describe("xterm options", () => {
       fontFamily: "IBM Plex Mono",
       fontSize: 15,
       cursorBlink: true,
-      convertEol: true,
+      convertEol: false,
       allowTransparency: false,
+      allowProposedApi: true,
     });
   });
 });

@@ -21,6 +21,68 @@ use super::{
     TerminalSemanticDetector,
 };
 
+#[derive(Default)]
+struct Utf8StreamDecoder {
+    pending: Vec<u8>,
+}
+
+impl Utf8StreamDecoder {
+    fn decode(&mut self, bytes: &[u8]) -> String {
+        if bytes.is_empty() && self.pending.is_empty() {
+            return String::new();
+        }
+
+        let mut combined = Vec::with_capacity(self.pending.len() + bytes.len());
+        combined.extend_from_slice(&self.pending);
+        combined.extend_from_slice(bytes);
+        self.pending.clear();
+
+        let mut output = String::new();
+        let mut cursor = 0;
+
+        while cursor < combined.len() {
+            match std::str::from_utf8(&combined[cursor..]) {
+                Ok(valid) => {
+                    output.push_str(valid);
+                    return output;
+                }
+                Err(error) => {
+                    let valid_up_to = error.valid_up_to();
+                    if valid_up_to > 0 {
+                        output.push_str(
+                            std::str::from_utf8(&combined[cursor..cursor + valid_up_to])
+                                .expect("valid UTF-8 prefix reported by decoder"),
+                        );
+                        cursor += valid_up_to;
+                    }
+
+                    match error.error_len() {
+                        Some(invalid_len) => {
+                            output.push('\u{fffd}');
+                            cursor += invalid_len;
+                        }
+                        None => {
+                            self.pending.extend_from_slice(&combined[cursor..]);
+                            return output;
+                        }
+                    }
+                }
+            }
+        }
+
+        output
+    }
+
+    fn finish(&mut self) -> String {
+        if self.pending.is_empty() {
+            return String::new();
+        }
+
+        let output = String::from_utf8_lossy(&self.pending).into_owned();
+        self.pending.clear();
+        output
+    }
+}
 
 static TERMINAL_DEBUG_ENABLED: OnceLock<bool> = OnceLock::new();
 
@@ -211,13 +273,14 @@ impl TerminalManager {
     ) {
         thread::spawn(move || {
             let mut buffer = [0_u8; 8192];
+            let mut decoder = Utf8StreamDecoder::default();
             let mut semantic_detector = TerminalSemanticDetector::default();
 
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(read) => {
-                        let data = String::from_utf8_lossy(&buffer[..read]).to_string();
+                        let data = decoder.decode(&buffer[..read]);
                         if data.is_empty() {
                             continue;
                         }
@@ -231,20 +294,23 @@ impl TerminalManager {
                             );
                         }
 
-                        for semantic_event in semantic_detector.consume(&session_id, &data) {
-                            let _ = app.emit(TERMINAL_SEMANTIC_EVENT, semantic_event);
-                        }
-
-                        let _ = app.emit(
-                            TERMINAL_OUTPUT_EVENT,
-                            TerminalOutputEvent {
-                                session_id: session_id.clone(),
-                                data,
-                            },
-                        );
+                        emit_terminal_output(&app, &session_id, data, &mut semantic_detector);
                     }
                     Err(_) => break,
                 }
+            }
+
+            let data = decoder.finish();
+            if !data.is_empty() {
+                if terminal_debug_enabled() {
+                    eprintln!(
+                        "[praw-terminal] output id={} bytes=pending preview={:?}",
+                        session_id,
+                        data.chars().take(80).collect::<String>()
+                    );
+                }
+
+                emit_terminal_output(&app, &session_id, data, &mut semantic_detector);
             }
         });
     }
@@ -288,6 +354,25 @@ impl TerminalManager {
             let _ = app.emit(TERMINAL_EXIT_EVENT, payload);
         });
     }
+}
+
+fn emit_terminal_output(
+    app: &AppHandle,
+    session_id: &str,
+    data: String,
+    semantic_detector: &mut TerminalSemanticDetector,
+) {
+    for semantic_event in semantic_detector.consume(session_id, &data) {
+        let _ = app.emit(TERMINAL_SEMANTIC_EVENT, semantic_event);
+    }
+
+    let _ = app.emit(
+        TERMINAL_OUTPUT_EVENT,
+        TerminalOutputEvent {
+            session_id: session_id.to_string(),
+            data,
+        },
+    );
 }
 
 fn resolve_shell(shell: Option<String>) -> String {
@@ -374,7 +459,7 @@ fn build_session_path(path: Option<&str>, home: Option<&str>) -> Option<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{build_session_path, parse_terminal_debug_flag};
+    use super::{build_session_path, parse_terminal_debug_flag, Utf8StreamDecoder};
 
     #[test]
     fn enriches_sparse_gui_session_paths_with_user_and_homebrew_bins() {
@@ -429,5 +514,27 @@ mod tests {
         assert!(parse_terminal_debug_flag(Some("TRUE")));
         assert!(parse_terminal_debug_flag(Some("yes")));
         assert!(parse_terminal_debug_flag(Some("on")));
+    }
+
+    #[test]
+    fn utf8_stream_decoder_preserves_multibyte_chars_split_across_reads() {
+        let mut decoder = Utf8StreamDecoder::default();
+        let bytes = "──✢⏵".as_bytes();
+
+        assert_eq!(decoder.decode(&bytes[..1]), "");
+        assert_eq!(decoder.decode(&bytes[1..4]), "─");
+        assert_eq!(decoder.decode(&bytes[4..7]), "─");
+        assert_eq!(decoder.decode(&bytes[7..10]), "✢");
+        assert_eq!(decoder.decode(&bytes[10..]), "⏵");
+        assert_eq!(decoder.finish(), "");
+    }
+
+    #[test]
+    fn utf8_stream_decoder_replaces_only_invalid_bytes() {
+        let mut decoder = Utf8StreamDecoder::default();
+
+        assert_eq!(decoder.decode(&[0xe2, 0x94]), "");
+        assert_eq!(decoder.decode(&[0x80, 0xff, b'a']), "─�a");
+        assert_eq!(decoder.finish(), "");
     }
 }

@@ -22,6 +22,10 @@ mod tests {
             Some(ProviderBridgeKind::Claude)
         );
         assert_eq!(
+            ProviderBridgeKind::from_cli_name("Claude"),
+            Some(ProviderBridgeKind::Claude)
+        );
+        assert_eq!(
             ProviderBridgeKind::from_cli_name("qwen"),
             Some(ProviderBridgeKind::Qwen)
         );
