@@ -9,6 +9,8 @@ import {
   unregisterTerminal,
   updateViewport,
   writeDirect,
+  writeDirectBuffered,
+  flushDirect,
   type TerminalController,
 } from "./terminal-registry";
 import {
@@ -28,6 +30,7 @@ describe("terminal-screen-mirror", () => {
     clearRegistry();
     clearMirrors();
     removeMirror("tab:1");
+    vi.useRealTimers();
   });
 
   it("stores the latest visible text for replay hydration", () => {
@@ -47,6 +50,16 @@ describe("terminal-screen-mirror", () => {
 
     expect(getMirrorSnapshot("tab:1").replayText).toBe("Receiving objects: 100%\nDone.\n");
     expect(exportMirrorText("tab:1")).toBe("Receiving objects: 100%\nDone.");
+  });
+
+  it("caps replay and export text to the recent tail for long AI output", () => {
+    writeToMirror("tab:1", `HEAD\n${"a".repeat(1_200_000)}\nTAIL`);
+
+    const snapshot = getMirrorSnapshot("tab:1");
+    expect(snapshot.replayText.length).toBeLessThanOrEqual(1_048_576);
+    expect(snapshot.replayText).toContain("TAIL");
+    expect(snapshot.replayText).not.toContain("HEAD");
+    expect(exportMirrorText("tab:1")).toContain("TAIL");
   });
 
   it("preserves viewport state independently from replay text", () => {
@@ -91,6 +104,38 @@ describe("terminal-screen-mirror", () => {
     expect(exportTerminalArchive("tab:1")).toBe("alpha\nbeta");
 
     unregisterTerminal("tab:1");
+  });
+
+  it("buffers direct terminal writes and flushes them as one ordered chunk", () => {
+    vi.useFakeTimers();
+    const controller = createController();
+    registerTerminal("tab:1", controller);
+
+    writeDirectBuffered("tab:1", "alpha");
+    writeDirectBuffered("tab:1", " beta");
+
+    expect(controller.writeDirect).not.toHaveBeenCalled();
+    expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+    flushDirect("tab:1");
+
+    expect(controller.writeDirect).toHaveBeenCalledTimes(1);
+    expect(controller.writeDirect).toHaveBeenCalledWith("alpha beta");
+    expect(getTerminalSnapshot("tab:1").content).toBe("alpha beta");
+  });
+
+  it("automatically flushes buffered direct terminal writes on the next frame window", () => {
+    vi.useFakeTimers();
+    const controller = createController();
+    registerTerminal("tab:1", controller);
+
+    writeDirectBuffered("tab:1", "stream");
+    vi.advanceTimersByTime(15);
+    expect(controller.writeDirect).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(controller.writeDirect).toHaveBeenCalledWith("stream");
+    expect(getTerminalSnapshot("tab:1").content).toBe("stream");
   });
 });
 

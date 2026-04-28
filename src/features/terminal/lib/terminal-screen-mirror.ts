@@ -2,6 +2,7 @@ import type { TerminalController } from "./terminal-registry";
 
 const ESC = "\u001b";
 const BEL = "\u0007";
+const MAX_REPLAY_TEXT_LENGTH = 1_048_576;
 
 export interface TerminalMirrorSnapshot {
   replayText: string;
@@ -45,8 +46,9 @@ export function writeToMirror(tabId: string, data: string): void {
 
   const mirror = ensureMirror(tabId);
   const next = applyTerminalChunk(mirror.replayText, mirror.pendingControl, mirror.pendingCarriageReturn, data);
-  mirror.replayText = next.replayText;
-  mirror.exportText = trimTrailingBlankLines(next.replayText);
+  const replayText = trimReplayText(next.replayText);
+  mirror.replayText = replayText;
+  mirror.exportText = trimTrailingBlankLines(replayText);
   mirror.pendingControl = next.pendingControl;
   mirror.pendingCarriageReturn = next.pendingCarriageReturn;
   mirror.controller?.writeDirect(data);
@@ -282,4 +284,12 @@ function consumeOscSequence(source: string, fromIndex: number): { end: number } 
 
 function trimTrailingBlankLines(value: string): string {
   return value.replace(/\r\n/gu, "\n").replace(/\n+$/gu, "");
+}
+
+function trimReplayText(value: string): string {
+  if (value.length <= MAX_REPLAY_TEXT_LENGTH) {
+    return value;
+  }
+
+  return value.slice(value.length - MAX_REPLAY_TEXT_LENGTH);
 }

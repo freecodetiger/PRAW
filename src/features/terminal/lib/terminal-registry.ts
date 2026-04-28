@@ -18,6 +18,8 @@ import {
 } from "./terminal-screen-mirror";
 import { clearPersistentTerminalRuntimes, disposePersistentTerminalRuntime, hardResetPersistentTerminalRuntime } from "./persistent-terminal-runtime";
 
+const DIRECT_WRITE_FLUSH_DELAY_MS = 16;
+
 export interface TerminalController {
   writeDirect: (data: string) => void;
   pasteText: (text: string) => void;
@@ -36,6 +38,7 @@ export interface TerminalSnapshot {
 }
 
 const registry = new Map<string, TerminalController>();
+const pendingDirectWrites = new Map<string, { data: string; timer: ReturnType<typeof setTimeout> | null }>();
 
 export function registerTerminal(tabId: string, terminal: TerminalController): void {
   registry.set(tabId, terminal);
@@ -69,7 +72,44 @@ export function hasTerminal(tabId: string): boolean {
 }
 
 export function writeDirect(tabId: string, data: string): void {
+  flushDirect(tabId);
   writeToMirror(tabId, data);
+}
+
+export function writeDirectBuffered(tabId: string, data: string): void {
+  if (!data) {
+    return;
+  }
+
+  const pending = pendingDirectWrites.get(tabId);
+  if (pending) {
+    pending.data += data;
+    return;
+  }
+
+  const created = {
+    data,
+    timer: setTimeout(() => {
+      flushDirect(tabId);
+    }, DIRECT_WRITE_FLUSH_DELAY_MS),
+  };
+  pendingDirectWrites.set(tabId, created);
+}
+
+export function flushDirect(tabId: string): void {
+  const pending = pendingDirectWrites.get(tabId);
+  if (!pending) {
+    return;
+  }
+
+  pendingDirectWrites.delete(tabId);
+  if (pending.timer) {
+    clearTimeout(pending.timer);
+  }
+
+  if (pending.data) {
+    writeToMirror(tabId, pending.data);
+  }
 }
 
 export function updateViewport(tabId: string, viewportY: number): void {
@@ -77,22 +117,40 @@ export function updateViewport(tabId: string, viewportY: number): void {
 }
 
 export function resetDirect(tabId: string): void {
+  clearPendingDirectWrite(tabId);
   resetMirror(tabId);
 }
 
 export function hardResetTerminalRuntime(tabId: string): void {
+  clearPendingDirectWrite(tabId);
   resetMirror(tabId);
   hardResetPersistentTerminalRuntime(tabId);
 }
 
 export function removeDirect(tabId: string): void {
+  clearPendingDirectWrite(tabId);
   registry.delete(tabId);
   disposePersistentTerminalRuntime(tabId);
   removeMirror(tabId);
 }
 
 export function clearRegistry(): void {
+  for (const tabId of pendingDirectWrites.keys()) {
+    clearPendingDirectWrite(tabId);
+  }
   registry.clear();
   clearPersistentTerminalRuntimes();
   clearMirrors();
+}
+
+function clearPendingDirectWrite(tabId: string): void {
+  const pending = pendingDirectWrites.get(tabId);
+  if (!pending) {
+    return;
+  }
+
+  pendingDirectWrites.delete(tabId);
+  if (pending.timer) {
+    clearTimeout(pending.timer);
+  }
 }

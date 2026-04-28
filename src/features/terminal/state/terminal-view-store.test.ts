@@ -36,6 +36,30 @@ describe("terminal-view-store AI transcript", () => {
     ]);
   });
 
+  it("does not publish store updates for raw agent workflow text without lifecycle markers", () => {
+    const store = useTerminalViewStore.getState();
+
+    store.syncTabState("tab:1", "/bin/bash", "/workspace", "dialog");
+    store.consumeSemantic("tab:1", {
+      sessionId: "session-1",
+      kind: "agent-workflow",
+      reason: "shell-entry",
+      confidence: "strong",
+      commandEntry: "codex",
+    });
+
+    let updates = 0;
+    const unsubscribe = useTerminalViewStore.subscribe(() => {
+      updates += 1;
+    });
+
+    const promptCwd = store.consumeOutput("tab:1", "assistant token ".repeat(10_000));
+    unsubscribe();
+
+    expect(promptCwd).toBeNull();
+    expect(updates).toBe(0);
+  });
+
   it("records local AI command feedback and can clear the transcript for a new session", () => {
     const store = useTerminalViewStore.getState();
 

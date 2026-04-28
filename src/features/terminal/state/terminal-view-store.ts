@@ -16,6 +16,7 @@ import {
 import type { TerminalSemanticEvent } from "../../../domain/terminal/types";
 import { normalizeDialogOutput, stripTerminalControlSequences } from "../lib/dialog-output";
 import {
+  consumeAgentWorkflowLifecycleChunk,
   consumeShellIntegrationChunk,
   createShellIntegrationParserState,
   type ShellIntegrationParserState,
@@ -241,7 +242,18 @@ export const useTerminalViewStore = create<TerminalViewStore>((set) => ({
         return state;
       }
 
-      const parsed = consumeShellIntegrationChunk(tabState.parserState, data);
+      const parsed =
+        tabState.presentation === "agent-workflow"
+          ? consumeAgentWorkflowLifecycleChunk(tabState.parserState, data)
+          : consumeShellIntegrationChunk(tabState.parserState, data);
+      if (
+        tabState.presentation === "agent-workflow" &&
+        parsed.timeline.length === 0 &&
+        areShellIntegrationParserStatesEqual(tabState.parserState, parsed.state)
+      ) {
+        return state;
+      }
+
       let nextState: TerminalTabViewState = {
         ...tabState,
         parserState: parsed.state,
@@ -504,6 +516,19 @@ function createTabViewState(shell: string, cwd: string, preferredMode: PaneRende
     activeCommandCaptureStarted: false,
     activePreStartCapturedOutput: null,
   };
+}
+
+function areShellIntegrationParserStatesEqual(
+  left: ShellIntegrationParserState,
+  right: ShellIntegrationParserState,
+): boolean {
+  return (
+    left.pending === right.pending &&
+    left.pendingControl === right.pendingControl &&
+    left.pendingCarriageReturn === right.pendingCarriageReturn &&
+    left.suppressPrompt === right.suppressPrompt &&
+    left.shellReady === right.shellReady
+  );
 }
 
 function reconcileShellState(

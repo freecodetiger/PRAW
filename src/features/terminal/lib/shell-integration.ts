@@ -149,6 +149,89 @@ export function consumeShellIntegrationChunk(
   };
 }
 
+export function consumeAgentWorkflowLifecycleChunk(
+  state: ShellIntegrationParserState,
+  chunk: string,
+): ShellIntegrationChunkResult {
+  const source = `${state.pending}${chunk}`;
+  let cursor = 0;
+  const events: ShellLifecycleEvent[] = [];
+  const timeline: ShellIntegrationTimelineEntry[] = [];
+  let suppressPrompt = state.suppressPrompt;
+  let shellReady = state.shellReady;
+
+  while (cursor < source.length) {
+    const markerIndex = source.indexOf(MARKER_PREFIX, cursor);
+    if (markerIndex === -1) {
+      return {
+        state: {
+          ...state,
+          pending: "",
+          suppressPrompt,
+          shellReady,
+        },
+        visibleOutput: "",
+        events,
+        timeline,
+      };
+    }
+
+    const markerEnd = findMarkerEnd(source, markerIndex + MARKER_PREFIX.length);
+    if (!markerEnd) {
+      return {
+        state: {
+          ...state,
+          pending: source.slice(markerIndex),
+          suppressPrompt,
+          shellReady,
+        },
+        visibleOutput: "",
+        events,
+        timeline,
+      };
+    }
+
+    const payload = source.slice(markerIndex + MARKER_PREFIX.length, markerEnd.index);
+    const marker = parseShellMarkerPayload(payload);
+    if (marker?.type === "prompt-start") {
+      suppressPrompt = true;
+    } else if (marker?.type === "prompt-end") {
+      suppressPrompt = false;
+    }
+
+    const event =
+      marker?.type === "command-start" ||
+      marker?.type === "command-end" ||
+      marker?.type === "prompt-state"
+        ? marker
+        : null;
+    if (event) {
+      if (event.type === "prompt-state") {
+        shellReady = true;
+      }
+      events.push(event);
+      timeline.push({
+        type: "event",
+        event,
+      });
+    }
+
+    cursor = markerEnd.index + markerEnd.length;
+  }
+
+  return {
+    state: {
+      ...state,
+      pending: "",
+      suppressPrompt,
+      shellReady,
+    },
+    visibleOutput: "",
+    events,
+    timeline,
+  };
+}
+
 function sanitizeVisibleTerminalOutput(
   pendingControl: string,
   pendingCarriageReturn: boolean,

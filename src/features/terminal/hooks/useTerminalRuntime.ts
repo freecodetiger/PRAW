@@ -15,7 +15,7 @@ import {
 } from "../state/terminal-view-store";
 import { selectAllWorkspaceTabs, useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
-import { hardResetTerminalRuntime, writeDirect } from "../lib/terminal-registry";
+import { flushDirect, hardResetTerminalRuntime, writeDirect, writeDirectBuffered } from "../lib/terminal-registry";
 
 const SHELL_COMMAND_START_MARKER_PREFIX = "\u001b]133;C";
 const SHELL_MARKER_BEL = "\u0007";
@@ -123,6 +123,10 @@ function asMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+function containsCommandEndMarker(data: string): boolean {
+  return data.includes("\u001b]133;D");
 }
 
 export function useTerminalRuntime() {
@@ -260,7 +264,9 @@ export function useTerminalRuntime() {
 
       let directOutput = event.data;
       const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
-      const startupFrame = extractAgentWorkflowStartupFrame(event.data);
+      const isAgentWorkflowOutput = existingTabState?.presentation === "agent-workflow";
+      const startupFrame =
+        !isAgentWorkflowOutput ? extractAgentWorkflowStartupFrame(event.data) : null;
       if (startupFrame && existingTabState?.presentation !== "agent-workflow") {
         hardResetTerminalRuntime(tabRef.tabId);
         consumeSemantic(tabRef.tabId, {
@@ -273,6 +279,7 @@ export function useTerminalRuntime() {
         directOutput = startupFrame.data;
         pendingAgentWorkflowEntryCutsRef.current.delete(tabRef.tabId);
       }
+      const shouldBufferAgentWorkflowOutput = isAgentWorkflowOutput || Boolean(startupFrame);
 
       if (pendingAgentWorkflowEntryCutsRef.current.has(tabRef.tabId)) {
         const commandEntry = pendingAgentWorkflowEntryCutsRef.current.get(tabRef.tabId);
@@ -282,7 +289,14 @@ export function useTerminalRuntime() {
       }
 
       if (directOutput) {
-        writeDirect(tabRef.tabId, directOutput);
+        if (shouldBufferAgentWorkflowOutput) {
+          writeDirectBuffered(tabRef.tabId, directOutput);
+          if (containsCommandEndMarker(event.data)) {
+            flushDirect(tabRef.tabId);
+          }
+        } else {
+          writeDirect(tabRef.tabId, directOutput);
+        }
       }
 
       const promptCwd = consumeOutput(tabRef.tabId, event.data);

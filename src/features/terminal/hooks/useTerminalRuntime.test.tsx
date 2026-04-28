@@ -8,7 +8,7 @@ import { DEFAULT_APP_CONFIG } from "../../../domain/config/model";
 import { createDialogState } from "../../../domain/terminal/dialog";
 import type { TerminalOutputEvent, TerminalSemanticEvent } from "../../../domain/terminal/types";
 import { useAppConfigStore } from "../../config/state/app-config-store";
-import { clearRegistry, getTerminalSnapshot } from "../lib/terminal-registry";
+import { clearRegistry, getTerminalSnapshot, registerTerminal } from "../lib/terminal-registry";
 import { createShellIntegrationParserState } from "../lib/shell-integration";
 import { useTerminalViewStore } from "../state/terminal-view-store";
 import { useWorkspaceStore } from "../state/workspace-store";
@@ -139,6 +139,7 @@ describe("useTerminalRuntime", () => {
     });
     host.remove();
     clearRegistry();
+    vi.useRealTimers();
   });
 
   it("clears pre-AI shell output when the tab first transitions into agent workflow mode", async () => {
@@ -185,6 +186,10 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "OpenAI Codex\n",
       });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
 
     expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
@@ -225,6 +230,10 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "zpc@zpc:~/projects/praw$ codex\r\n\x1b]133;C;entry=codex\x07OpenAI Codex\n",
       });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
 
     const snapshot = getTerminalSnapshot("tab:1").content;
@@ -233,6 +242,7 @@ describe("useTerminalRuntime", () => {
   });
 
   it("keeps the agent startup frame when output arrives before the semantic event", async () => {
+    vi.useFakeTimers();
     useTerminalViewStore.setState((state) => ({
       ...state,
       tabStates: {
@@ -257,6 +267,13 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "zpc@zpc:~$ claude\r\n\x1b]133;C;entry=claude\x07\x1b]133;PRAW_AGENT;provider=claude\x07Claude Code\n",
       });
+    });
+
+    expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+    await act(async () => {
+      vi.advanceTimersByTime(16);
+      await Promise.resolve();
     });
 
     await act(async () => {
@@ -318,12 +335,17 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "OpenAI Codex\n",
       });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
 
     expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
   });
 
   it("mirrors PTY output to the raw terminal snapshot for agent workflow tabs in raw-only mode", async () => {
+    vi.useFakeTimers();
     await act(async () => {
       root.render(<RuntimeHarness />);
       await Promise.resolve();
@@ -336,7 +358,41 @@ describe("useTerminalRuntime", () => {
       });
     });
 
+    expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+    await act(async () => {
+      vi.advanceTimersByTime(16);
+      await Promise.resolve();
+    });
+
     expect(getTerminalSnapshot("tab:1").content).toContain("assistant: hello from raw-only mode\n");
+    vi.useRealTimers();
+  });
+
+  it("flushes buffered agent workflow output before command-end lifecycle handling", async () => {
+    vi.useFakeTimers();
+    const controller = createController();
+    registerTerminal("tab:1", controller);
+
+    await act(async () => {
+      root.render(<RuntimeHarness />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      terminalApi.emitOutput({
+        sessionId: "session-1",
+        data: "assistant: final line\n\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07",
+      });
+    });
+
+    expect(controller.writeDirect).toHaveBeenCalledWith(
+      "assistant: final line\n\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07",
+    );
+    expect(controller.clear).toHaveBeenCalled();
+    expect(controller.writeDirect.mock.invocationCallOrder[0]).toBeLessThan(
+      controller.clear.mock.invocationCallOrder[0],
+    );
   });
 
   it("starts terminal sessions for inactive workspace tabs", async () => {
@@ -432,3 +488,16 @@ describe("useTerminalRuntime", () => {
     });
   });
 });
+
+function createController() {
+  return {
+    writeDirect: vi.fn((_data: string) => undefined),
+    pasteText: vi.fn(),
+    sendEnter: vi.fn(),
+    clear: vi.fn(() => undefined),
+    focus: vi.fn(),
+    blur: vi.fn(),
+    hasSelection: vi.fn(() => false),
+    getSelectionText: vi.fn(() => ""),
+  } satisfies Parameters<typeof registerTerminal>[1];
+}
