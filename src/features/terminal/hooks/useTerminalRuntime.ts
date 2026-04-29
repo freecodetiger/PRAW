@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useAppConfigStore } from "../../config/state/app-config-store";
 import {
@@ -15,11 +15,23 @@ import {
 } from "../state/terminal-view-store";
 import { selectAllWorkspaceTabs, useWorkspaceStore } from "../state/workspace-store";
 import { resolveSessionTabRef, type SessionTabRef } from "./runtime-session-routing";
-import { flushDirect, hardResetTerminalRuntime, writeDirect, writeDirectBuffered } from "../lib/terminal-registry";
+import { hardResetTerminalRuntime, writeDirect, writeRawDirect } from "../lib/terminal-registry";
+import { StringChunkQueue } from "../lib/string-chunk-queue";
 
 const SHELL_COMMAND_START_MARKER_PREFIX = "\u001b]133;C";
 const SHELL_MARKER_BEL = "\u0007";
 const SHELL_MARKER_ST = "\u001b\\";
+const TERMINAL_OUTPUT_FLUSH_DELAY_MS = 16;
+const MAX_TERMINAL_OUTPUT_FLUSH_CHARS = 4 * 1024;
+const AI_OUTPUT_BACKLOG_COMPACT_THRESHOLD = 24 * 1024;
+const AI_OUTPUT_BACKLOG_TAIL_CHARS = 8 * 1024;
+
+interface PendingTerminalOutput {
+  directOutput: StringChunkQueue;
+  parserOutput: StringChunkQueue;
+  isAgentWorkflow: boolean;
+  resetBeforeNextWrite: boolean;
+}
 
 function stripAgentWorkflowEntryPrefix(data: string, commandEntry: string | undefined): { data: string; matched: boolean } {
   let cursor = 0;
@@ -125,10 +137,6 @@ function asMessage(error: unknown): string {
   return String(error);
 }
 
-function containsCommandEndMarker(data: string): boolean {
-  return data.includes("\u001b]133;D");
-}
-
 export function useTerminalRuntime() {
   const preferredMode = useAppConfigStore((state) => state.config.terminal.preferredMode);
   const workspaceCollection = useWorkspaceStore((state) => state.workspaceCollection);
@@ -150,6 +158,92 @@ export function useTerminalRuntime() {
   const previousSessionIdsRef = useRef(new Set<string>());
   const previousTabKeysRef = useRef(new Set<string>());
   const pendingAgentWorkflowEntryCutsRef = useRef(new Map<string, string | undefined>());
+  const pendingTerminalOutputRef = useRef(new Map<string, PendingTerminalOutput>());
+  const terminalOutputFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushPendingTerminalOutputRef = useRef<() => void>(() => undefined);
+  const consumeOutputRef = useRef(consumeOutput);
+  const updateTabCwdRef = useRef(updateTabCwd);
+  consumeOutputRef.current = consumeOutput;
+  updateTabCwdRef.current = updateTabCwd;
+
+  const scheduleTerminalOutputFlush = useCallback(() => {
+    if (terminalOutputFlushTimerRef.current !== null || pendingTerminalOutputRef.current.size === 0) {
+      return;
+    }
+
+    terminalOutputFlushTimerRef.current = setTimeout(() => {
+      terminalOutputFlushTimerRef.current = null;
+      flushPendingTerminalOutputRef.current();
+    }, TERMINAL_OUTPUT_FLUSH_DELAY_MS);
+  }, []);
+
+  const enqueueTerminalOutput = useCallback((tabId: string, directOutput: string, parserOutput: string, isAgentWorkflow: boolean) => {
+    if (!directOutput && !parserOutput) {
+      return;
+    }
+
+    const pending = pendingTerminalOutputRef.current.get(tabId) ?? {
+      directOutput: new StringChunkQueue(),
+      parserOutput: new StringChunkQueue(),
+      isAgentWorkflow,
+      resetBeforeNextWrite: false,
+    };
+    pending.isAgentWorkflow = pending.isAgentWorkflow || isAgentWorkflow;
+    pending.directOutput.push(directOutput);
+    pending.parserOutput.push(parserOutput);
+
+    if (pending.isAgentWorkflow && pending.directOutput.length > AI_OUTPUT_BACKLOG_COMPACT_THRESHOLD) {
+      pending.directOutput.trimToLast(AI_OUTPUT_BACKLOG_TAIL_CHARS);
+      pending.parserOutput.trimToLast(AI_OUTPUT_BACKLOG_TAIL_CHARS);
+      pending.resetBeforeNextWrite = true;
+    }
+
+    pendingTerminalOutputRef.current.set(tabId, pending);
+    scheduleTerminalOutputFlush();
+  }, [scheduleTerminalOutputFlush]);
+
+  const clearQueuedTerminalOutput = useCallback((tabId: string) => {
+    pendingTerminalOutputRef.current.delete(tabId);
+  }, []);
+
+  const flushPendingTerminalOutput = useCallback(() => {
+    if (pendingTerminalOutputRef.current.size === 0) {
+      return;
+    }
+
+    for (const [tabId, pending] of Array.from(pendingTerminalOutputRef.current.entries())) {
+      const directOutput = pending.directOutput.shift(MAX_TERMINAL_OUTPUT_FLUSH_CHARS);
+      const parserOutput = pending.parserOutput.shift(MAX_TERMINAL_OUTPUT_FLUSH_CHARS);
+      const shouldResetBeforeWrite = pending.resetBeforeNextWrite;
+      pending.resetBeforeNextWrite = false;
+
+      if (pending.directOutput.isEmpty && pending.parserOutput.isEmpty) {
+        pendingTerminalOutputRef.current.delete(tabId);
+      }
+
+      if (shouldResetBeforeWrite) {
+        hardResetTerminalRuntime(tabId);
+      }
+
+      if (directOutput) {
+        if (pending.isAgentWorkflow) {
+          writeRawDirect(tabId, directOutput);
+        } else {
+          writeDirect(tabId, directOutput);
+        }
+      }
+
+      if (parserOutput) {
+        const promptCwd = consumeOutputRef.current(tabId, parserOutput);
+        if (promptCwd) {
+          updateTabCwdRef.current(tabId, promptCwd);
+        }
+      }
+    }
+
+    scheduleTerminalOutputFlush();
+  }, [scheduleTerminalOutputFlush]);
+  flushPendingTerminalOutputRef.current = flushPendingTerminalOutput;
   const tabs = useMemo(
     () =>
       selectAllWorkspaceTabs({
@@ -263,11 +357,11 @@ export function useTerminalRuntime() {
       }
 
       let directOutput = event.data;
-      const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
+      let existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
       const isAgentWorkflowOutput = existingTabState?.presentation === "agent-workflow";
-      const startupFrame =
-        !isAgentWorkflowOutput ? extractAgentWorkflowStartupFrame(event.data) : null;
+      const startupFrame = !isAgentWorkflowOutput ? extractAgentWorkflowStartupFrame(event.data) : null;
       if (startupFrame && existingTabState?.presentation !== "agent-workflow") {
+        clearQueuedTerminalOutput(tabRef.tabId);
         hardResetTerminalRuntime(tabRef.tabId);
         consumeSemantic(tabRef.tabId, {
           sessionId: event.sessionId,
@@ -278,9 +372,8 @@ export function useTerminalRuntime() {
         });
         directOutput = startupFrame.data;
         pendingAgentWorkflowEntryCutsRef.current.delete(tabRef.tabId);
+        existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
       }
-      const shouldBufferAgentWorkflowOutput = isAgentWorkflowOutput || Boolean(startupFrame);
-
       if (pendingAgentWorkflowEntryCutsRef.current.has(tabRef.tabId)) {
         const commandEntry = pendingAgentWorkflowEntryCutsRef.current.get(tabRef.tabId);
         const stripped = stripAgentWorkflowEntryPrefix(event.data, commandEntry);
@@ -288,21 +381,7 @@ export function useTerminalRuntime() {
         pendingAgentWorkflowEntryCutsRef.current.delete(tabRef.tabId);
       }
 
-      if (directOutput) {
-        if (shouldBufferAgentWorkflowOutput) {
-          writeDirectBuffered(tabRef.tabId, directOutput);
-          if (containsCommandEndMarker(event.data)) {
-            flushDirect(tabRef.tabId);
-          }
-        } else {
-          writeDirect(tabRef.tabId, directOutput);
-        }
-      }
-
-      const promptCwd = consumeOutput(tabRef.tabId, event.data);
-      if (promptCwd) {
-        updateTabCwd(tabRef.tabId, promptCwd);
-      }
+      enqueueTerminalOutput(tabRef.tabId, directOutput, event.data, existingTabState?.presentation === "agent-workflow");
     }).then((cleanup) => {
       if (disposed) {
         cleanup();
@@ -315,8 +394,13 @@ export function useTerminalRuntime() {
     return () => {
       disposed = true;
       unlistenOutput?.();
+      if (terminalOutputFlushTimerRef.current !== null) {
+        clearTimeout(terminalOutputFlushTimerRef.current);
+        terminalOutputFlushTimerRef.current = null;
+      }
+      pendingTerminalOutputRef.current.clear();
     };
-  }, [consumeOutput, updateTabCwd]);
+  }, [clearQueuedTerminalOutput, consumeSemantic, enqueueTerminalOutput]);
 
   useEffect(() => {
     let disposed = false;
@@ -330,6 +414,7 @@ export function useTerminalRuntime() {
 
       const existingTabState = selectTerminalTabState(useTerminalViewStore.getState().tabStates, tabRef.tabId);
       if (event.kind === "agent-workflow" && existingTabState?.presentation !== "agent-workflow") {
+        clearQueuedTerminalOutput(tabRef.tabId);
         hardResetTerminalRuntime(tabRef.tabId);
         pendingAgentWorkflowEntryCutsRef.current.set(tabRef.tabId, event.commandEntry);
       }
@@ -348,7 +433,7 @@ export function useTerminalRuntime() {
       disposed = true;
       unlistenSemantic?.();
     };
-  }, [consumeSemantic]);
+  }, [clearQueuedTerminalOutput, consumeSemantic]);
 
   useEffect(() => {
     const currentSessionIds = new Set<string>();

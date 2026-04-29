@@ -18,6 +18,7 @@ export function createPersistentTerminalOptions(config: PersistentTerminalOption
     fontFamily: config.fontFamily,
     fontSize: config.fontSize,
     lineHeight: 1.3,
+    scrollback: 2000,
     theme: config.theme,
   };
 }

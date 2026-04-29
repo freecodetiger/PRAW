@@ -8,6 +8,7 @@ import { createImeTextareaGuard } from "./ime-textarea-guard";
 import { applyTerminalAppearance } from "./terminal-appearance";
 import { createPersistentTerminalOptions } from "./xterm-options";
 import type { TerminalController } from "./terminal-registry";
+import { StringChunkQueue } from "./string-chunk-queue";
 import { updateViewport } from "./terminal-registry";
 
 export interface PersistentTerminalRuntimeConfig {
@@ -26,6 +27,9 @@ export interface PersistentTerminalAttachment {
 }
 
 class PersistentTerminalRuntime {
+  private static readonly writeFlushDelayMs = 16;
+  private static readonly maxWriteBatchLength = 2 * 1024;
+
   private readonly tabId: string;
   private readonly host: HTMLDivElement;
   private terminal: Terminal | null = null;
@@ -38,7 +42,10 @@ class PersistentTerminalRuntime {
   private scrollDisposable: { dispose(): void } | null = null;
   private guardCleanup: (() => void) | null = null;
   private altGuardCleanup: (() => void) | null = null;
-  private pendingWrites = "";
+  private pendingWrites = new StringChunkQueue();
+  private writeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private writeInFlight = false;
+  private writeGeneration = 0;
   private config: PersistentTerminalRuntimeConfig;
   private installedGuardFactory?: PersistentTerminalRuntimeConfig["installTerminalGuards"];
 
@@ -59,12 +66,7 @@ class PersistentTerminalRuntime {
           return;
         }
 
-        if (!this.terminal) {
-          this.pendingWrites += data;
-          return;
-        }
-
-        this.terminal.write(data);
+        this.enqueueTerminalWrite(data);
       },
       pasteText: (text) => {
         this.terminal?.paste(text);
@@ -73,7 +75,8 @@ class PersistentTerminalRuntime {
         await this.config.write("\r");
       },
       clear: () => {
-        this.pendingWrites = "";
+        this.pendingWrites.clear();
+        this.clearScheduledWriteFlush();
         this.terminal?.clear();
       },
       focus: () => {
@@ -150,12 +153,14 @@ class PersistentTerminalRuntime {
   dispose(): void {
     this.detach();
     this.disposeTerminalInstance();
-    this.pendingWrites = "";
+    this.pendingWrites.clear();
+    this.clearScheduledWriteFlush();
   }
 
   hardReset(): void {
     this.disposeTerminalInstance();
-    this.pendingWrites = "";
+    this.pendingWrites.clear();
+    this.clearScheduledWriteFlush();
     this.ensureTerminal();
     this.refit();
     this.syncFocus();
@@ -170,6 +175,9 @@ class PersistentTerminalRuntime {
     this.resizeDisposable?.dispose();
     this.scrollDisposable?.dispose();
     this.imeGuard?.dispose();
+    this.clearScheduledWriteFlush();
+    this.writeInFlight = false;
+    this.writeGeneration += 1;
     this.dataDisposable = null;
     this.resizeDisposable = null;
     this.scrollDisposable = null;
@@ -214,6 +222,9 @@ class PersistentTerminalRuntime {
     this.imeGuard = terminal.textarea
       ? createImeTextareaGuard(terminal.textarea, {
           onPasteText: (text) => terminal.paste(text),
+          onTextInput: (text) => {
+            void this.config.write(text);
+          },
         })
       : null;
     this.guardCleanup = (this.config.installTerminalGuards?.(terminal) ?? null) as (() => void) | null;
@@ -222,9 +233,62 @@ class PersistentTerminalRuntime {
     this.terminal = terminal;
     this.fitAddon = fitAddon;
 
-    if (this.pendingWrites.length > 0) {
-      terminal.write(this.pendingWrites);
-      this.pendingWrites = "";
+    this.scheduleTerminalWriteFlush();
+  }
+
+  private enqueueTerminalWrite(data: string): void {
+    if (!data) {
+      return;
+    }
+
+    this.pendingWrites.push(data);
+    this.scheduleTerminalWriteFlush();
+  }
+
+  private scheduleTerminalWriteFlush(): void {
+    if (!this.terminal || this.writeInFlight || this.writeFlushTimer !== null || this.pendingWrites.isEmpty) {
+      return;
+    }
+
+    this.writeFlushTimer = setTimeout(() => {
+      this.writeFlushTimer = null;
+      this.flushTerminalWriteQueue();
+    }, PersistentTerminalRuntime.writeFlushDelayMs);
+  }
+
+  private flushTerminalWriteQueue(): void {
+    const terminal = this.terminal;
+    if (!terminal || this.writeInFlight || this.pendingWrites.isEmpty) {
+      return;
+    }
+
+    const generation = this.writeGeneration;
+    const data = this.pendingWrites.shift(PersistentTerminalRuntime.maxWriteBatchLength);
+    this.writeInFlight = true;
+
+    try {
+      terminal.write(data, () => {
+        if (generation !== this.writeGeneration) {
+          return;
+        }
+
+        this.writeInFlight = false;
+        this.scheduleTerminalWriteFlush();
+      });
+    } catch {
+      if (generation !== this.writeGeneration) {
+        return;
+      }
+
+      this.writeInFlight = false;
+      this.scheduleTerminalWriteFlush();
+    }
+  }
+
+  private clearScheduledWriteFlush(): void {
+    if (this.writeFlushTimer !== null) {
+      clearTimeout(this.writeFlushTimer);
+      this.writeFlushTimer = null;
     }
   }
 

@@ -64,6 +64,17 @@ function RuntimeHarness() {
   return null;
 }
 
+async function flushTerminalOutput() {
+  await act(async () => {
+    if (vi.isFakeTimers()) {
+      vi.advanceTimersByTime(20);
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await Promise.resolve();
+  });
+}
+
 describe("useTerminalRuntime", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -85,6 +96,8 @@ describe("useTerminalRuntime", () => {
 
     useWorkspaceStore.setState((state) => ({
       ...state,
+      workspaceCollection: null,
+      activeWorkspaceId: null,
       window: {
         layout: {
           kind: "pane",
@@ -168,6 +181,7 @@ describe("useTerminalRuntime", () => {
         data: "zpc@zpc:~$ ls\nDesktop\n",
       });
     });
+    await flushTerminalOutput();
 
     expect(getTerminalSnapshot("tab:1").content).toContain("Desktop");
 
@@ -191,6 +205,7 @@ describe("useTerminalRuntime", () => {
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
+    await flushTerminalOutput();
 
     expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
   });
@@ -235,6 +250,7 @@ describe("useTerminalRuntime", () => {
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
+    await flushTerminalOutput();
 
     const snapshot = getTerminalSnapshot("tab:1").content;
     expect(snapshot).toBe("OpenAI Codex\n");
@@ -267,6 +283,7 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "zpc@zpc:~$ claude\r\n\x1b]133;C;entry=claude\x07\x1b]133;PRAW_AGENT;provider=claude\x07Claude Code\n",
       });
+      await Promise.resolve();
     });
 
     expect(getTerminalSnapshot("tab:1").content).toBe("");
@@ -317,6 +334,7 @@ describe("useTerminalRuntime", () => {
         data: "zpc@zpc:~$ z",
       });
     });
+    await flushTerminalOutput();
 
     expect(getTerminalSnapshot("tab:1").content).toContain("z");
 
@@ -340,6 +358,7 @@ describe("useTerminalRuntime", () => {
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 20));
     });
+    await flushTerminalOutput();
 
     expect(getTerminalSnapshot("tab:1").content).toBe("OpenAI Codex\n");
   });
@@ -356,6 +375,7 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "assistant: hello from raw-only mode\n",
       });
+      await Promise.resolve();
     });
 
     expect(getTerminalSnapshot("tab:1").content).toBe("");
@@ -384,6 +404,8 @@ describe("useTerminalRuntime", () => {
         sessionId: "session-1",
         data: "assistant: final line\n\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07",
       });
+      vi.advanceTimersByTime(16);
+      await Promise.resolve();
     });
 
     expect(controller.writeDirect).toHaveBeenCalledWith(
@@ -393,6 +415,182 @@ describe("useTerminalRuntime", () => {
     expect(controller.writeDirect.mock.invocationCallOrder[0]).toBeLessThan(
       controller.clear.mock.invocationCallOrder[0],
     );
+  });
+
+  it("defers PTY output work so bursty agent output does not block the current event turn", async () => {
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        root.render(<RuntimeHarness />);
+        await Promise.resolve();
+      });
+
+      act(() => {
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "first burst\n",
+        });
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "second burst\n",
+        });
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+      await act(async () => {
+        vi.advanceTimersByTime(15);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toBe("");
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toBe("first burst\nsecond burst\n");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops queued shell output when a tab resets into agent workflow mode before the queue flushes", async () => {
+    vi.useFakeTimers();
+
+    try {
+      useTerminalViewStore.setState((state) => ({
+        ...state,
+        tabStates: {
+          "tab:1": {
+            ...createDialogState("/bin/bash", "/workspace"),
+            mode: "dialog",
+            modeSource: "default",
+            presentation: "default",
+            shell: "/bin/bash",
+            parserState: createShellIntegrationParserState(),
+          },
+        },
+      }));
+
+      await act(async () => {
+        root.render(<RuntimeHarness />);
+        await Promise.resolve();
+      });
+
+      act(() => {
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "zpc@zpc:~$ claude",
+        });
+        terminalApi.emitSemantic({
+          sessionId: "session-1",
+          kind: "agent-workflow",
+          reason: "shell-entry",
+          confidence: "strong",
+          commandEntry: "claude",
+        });
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "\r\n\x1b]133;C;entry=claude\x07Claude Code\n",
+        });
+      });
+
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+        await Promise.resolve();
+      });
+
+      const snapshot = getTerminalSnapshot("tab:1").content;
+      expect(snapshot).toBe("Claude Code\n");
+      expect(snapshot).not.toContain("zpc@zpc");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flushes large PTY output in small chunks to keep input responsive during backlog catch-up", async () => {
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        root.render(<RuntimeHarness />);
+        await Promise.resolve();
+      });
+
+      act(() => {
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "x".repeat(10_000),
+        });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toHaveLength(4096);
+
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toHaveLength(8192);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("compacts agent workflow output backlog instead of replaying every visual frame", async () => {
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        root.render(<RuntimeHarness />);
+        await Promise.resolve();
+      });
+
+      act(() => {
+        terminalApi.emitOutput({
+          sessionId: "session-1",
+          data: "a".repeat(40_000),
+        });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+        await Promise.resolve();
+      });
+
+      const snapshot = getTerminalSnapshot("tab:1").content;
+      expect(snapshot.length).toBeLessThan(40_000);
+      expect(snapshot).toHaveLength(4096);
+
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+        await Promise.resolve();
+      });
+
+      expect(getTerminalSnapshot("tab:1").content).toHaveLength(8192);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("starts terminal sessions for inactive workspace tabs", async () => {

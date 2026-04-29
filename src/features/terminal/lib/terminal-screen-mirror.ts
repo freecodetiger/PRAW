@@ -2,7 +2,7 @@ import type { TerminalController } from "./terminal-registry";
 
 const ESC = "\u001b";
 const BEL = "\u0007";
-const MAX_REPLAY_TEXT_LENGTH = 1_048_576;
+export const MAX_MIRROR_REPLAY_TEXT_LENGTH = 200_000;
 
 export interface TerminalMirrorSnapshot {
   replayText: string;
@@ -51,6 +51,20 @@ export function writeToMirror(tabId: string, data: string): void {
   mirror.exportText = trimTrailingBlankLines(replayText);
   mirror.pendingControl = next.pendingControl;
   mirror.pendingCarriageReturn = next.pendingCarriageReturn;
+  mirror.controller?.writeDirect(data);
+}
+
+export function writeRawToMirror(tabId: string, data: string): void {
+  if (!data) {
+    return;
+  }
+
+  const mirror = ensureMirror(tabId);
+  const replayText = trimReplayText(`${mirror.replayText}${data}`);
+  mirror.replayText = replayText;
+  mirror.exportText = trimTrailingBlankLines(replayText);
+  mirror.pendingControl = "";
+  mirror.pendingCarriageReturn = false;
   mirror.controller?.writeDirect(data);
 }
 
@@ -168,6 +182,13 @@ function appendPlainText(
   chunk: string,
   pendingCarriageReturn: boolean,
 ): { output: string; pendingCarriageReturn: boolean } {
+  if (!pendingCarriageReturn && chunk.length > 0 && !/[\b\r]/u.test(chunk)) {
+    return {
+      output: `${output}${chunk}`,
+      pendingCarriageReturn: false,
+    };
+  }
+
   let next = output;
   let carry = pendingCarriageReturn;
 
@@ -287,9 +308,9 @@ function trimTrailingBlankLines(value: string): string {
 }
 
 function trimReplayText(value: string): string {
-  if (value.length <= MAX_REPLAY_TEXT_LENGTH) {
+  if (value.length <= MAX_MIRROR_REPLAY_TEXT_LENGTH) {
     return value;
   }
 
-  return value.slice(value.length - MAX_REPLAY_TEXT_LENGTH);
+  return value.slice(value.length - MAX_MIRROR_REPLAY_TEXT_LENGTH);
 }

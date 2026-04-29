@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 interface AiModePromptOverlayProps {
   expanded: boolean;
@@ -39,6 +39,22 @@ export function AiModePromptOverlay({
 }: AiModePromptOverlayProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftRef = useRef(draft);
+  const onChangeRef = useRef(onChange);
+  const onCollapseRef = useRef(onCollapse);
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onCollapseRef.current = onCollapse;
+  }, [onCollapse]);
 
   useEffect(() => {
     if (!expanded) {
@@ -46,12 +62,12 @@ export function AiModePromptOverlay({
     }
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (draft.trim().length > 0) {
+      if (draftRef.current.trim().length > 0) {
         return;
       }
 
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
-        onCollapse();
+        onCollapseRef.current();
       }
     };
 
@@ -59,7 +75,7 @@ export function AiModePromptOverlay({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [expanded, draft, onCollapse]);
+  }, [expanded]);
 
   useEffect(() => {
     if (!expanded || disabled) {
@@ -71,15 +87,53 @@ export function AiModePromptOverlay({
     inputRef.current?.setSelectionRange(end, end);
   }, [expanded, disabled]);
 
+  useLayoutEffect(() => {
+    const pendingSelection = pendingSelectionRef.current;
+    if (!expanded || !pendingSelection) {
+      return;
+    }
+
+    pendingSelectionRef.current = null;
+    inputRef.current?.setSelectionRange(pendingSelection.start, pendingSelection.end);
+  }, [draft, expanded]);
+
   useEffect(() => {
+    if (!expanded || disabled) {
+      return;
+    }
+
     const textarea = inputRef.current;
     if (!textarea) {
       return;
     }
 
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 40), 160)}px`;
-  }, [draft, expanded]);
+    const handleBeforeInput = (event: InputEvent) => {
+      const text = readAtomicSmartQuoteInput(event);
+      if (!text) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const source = draftRef.current;
+      const selectionStart = textarea.selectionStart ?? source.length;
+      const selectionEnd = textarea.selectionEnd ?? selectionStart;
+      const next = `${source.slice(0, selectionStart)}${text}${source.slice(selectionEnd)}`;
+      const caret = selectionStart + text.length;
+
+      draftRef.current = next;
+      pendingSelectionRef.current = { start: caret, end: caret };
+      textarea.value = next;
+      textarea.setSelectionRange(caret, caret);
+      onChangeRef.current(next);
+    };
+
+    textarea.addEventListener("beforeinput", handleBeforeInput as EventListener, { capture: true });
+    return () => {
+      textarea.removeEventListener("beforeinput", handleBeforeInput as EventListener, { capture: true });
+    };
+  }, [disabled, expanded]);
 
   if (!expanded) {
     return null;
@@ -147,4 +201,27 @@ export function AiModePromptOverlay({
       </div>
     </div>
   );
+}
+
+function readAtomicSmartQuoteInput(event: InputEvent): string {
+  const inputType = typeof event.inputType === "string" ? event.inputType : "";
+  const data = typeof event.data === "string" ? event.data : "";
+
+  if (event.isComposing || inputType !== "insertText") {
+    return "";
+  }
+
+  if (data === "“”") {
+    return "“";
+  }
+
+  if (data === "‘’") {
+    return "‘";
+  }
+
+  return isSmartQuote(data) ? data : "";
+}
+
+function isSmartQuote(value: string): boolean {
+  return value === "“" || value === "”" || value === "‘" || value === "’";
 }

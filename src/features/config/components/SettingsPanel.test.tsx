@@ -478,7 +478,7 @@ describe("SettingsPanel", () => {
 
     expect(host.textContent).toContain("About & Updates");
     expect(host.textContent).toContain("Current version");
-    expect(host.textContent).toContain("v0.2.3");
+    expect(host.textContent).toContain("v0.2.4");
   });
 
   it("checks for updates manually and opens the available release page", async () => {

@@ -40,6 +40,33 @@ class FakeClipboardPasteEvent extends Event {
   }
 }
 
+class FakeInputEvent extends Event {
+  readonly data: string | null;
+  readonly inputType: string;
+  readonly isComposing: boolean;
+
+  constructor(init: { data?: string | null; inputType?: string; isComposing?: boolean } = {}) {
+    super("input");
+    this.data = init.data ?? null;
+    this.inputType = init.inputType ?? "";
+    this.isComposing = init.isComposing ?? false;
+  }
+}
+
+class FakeBeforeInputEvent extends Event {
+  readonly data: string | null;
+  readonly inputType: string;
+  readonly isComposing: boolean;
+  stopImmediatePropagation = vi.fn();
+
+  constructor(init: { data?: string | null; inputType?: string; isComposing?: boolean } = {}) {
+    super("beforeinput", { cancelable: true });
+    this.data = init.data ?? null;
+    this.inputType = init.inputType ?? "";
+    this.isComposing = init.isComposing ?? false;
+  }
+}
+
 describe("ime textarea guard", () => {
   it("clears stale textarea content after composition ends", () => {
     vi.useFakeTimers();
@@ -115,6 +142,98 @@ describe("ime textarea guard", () => {
     vi.useRealTimers();
   });
 
+  it("captures Chinese smart quotes before xterm can turn them into cursor movement", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const onTextInput = vi.fn();
+    const guard = createImeTextareaGuard(textarea, { onTextInput });
+    const event = new FakeBeforeInputEvent({ data: "“", inputType: "insertText" });
+
+    textarea.dispatch("beforeinput", event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(onTextInput).toHaveBeenCalledWith("“");
+    expect(textarea.listenerOptions.beforeinput).toMatchObject({ capture: true });
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("commits Chinese smart quote pairs atomically without adding terminal cursor movement", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const onTextInput = vi.fn();
+    const guard = createImeTextareaGuard(textarea, { onTextInput });
+    const event = new FakeBeforeInputEvent({ data: "“”", inputType: "insertText" });
+
+    textarea.dispatch("beforeinput", event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(onTextInput).toHaveBeenCalledWith("“”");
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("commits Chinese parenthesis pairs atomically like smart quote pairs", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const onTextInput = vi.fn();
+    const guard = createImeTextareaGuard(textarea, { onTextInput });
+    const event = new FakeBeforeInputEvent({ data: "（）", inputType: "insertText" });
+
+    textarea.dispatch("beforeinput", event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(onTextInput).toHaveBeenCalledWith("（）");
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("clears Chinese parenthesis input residue instead of preserving it like a smart quote", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const guard = createImeTextareaGuard(textarea);
+
+    textarea.value = "（";
+    textarea.dispatch("input", new FakeInputEvent({ data: "（", inputType: "insertText" }));
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("does not capture normal ASCII insert text before xterm handles it", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const onTextInput = vi.fn();
+    const guard = createImeTextareaGuard(textarea, { onTextInput });
+    const event = new FakeBeforeInputEvent({ data: "a", inputType: "insertText" });
+
+    textarea.dispatch("beforeinput", event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
+    expect(onTextInput).not.toHaveBeenCalled();
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
   it("clears residual input value after a non-composing input event", () => {
     vi.useFakeTimers();
     const textarea = new FakeTextarea();
@@ -128,6 +247,38 @@ describe("ime textarea guard", () => {
     vi.runAllTimers();
 
     expect(textarea.value).toBe("");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("preserves committed smart punctuation input instead of clearing it on the next tick", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const guard = createImeTextareaGuard(textarea);
+
+    textarea.value = "“";
+    textarea.dispatch("input", new FakeInputEvent({ data: "“", inputType: "insertText" }));
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("“");
+    guard.dispose();
+    vi.useRealTimers();
+  });
+
+  it("cancels a pending composition reset when smart punctuation is committed as insert text", () => {
+    vi.useFakeTimers();
+    const textarea = new FakeTextarea();
+    const guard = createImeTextareaGuard(textarea);
+
+    textarea.value = "“";
+    textarea.dispatch("compositionstart", new Event("compositionstart"));
+    textarea.dispatch("compositionend", new Event("compositionend"));
+    textarea.dispatch("input", new FakeInputEvent({ data: "“", inputType: "insertText" }));
+
+    vi.runAllTimers();
+
+    expect(textarea.value).toBe("“");
     guard.dispose();
     vi.useRealTimers();
   });

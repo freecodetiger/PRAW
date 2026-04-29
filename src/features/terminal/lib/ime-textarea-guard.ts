@@ -6,6 +6,7 @@ interface TextareaLike {
 
 interface ImeTextareaGuardOptions {
   onPasteText?: (text: string) => void;
+  onTextInput?: (text: string) => void;
 }
 
 interface ImeTextareaGuard {
@@ -66,12 +67,30 @@ export function createImeTextareaGuard(textarea: TextareaLike, options: ImeTexta
     scheduleResetWhenIdle();
   };
 
-  const handleInput: EventListener = () => {
+  const handleBeforeInput: EventListener = (event) => {
+    const text = readSmartPunctuationInput(event);
+    if (!text || !options.onTextInput) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    options.onTextInput(text);
+    scheduleResetWhenIdle();
+  };
+
+  const handleInput: EventListener = (event) => {
+    if (shouldPreserveCommittedInput(event)) {
+      clearPendingReset();
+      return;
+    }
+
     scheduleResetWhenIdle();
   };
 
   textarea.addEventListener("compositionstart", handleCompositionStart);
   textarea.addEventListener("compositionend", handleCompositionEnd);
+  textarea.addEventListener("beforeinput", handleBeforeInput, { capture: true });
   textarea.addEventListener("paste", handlePaste, { capture: true });
   textarea.addEventListener("input", handleInput);
 
@@ -80,12 +99,61 @@ export function createImeTextareaGuard(textarea: TextareaLike, options: ImeTexta
       clearPendingReset();
       textarea.removeEventListener("compositionstart", handleCompositionStart);
       textarea.removeEventListener("compositionend", handleCompositionEnd);
+      textarea.removeEventListener("beforeinput", handleBeforeInput, { capture: true });
       textarea.removeEventListener("paste", handlePaste, { capture: true });
       textarea.removeEventListener("input", handleInput);
     },
   };
 }
 
+function readSmartPunctuationInput(event: Event): string {
+  const inputEvent = event as InputEvent;
+  const inputType = typeof inputEvent.inputType === "string" ? inputEvent.inputType : "";
+  const data = typeof inputEvent.data === "string" ? inputEvent.data : "";
+
+  if (inputEvent.isComposing || inputType !== "insertText") {
+    return "";
+  }
+
+  return normalizeChineseSmartQuote(data);
+}
+
+function normalizeChineseSmartQuote(value: string): string {
+  if (value === "“”") {
+    return "“”";
+  }
+
+  if (value === "‘’") {
+    return "‘’";
+  }
+
+  if (value === "（）") {
+    return "（）";
+  }
+
+  if (value === "「」") {
+    return "「」";
+  }
+
+  if (value === "『』") {
+    return "『』";
+  }
+
+  return isChineseSmartQuote(value) ? value : "";
+}
+
+function isChineseSmartQuote(value: string): boolean {
+  return (
+    value === "“" ||
+    value === "”" ||
+    value === "‘" ||
+    value === "’" ||
+    value === "「" ||
+    value === "」" ||
+    value === "『" ||
+    value === "』"
+  );
+}
 
 function readPlainTextFromPasteEvent(event: Event): string {
   if (!("clipboardData" in event)) {
@@ -94,4 +162,20 @@ function readPlainTextFromPasteEvent(event: Event): string {
 
   const clipboardData = (event as ClipboardEvent).clipboardData;
   return clipboardData?.getData("text/plain") ?? "";
+}
+
+function shouldPreserveCommittedInput(event: Event): boolean {
+  const inputEvent = event as InputEvent;
+  const inputType = typeof inputEvent.inputType === "string" ? inputEvent.inputType : "";
+  const data = typeof inputEvent.data === "string" ? inputEvent.data : "";
+
+  if (inputEvent.isComposing || inputType.includes("Composition")) {
+    return true;
+  }
+
+  if (inputType !== "insertText" || data.length === 0) {
+    return false;
+  }
+
+  return Array.from(data).length === 1 && isChineseSmartQuote(data);
 }

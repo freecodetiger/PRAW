@@ -451,6 +451,26 @@ describe("AiWorkflowSurface", () => {
     expect(host.querySelector('[aria-label="AI composer input"]')).toBeNull();
   });
 
+  it("does not rerender the raw terminal surface while typing in the bypass prompt", () => {
+    renderSurface(root, createAgentWorkflowPaneState(), {
+      quickPromptOpenRequestKey: 1,
+    });
+
+    const renderCountAfterOpen = renderCalls.length;
+    const input = host.querySelector('[aria-label="AI prompt input"]') as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+
+    act(() => {
+      if (input) {
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+        descriptor?.set?.call(input, "continue from here");
+      }
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(renderCalls).toHaveLength(renderCountAfterOpen);
+  });
+
   it("submits bypass prompts with Enter and collapses the capsule after success", async () => {
     const onSubmitAiInput = vi.fn(async () => undefined);
 

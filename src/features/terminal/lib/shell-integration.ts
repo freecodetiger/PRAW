@@ -21,6 +21,10 @@ export interface ShellIntegrationChunkResult {
   timeline: ShellIntegrationTimelineEntry[];
 }
 
+interface ShellIntegrationConsumeOptions {
+  captureVisibleOutput?: boolean;
+}
+
 export type ShellIntegrationTimelineEntry =
   | { type: "output"; text: string }
   | { type: "event"; event: ShellLifecycleEvent };
@@ -38,7 +42,9 @@ export function createShellIntegrationParserState(): ShellIntegrationParserState
 export function consumeShellIntegrationChunk(
   state: ShellIntegrationParserState,
   chunk: string,
+  options: ShellIntegrationConsumeOptions = {},
 ): ShellIntegrationChunkResult {
+  const captureVisibleOutput = options.captureVisibleOutput ?? true;
   const source = `${state.pending}${chunk}`;
   let cursor = 0;
   let visibleOutput = "";
@@ -50,7 +56,7 @@ export function consumeShellIntegrationChunk(
   let pendingCarriageReturn = state.pendingCarriageReturn;
 
   const appendVisibleSlice = (value: string) => {
-    if (!shellReady || suppressPrompt || value.length === 0) {
+    if (!captureVisibleOutput || !shellReady || suppressPrompt || value.length === 0) {
       return;
     }
 

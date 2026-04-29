@@ -19,10 +19,12 @@ import {
   createMirrorSnapshot,
   exportMirrorText,
   getMirrorSnapshot,
+  MAX_MIRROR_REPLAY_TEXT_LENGTH,
   removeMirror,
   resetMirror,
   updateMirrorViewport,
   writeToMirror,
+  writeRawToMirror,
 } from "./terminal-screen-mirror";
 
 describe("terminal-screen-mirror", () => {
@@ -136,6 +138,27 @@ describe("terminal-screen-mirror", () => {
     vi.advanceTimersByTime(1);
     expect(controller.writeDirect).toHaveBeenCalledWith("stream");
     expect(getTerminalSnapshot("tab:1").content).toBe("stream");
+  });
+
+  it("bounds replay and archive text to recent output", () => {
+    writeToMirror("tab:1", "a".repeat(MAX_MIRROR_REPLAY_TEXT_LENGTH + 10));
+
+    expect(getMirrorSnapshot("tab:1").replayText).toHaveLength(MAX_MIRROR_REPLAY_TEXT_LENGTH);
+    expect(exportMirrorText("tab:1")).toHaveLength(MAX_MIRROR_REPLAY_TEXT_LENGTH);
+
+    writeToMirror("tab:1", "bc");
+
+    const snapshot = getMirrorSnapshot("tab:1");
+    expect(snapshot.replayText).toHaveLength(MAX_MIRROR_REPLAY_TEXT_LENGTH);
+    expect(snapshot.replayText.endsWith("bc")).toBe(true);
+    expect(exportMirrorText("tab:1")?.endsWith("bc")).toBe(true);
+  });
+
+  it("can append raw agent workflow output without terminal control parsing", () => {
+    writeRawToMirror("tab:1", "loading\rredraw");
+
+    expect(getMirrorSnapshot("tab:1").replayText).toBe("loading\rredraw");
+    expect(exportMirrorText("tab:1")).toBe("loading\rredraw");
   });
 });
 

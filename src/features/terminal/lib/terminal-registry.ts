@@ -14,6 +14,7 @@ import {
   removeMirror,
   resetMirror,
   updateMirrorViewport,
+  writeRawToMirror,
   writeToMirror,
 } from "./terminal-screen-mirror";
 import { clearPersistentTerminalRuntimes, disposePersistentTerminalRuntime, hardResetPersistentTerminalRuntime } from "./persistent-terminal-runtime";
@@ -110,6 +111,11 @@ export function flushDirect(tabId: string): void {
   if (pending.data) {
     writeToMirror(tabId, pending.data);
   }
+}
+
+export function writeRawDirect(tabId: string, data: string): void {
+  flushDirect(tabId);
+  writeRawToMirror(tabId, data);
 }
 
 export function updateViewport(tabId: string, viewportY: number): void {

@@ -17,6 +17,7 @@ describe("xterm options", () => {
       fontSize: 15,
       cursorBlink: true,
       convertEol: false,
+      scrollback: 2000,
       allowTransparency: false,
       allowProposedApi: true,
     });

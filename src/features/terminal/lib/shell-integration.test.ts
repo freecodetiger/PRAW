@@ -35,6 +35,24 @@ describe("shell integration parser", () => {
     expect(result.events).toEqual([{ type: "command-start", entry: "codex" }]);
   });
 
+  it("can skip visible output capture while still parsing lifecycle markers", () => {
+    const result = consumeShellIntegrationChunk(
+      createReadyState(),
+      `heavy output\rheavy redraw\x1b[?1049h\x1b]133;D;0\x07\x1b]133;P;cwd=/workspace\x07`,
+      { captureVisibleOutput: false },
+    );
+
+    expect(result.visibleOutput).toBe("");
+    expect(result.timeline).toEqual([
+      { type: "event", event: { type: "command-end", exitCode: 0 } },
+      { type: "event", event: { type: "prompt-state", cwd: "/workspace" } },
+    ]);
+    expect(result.events).toEqual([
+      { type: "command-end", exitCode: 0 },
+      { type: "prompt-state", cwd: "/workspace" },
+    ]);
+  });
+
   it("holds partial marker data until the sequence is complete", () => {
     const first = consumeShellIntegrationChunk(createReadyState(), "a\x1b]133;P;cwd=/wo");
     expect(first.visibleOutput).toBe("a");

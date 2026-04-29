@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getCurrentWindow, type DragDropEvent } from "@tauri-apps/api/window";
 
@@ -156,6 +156,24 @@ export function AiWorkflowSurface({
   const composerDisabledRef = useRef(false);
   const handledVoiceBypassRequestKeyRef = useRef(0);
   const voiceConfigured = speechConfig.enabled && speechConfig.apiKey.trim().length > 0;
+  const terminalSurface = useMemo(
+    () => (
+      <div className="ai-workflow__bootstrap-terminal">
+        <ClassicTerminalSurface
+          tabId={tabId}
+          sessionId={sessionId}
+          fontFamily={fontFamily}
+          fontSize={fontSize}
+          theme={theme}
+          isActive={isActive}
+          inputSuspended={false}
+          write={write}
+          resize={resize}
+        />
+      </div>
+    ),
+    [fontFamily, fontSize, isActive, resize, sessionId, tabId, theme, write],
+  );
 
   useEffect(() => {
     voiceSessionIdRef.current = voiceSessionId;
@@ -573,19 +591,7 @@ ${transcript}` : transcript));
         />
       ) : null}
 
-      <div className="ai-workflow__bootstrap-terminal">
-        <ClassicTerminalSurface
-          tabId={tabId}
-          sessionId={sessionId}
-          fontFamily={fontFamily}
-          fontSize={fontSize}
-          theme={theme}
-          isActive={isActive}
-          inputSuspended={false}
-          write={write}
-          resize={resize}
-        />
-      </div>
+      {terminalSurface}
     </div>
   );
 }

@@ -1530,6 +1530,7 @@ button {
 }
 
 .ai-workflow__bypass-input {
+  height: 92px;
   min-height: 40px;
   max-height: 160px;
   padding: 10px 12px;
@@ -1537,6 +1538,7 @@ button {
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 98%, var(--ai-background-color));
   resize: none;
+  overflow-y: auto;
 }
 
 .ai-workflow__bypass-voice {
